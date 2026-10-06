@@ -1,0 +1,48 @@
+import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
+import { ProgressClient } from "./ProgressClient";
+
+export default async function ProgressPage() {
+  const user = await getCurrentUser();
+
+  const progressWhere: any = {};
+  const assessmentWhere: any = {};
+
+  if (user.role === "TEACHER" && user.teacherId) {
+    progressWhere.teacherId = user.teacherId;
+    assessmentWhere.teacherId = user.teacherId;
+  }
+
+  const progressList = await prisma.studentProgress.findMany({
+    where: progressWhere,
+    include: {
+      student: true,
+      subject: true,
+      teacher: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const assessments = await prisma.assessment.findMany({
+    where: assessmentWhere,
+    include: {
+      student: true,
+      subject: true,
+      teacher: true,
+    },
+    orderBy: { testDate: "desc" },
+  });
+
+  const concerns = await prisma.parentConcern.findMany({
+    include: { student: true },
+    orderBy: { reportedDate: "desc" },
+  });
+
+  return (
+    <ProgressClient
+      progressList={progressList}
+      assessments={assessments}
+      concerns={concerns}
+    />
+  );
+}

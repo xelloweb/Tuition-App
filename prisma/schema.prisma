@@ -1,0 +1,459 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  OWNER
+  COORDINATOR
+  TEACHER
+  ACCOUNTS
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      String   @default("COORDINATOR") // OWNER, COORDINATOR, TEACHER, ACCOUNTS
+  teacherId String?  @unique
+  teacher   Teacher? @relation(fields: [teacherId], references: [id])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Guardian {
+  id             String    @id @default(cuid())
+  name           String
+  whatsappNumber String
+  email          String?
+  country        String    @default("India")
+  timeZone       String    @default("Asia/Kolkata")
+  notes          String?
+  students       Student[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Student {
+  id                String              @id @default(cuid())
+  studentCode       String              @unique
+  name              String
+  grade             String
+  board             String              @default("CBSE")
+  medium            String              @default("English")
+  guardianId        String?
+  guardian          Guardian?           @relation(fields: [guardianId], references: [id])
+  guardianName      String
+  whatsappNumber    String
+  email             String?
+  country           String              @default("India")
+  timeZone          String              @default("Asia/Kolkata")
+  joiningDate       DateTime            @default(now())
+  preferredTimings  String?
+  learningGoals     String?
+  coordinatorNotes  String?
+  status            String              @default("ACTIVE") // ACTIVE, PAUSED, COMPLETED, WITHDRAWN
+  packages          StudentPackage[]
+  enrolments        SubjectEnrollment[]
+  sessions          Session[]
+  invoices          Invoice[]
+  payments          Payment[]
+  followUps         FollowUp[]
+  progressReports   StudentProgress[]
+  assessments       Assessment[]
+  parentConcerns    ParentConcern[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
+model Subject {
+  id          String              @id @default(cuid())
+  name        String              @unique
+  code        String              @unique
+  category    String              @default("Academic")
+  color       String              @default("#2563eb")
+  enrolments  SubjectEnrollment[]
+  sessions    Session[]
+  allocations SubjectAllocation[]
+  progress    StudentProgress[]
+  assessments Assessment[]
+  createdAt   DateTime            @default(now())
+}
+
+model Teacher {
+  id             String              @id @default(cuid())
+  name           String
+  email          String              @unique
+  phone          String
+  subjects       String // Comma-separated or specialty
+  grades         String // Supported grades
+  country        String              @default("India")
+  timeZone       String              @default("Asia/Kolkata")
+  active         Boolean             @default(true)
+  defaultRate    Int                 @default(500) // Hourly rate in INR
+  user           User?
+  enrolments     SubjectEnrollment[]
+  sessions       Session[]
+  payoutItems    PayoutItem[]
+  progressNotes  StudentProgress[]
+  assessments    Assessment[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+}
+
+model SubjectEnrollment {
+  id             String    @id @default(cuid())
+  studentId      String
+  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId      String
+  subject        Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherId      String
+  teacher        Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  status         String    @default("ACTIVE")
+  targetExamDate DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([studentId, subjectId])
+}
+
+model PackageTemplate {
+  id              String           @id @default(cuid())
+  name            String
+  totalCredits    Int
+  durationMinutes Int              @default(60)
+  defaultPrice    Int
+  currency        String           @default("INR")
+  notes           String?
+  packages        StudentPackage[]
+  createdAt       DateTime         @default(now())
+}
+
+model StudentPackage {
+  id                     String              @id @default(cuid())
+  packageNumber          String              @unique
+  studentId              String
+  student                Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  templateId             String?
+  template               PackageTemplate?    @relation(fields: [templateId], references: [id])
+  name                   String
+  totalCredits           Int
+  durationMinutes        Int                 @default(60)
+  startDate              DateTime            @default(now())
+  expiryDate             DateTime?
+  price                  Int
+  currency               String              @default("INR")
+  status                 String              @default("ACTIVE") // DRAFT, ACTIVE, PAUSED, EXHAUSTED, EXPIRED, CLOSED
+  cancellationNoticeHours Int                @default(4)
+  noShowDeductCredit     Boolean             @default(true)
+  notes                  String?
+  allocations            SubjectAllocation[]
+  creditLedgers          CreditLedger[]
+  sessions               Session[]
+  invoices               Invoice[]
+  followUps              FollowUp[]
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+}
+
+model SubjectAllocation {
+  id               String         @id @default(cuid())
+  packageId        String
+  package          StudentPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  subjectId        String
+  subject          Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  allocatedCredits Int
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([packageId, subjectId])
+}
+
+model CreditLedger {
+  id                 String         @id @default(cuid())
+  packageId          String
+  package            StudentPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  subjectId          String?
+  eventType          String // PURCHASE_INITIAL, REALLOCATION_IN, REALLOCATION_OUT, SESSION_RESERVED, SESSION_UNRESERVED, SESSION_CONSUMED, SESSION_REVERSED, MANUAL_ADJUSTMENT
+  creditsDelta       Int // e.g. -1 for consumption, +1 for reversal/allocation
+  resultingRemaining Int?
+  sessionId          String?
+  reason             String
+  actorRole          String
+  actorName          String
+  metadata           String? // JSON string
+  createdAt          DateTime       @default(now())
+}
+
+model Session {
+  id                     String            @id @default(cuid())
+  packageId              String
+  package                StudentPackage    @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  studentId              String
+  student                Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacherId              String
+  teacher                Teacher           @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subjectId              String
+  subject                Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  scheduledStartTimeUtc  DateTime
+  scheduledEndTimeUtc    DateTime
+  durationMinutes        Int               @default(60)
+  status                 String            @default("SCHEDULED") // SCHEDULED, COMPLETED, STUDENT_NO_SHOW, TEACHER_NO_SHOW, CANCELLED, RESCHEDULED
+  meetingUrl             String?
+  recurrenceId           String?
+  rescheduledFromId      String?
+  rescheduledToId        String?
+  isCreditReserved       Boolean           @default(true)
+  isCreditConsumed       Boolean           @default(false)
+  attendance             AttendanceRecord?
+  payoutItems            PayoutItem[]
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+}
+
+model AttendanceRecord {
+  id                    String               @id @default(cuid())
+  sessionId             String               @unique
+  session               Session              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionOutcome        String // COMPLETED, STUDENT_NO_SHOW, TEACHER_NO_SHOW, CANCELLED
+  studentAttendance     String // PRESENT, LATE, ABSENT
+  actualDurationMinutes Int                  @default(60)
+  topicCovered          String
+  homework              String?
+  studentProgressNote   String?
+  markedByRole          String
+  markedByName          String
+  markedAt              DateTime             @default(now())
+  isReversed            Boolean              @default(false)
+  reversalReason        String?
+  reversedAt            DateTime?
+  reversedByName        String?
+  revisions             AttendanceRevision[]
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+}
+
+model AttendanceRevision {
+  id                 String           @id @default(cuid())
+  attendanceRecordId String
+  attendanceRecord   AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+  sessionId          String?
+  previousOutcome    String
+  newOutcome         String
+  previousAttendance String
+  newAttendance      String
+  reason             String
+  actorRole          String
+  actorName          String
+  createdAt          DateTime         @default(now())
+}
+
+model Invoice {
+  id            String              @id @default(cuid())
+  invoiceNumber String              @unique
+  studentId     String
+  student       Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  packageId     String?
+  package       StudentPackage?     @relation(fields: [packageId], references: [id])
+  issueDate     DateTime            @default(now())
+  dueDate       DateTime
+  subtotal      Int // minor units or rupees
+  discount      Int                 @default(0)
+  totalAmount   Int
+  paidAmount    Int                 @default(0)
+  balanceDue    Int
+  currency      String              @default("INR")
+  status        String              @default("UNPAID") // DRAFT, UNPAID, PARTIALLY_PAID, PAID, OVERDUE, CANCELLED
+  notes         String?
+  items         InvoiceLineItem[]
+  instalments   InvoiceInstalment[]
+  allocations   PaymentAllocation[]
+  followUps     FollowUp[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+}
+
+model InvoiceLineItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Int
+  amount      Int
+  createdAt   DateTime @default(now())
+}
+
+model InvoiceInstalment {
+  id               String              @id @default(cuid())
+  invoiceId        String
+  invoice          Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  instalmentNumber Int
+  dueDate          DateTime
+  amount           Int
+  paidAmount       Int                 @default(0)
+  status           String              @default("PENDING") // PENDING, PARTIALLY_PAID, PAID, OVERDUE
+  allocations      PaymentAllocation[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+}
+
+model Payment {
+  id             String              @id @default(cuid())
+  paymentNumber  String              @unique
+  studentId      String
+  student        Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  amount         Int
+  currency       String              @default("INR")
+  receivedDate   DateTime            @default(now())
+  paymentMethod  String // UPI, BANK_TRANSFER, CASH, CARD
+  reference      String?
+  proofFileName  String?
+  proofUrl       String?
+  isVerified     Boolean             @default(false)
+  verifiedAt     DateTime?
+  verifiedByName String?
+  verifiedByRole String?
+  notes          String?
+  allocations    PaymentAllocation[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+}
+
+model PaymentAllocation {
+  id           String             @id @default(cuid())
+  paymentId    String
+  payment      Payment            @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoiceId    String
+  invoice      Invoice            @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  instalmentId String?
+  instalment   InvoiceInstalment? @relation(fields: [instalmentId], references: [id])
+  amount       Int
+  createdAt    DateTime           @default(now())
+}
+
+model FollowUp {
+  id                  String          @id @default(cuid())
+  studentId           String
+  student             Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  invoiceId           String?
+  invoice             Invoice?        @relation(fields: [invoiceId], references: [id])
+  packageId           String?
+  package             StudentPackage? @relation(fields: [packageId], references: [id])
+  type                String // DUE_PAYMENT, OVERDUE_PAYMENT, PACKAGE_EXHAUSTION, PACKAGE_EXPIRY, ACADEMIC_CHECKIN, RENEWAL
+  assignedStaff       String
+  contactDate         DateTime        @default(now())
+  outcome             String? // PROMISED_PAYMENT, REQUESTED_CALLBACK, DISPUTED, RESOLVED, UNREACHABLE
+  parentResponse      String?
+  promisedPaymentDate DateTime?
+  nextActionDate      DateTime?
+  notes               String?
+  isResolved          Boolean         @default(false)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+model PayoutRun {
+  id             String       @id @default(cuid())
+  runNumber      String       @unique
+  periodStart    DateTime
+  periodEnd      DateTime
+  totalSessions  Int          @default(0)
+  totalAmount    Int          @default(0)
+  currency       String       @default("INR")
+  status         String       @default("DRAFT") // DRAFT, APPROVED, PAID
+  approvedByName String?
+  approvedAt     DateTime?
+  paidAt         DateTime?
+  items          PayoutItem[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model PayoutItem {
+  id              String     @id @default(cuid())
+  payoutRunId     String?
+  payoutRun       PayoutRun? @relation(fields: [payoutRunId], references: [id])
+  teacherId       String
+  teacher         Teacher    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  sessionId       String
+  session         Session    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionDate     DateTime
+  durationMinutes Int
+  rateSnapshot    Int
+  amount          Int
+  status          String     @default("PENDING") // PENDING, APPROVED, PAID
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@unique([sessionId])
+}
+
+model StudentProgress {
+  id                      String   @id @default(cuid())
+  studentId               String
+  student                 Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId               String
+  subject                 Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherId               String
+  teacher                 Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  monthYear               String // e.g. "2026-10"
+  topicProgress           String
+  homeworkCompletionRate  Int      @default(100) // Percentage
+  areasOfImprovement      String?
+  teacherFeedback         String
+  coordinatorNotes        String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model Assessment {
+  id              String   @id @default(cuid())
+  studentId       String
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId       String
+  subject         Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherId       String
+  teacher         Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  assessmentTitle String
+  testDate        DateTime @default(now())
+  score           Float
+  maxScore        Float
+  percentage      Float
+  feedback        String?
+  createdAt       DateTime @default(now())
+}
+
+model ParentConcern {
+  id              String    @id @default(cuid())
+  studentId       String
+  student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  reportedDate    DateTime  @default(now())
+  category        String // ACADEMIC, TEACHER_PACE, TIMING, BILLING, OTHER
+  description     String
+  owner           String
+  status          String    @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED
+  nextAction      String?
+  resolutionNotes String?
+  resolvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  action     String
+  actorRole  String
+  actorName  String
+  details    String
+  createdAt  DateTime @default(now())
+}
