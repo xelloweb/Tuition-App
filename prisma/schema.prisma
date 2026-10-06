@@ -95,9 +95,11 @@ model Teacher {
   country        String              @default("India")
   timeZone       String              @default("Asia/Kolkata")
   active         Boolean             @default(true)
-  defaultRate    Int                 @default(500) // Hourly rate in INR
+  defaultRate    Int                 @default(500) // Base Hourly rate in INR
+  gradeRates     String? // JSON string: rates per standard/grade e.g. {"10th Grade": 500, "11th Grade": 600, "12th Grade": 700}
   user           User?
   enrolments     SubjectEnrollment[]
+  timetableSlots TimetableSlot[]
   sessions       Session[]
   payoutItems    PayoutItem[]
   progressNotes  StudentProgress[]
@@ -112,15 +114,44 @@ model SubjectEnrollment {
   student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   subjectId      String
   subject        Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  teacherId      String
-  teacher        Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  // Null until a trainer is assigned; a removed trainer leaves the enrolment in place.
+  teacherId      String?
+  teacher        Teacher?  @relation(fields: [teacherId], references: [id], onDelete: SetNull)
   status         String    @default("ACTIVE")
   targetExamDate DateTime?
   notes          String?
+  timetableSlots TimetableSlot[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   @@unique([studentId, subjectId])
+}
+
+// One recurring weekly class for an enrolment (many per enrolment). Times are
+// wall-clock times in `timeZone`; dated Sessions are generated from it.
+model TimetableSlot {
+  id             String            @id @default(cuid())
+  enrolmentId    String
+  enrolment      SubjectEnrollment @relation(fields: [enrolmentId], references: [id], onDelete: Restrict)
+  teacherId      String?
+  teacher        Teacher?          @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  weekday        Int // 0 = Sunday ... 6 = Saturday, in timeZone
+  startMinutes   Int // local start, minutes after midnight
+  endMinutes     Int // local end on the same day (overnight slots are not allowed)
+  timeZone       String // IANA zone, e.g. Asia/Dubai
+  effectiveFrom  DateTime
+  effectiveUntil DateTime? // exclusive; null = open-ended
+  active         Boolean           @default(true)
+  previousSlotId String? // the version this slot replaced when edited
+  createdByName  String
+  createdByRole  String
+  updatedByName  String?
+  sessions       Session[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([enrolmentId])
+  @@index([teacherId])
 }
 
 model PackageTemplate {
@@ -207,6 +238,9 @@ model Session {
   status                 String            @default("SCHEDULED") // SCHEDULED, COMPLETED, STUDENT_NO_SHOW, TEACHER_NO_SHOW, CANCELLED, RESCHEDULED
   meetingUrl             String?
   recurrenceId           String?
+  timetableSlotId        String? // set when generated from a weekly timetable slot
+  timetableSlot          TimetableSlot?    @relation(fields: [timetableSlotId], references: [id], onDelete: SetNull)
+  occurrenceDate         String? // local date (YYYY-MM-DD, slot time zone) of the generated occurrence
   rescheduledFromId      String?
   rescheduledToId        String?
   isCreditReserved       Boolean           @default(true)
@@ -215,6 +249,9 @@ model Session {
   payoutItems            PayoutItem[]
   createdAt              DateTime          @default(now())
   updatedAt              DateTime          @updatedAt
+
+  // A slot produces at most one class per date, so regeneration is idempotent.
+  @@unique([timetableSlotId, occurrenceDate])
 }
 
 model AttendanceRecord {
@@ -456,4 +493,13 @@ model AuditLog {
   actorName  String
   details    String
   createdAt  DateTime @default(now())
+}
+
+// Remembers which record a create request produced, so a retried submission
+// (double click, network timeout) returns that record instead of a duplicate.
+model IdempotencyKey {
+  key       String   @id // "<scope>:<client key>"
+  scope     String
+  entityId  String
+  createdAt DateTime @default(now())
 }

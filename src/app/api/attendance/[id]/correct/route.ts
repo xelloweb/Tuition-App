@@ -1,31 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { canCorrectAttendance, requirePermission, requireUser } from "@/lib/auth";
+import { readJsonObject, withErrorHandling } from "@/lib/api-errors";
 import { correctAttendanceRecord } from "@/lib/attendance-ledger";
+import { SessionOutcome, StudentAttendance } from "@/lib/types";
 
-export async function POST(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await context.params;
-    const user = await getCurrentUser();
-    const body = await req.json();
+type Ctx = { params: Promise<{ id: string }> };
 
-    const { newOutcome, newAttendance, reason } = body;
+export const POST = withErrorHandling<Ctx>("POST /api/attendance/[id]/correct", async (req, { params }) => {
+  const { id } = await params;
+  const user = await requireUser();
+  requirePermission(canCorrectAttendance(user.role), "Only the owner or an academic coordinator can correct attendance.");
 
-    const result = await correctAttendanceRecord(
-      id,
-      newOutcome,
-      newAttendance,
-      reason,
-      user
-    );
-
-    return NextResponse.json({ success: true, result });
-  } catch (err: any) {
-    return NextResponse.json(
-      { error: err.message || "Failed to correct attendance" },
-      { status: 400 }
-    );
-  }
-}
+  const body = await readJsonObject(req);
+  const result = await correctAttendanceRecord(
+    id,
+    String(body.newOutcome ?? "") as SessionOutcome,
+    String(body.newAttendance ?? "") as StudentAttendance,
+    typeof body.reason === "string" ? body.reason : "",
+    user
+  );
+  return NextResponse.json({ success: true, result, warnings: result.warnings });
+});

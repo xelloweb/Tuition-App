@@ -1,8 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, AlertCircle, CheckCircle2, ArrowRight, ShieldCheck, RefreshCw } from "lucide-react";
+import {
+  X,
+  AlertCircle,
+  CheckCircle2,
+  ArrowRight,
+  ShieldCheck,
+  RefreshCw,
+  Plus,
+  Minus,
+  ArrowRightLeft,
+  Sparkles,
+} from "lucide-react";
+import { errorMessage as toErrorMessage, readApiResponse } from "@/lib/client-api";
 import { PackageBalanceBreakdown } from "@/lib/types";
+import { Button } from "@/components/ui/Button";
 
 interface ReallocateModalProps {
   pkg: PackageBalanceBreakdown;
@@ -25,6 +38,11 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState("");
+
+  // Transfer helper state (quick transfer between 2 subjects)
+  const [transferFrom, setTransferFrom] = useState(pkg.subjects[0]?.subjectId || "");
+  const [transferTo, setTransferTo] = useState(pkg.subjects[1]?.subjectId || "");
+  const [transferCount, setTransferCount] = useState(1);
 
   const totalAllocated = Object.values(allocations).reduce((a, b) => a + Number(b || 0), 0);
   const unallocated = pkg.totalEntitlement - totalAllocated;
@@ -50,7 +68,12 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
           body: JSON.stringify(payload),
         });
 
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !Array.isArray(data.errors)) {
+          setValidationResult(null);
+          setErrorMessage(data?.error || "Could not check this reallocation. Try again.");
+          return;
+        }
         setValidationResult(data);
       } catch (err: any) {
         console.error("Preview validation error", err);
@@ -66,14 +89,53 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
   const handleAllocationChange = (subjectId: string, val: number) => {
     setAllocations((prev) => ({
       ...prev,
-      [subjectId]: val,
+      [subjectId]: Math.max(0, val),
     }));
+  };
+
+  const handleIncrement = (subjectId: string) => {
+    setAllocations((prev) => ({
+      ...prev,
+      [subjectId]: (prev[subjectId] || 0) + 1,
+    }));
+  };
+
+  const handleDecrement = (subjectId: string, minAllowed: number) => {
+    setAllocations((prev) => {
+      const current = prev[subjectId] || 0;
+      if (current <= minAllowed) return prev;
+      return {
+        ...prev,
+        [subjectId]: current - 1,
+      };
+    });
+  };
+
+  const handleApplyTransfer = () => {
+    if (!transferFrom || !transferTo || transferFrom === transferTo || transferCount <= 0) return;
+    const fromSub = pkg.subjects.find((s) => s.subjectId === transferFrom);
+    const minFromAllowed = (fromSub?.consumedCredits || 0) + (fromSub?.reservedCredits || 0);
+    const currentFrom = allocations[transferFrom] || 0;
+
+    if (currentFrom - transferCount < minFromAllowed) {
+      setErrorMessage(
+        `Cannot transfer ${transferCount} classes: would violate consumed (${fromSub?.consumedCredits}) or reserved (${fromSub?.reservedCredits}) classes.`
+      );
+      return;
+    }
+
+    setAllocations((prev) => ({
+      ...prev,
+      [transferFrom]: (prev[transferFrom] || 0) - transferCount,
+      [transferTo]: (prev[transferTo] || 0) + transferCount,
+    }));
+    setErrorMessage("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) {
-      setErrorMessage("Please enter a clear operational reason for this reallocation.");
+      setErrorMessage("Please enter an operational reason for this reallocation.");
       return;
     }
 
@@ -97,119 +159,212 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to reallocate package credits");
-      }
+      const data = await readApiResponse<any>(res, "Failed to reallocate package credits");
 
       onSuccess();
     } catch (err: any) {
-      setErrorMessage(err.message);
+      setErrorMessage(toErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+    <div className="fixed inset-0 z-50 modal-overlay bg-black/75 p-3 sm:p-4 backdrop-blur-md">
+      <div className="w-full max-w-2xl rounded-3xl bg-[#0c1220] p-5 sm:p-6 shadow-2xl border border-slate-800 text-white my-8 animate-in fade-in zoom-in-95 duration-150">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">
+            <h3 className="text-base sm:text-lg font-bold text-white">
               Reallocate Remaining Classes
             </h3>
-            <p className="text-xs text-slate-500">
-              Package: <span className="font-semibold text-slate-800">{pkg.packageName}</span> ({pkg.packageNumber})
+            <p className="text-xs text-slate-400">
+              Package: <span className="font-semibold text-teal-400">{pkg.packageName}</span> ({pkg.packageNumber})
             </p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white min-touch-target flex items-center justify-center transition-colors"
+            aria-label="Close dialog"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-5 space-y-5">
-          {/* Entitlement Banner */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4 border border-slate-200">
-            <div>
-              <span className="text-xs text-slate-500">Total Entitlement</span>
-              <div className="text-xl font-black text-slate-900">
-                {pkg.totalEntitlement} Classes
+        <form onSubmit={handleSubmit} className="mt-4 space-y-5 text-xs">
+          {/* PACKAGE METRICS SUMMARY BANNER */}
+          <div className="rounded-2xl bg-slate-900/80 p-4 border border-slate-800">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Package</span>
+                <span className="text-lg sm:text-xl font-black text-white font-mono tabular-nums">
+                  {pkg.totalEntitlement}
+                </span>
+                <span className="text-[10px] text-slate-400 block">Entitlement</span>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Consumed</span>
+                <span className="text-lg sm:text-xl font-bold text-slate-300 font-mono tabular-nums">
+                  {pkg.totalConsumed}
+                </span>
+                <span className="text-[10px] text-slate-400 block">Taught & Locked</span>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Remaining</span>
+                <span className="text-lg sm:text-xl font-bold text-teal-400 font-mono tabular-nums">
+                  {pkg.totalRemaining}
+                </span>
+                <span className="text-[10px] text-slate-400 block">Unused Credits</span>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Proposed Sum</span>
+                <span
+                  className={`text-lg sm:text-xl font-black font-mono tabular-nums ${
+                    totalAllocated === pkg.totalEntitlement ? "text-emerald-400" : "text-rose-400"
+                  }`}
+                >
+                  {totalAllocated} / {pkg.totalEntitlement}
+                </span>
+                <span className="text-[10px] text-slate-400 block">
+                  {totalAllocated === pkg.totalEntitlement ? "Balanced" : `${pkg.totalEntitlement - totalAllocated} unallocated`}
+                </span>
               </div>
             </div>
-            <div>
-              <span className="text-xs text-slate-500">Already Consumed</span>
-              <div className="text-xl font-bold text-slate-700">
-                {pkg.totalConsumed} Classes
-              </div>
-            </div>
-            <div>
-              <span className="text-xs text-slate-500">Remaining to Allocate</span>
-              <div className="text-xl font-bold text-teal-700">
-                {pkg.totalRemaining} Classes
-              </div>
-            </div>
-            <div>
-              <span className="text-xs text-slate-500">Proposed Sum</span>
-              <div
-                className={`text-xl font-bold ${
-                  totalAllocated === pkg.totalEntitlement
-                    ? "text-emerald-700"
-                    : "text-red-700"
-                }`}
-              >
-                {totalAllocated} / {pkg.totalEntitlement}
-              </div>
-            </div>
+            <p className="mt-2 text-[11px] text-slate-400 text-center border-t border-slate-800 pt-2">
+              Remaining credits are flexible across enrolled subjects. Total package classes remain fixed.
+            </p>
           </div>
 
-          {/* Subject Allocations Inputs & Live Balance Preview */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Subject Class Allocations
+          {/* STEP 2 & 3: QUICK TRANSFER TOOL */}
+          {pkg.subjects.length >= 2 && (
+            <div className="rounded-2xl border border-teal-500/20 bg-teal-500/5 p-3.5 space-y-2.5">
+              <div className="flex items-center gap-1.5 font-bold text-teal-400 text-xs">
+                <ArrowRightLeft className="h-4 w-4 text-teal-400" />
+                <span>Quick Transfer Between Subjects:</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
+                <div className="sm:col-span-1">
+                  <label className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Transfer From</label>
+                  <select
+                    value={transferFrom}
+                    onChange={(e) => setTransferFrom(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2 font-semibold text-white text-xs focus:outline-hidden focus:border-teal-500"
+                  >
+                    {pkg.subjects.map((s) => (
+                      <option key={s.subjectId} value={s.subjectId}>
+                        {s.subjectName} (Avail: {Math.max(0, (allocations[s.subjectId] || 0) - s.consumedCredits - s.reservedCredits)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="sm:col-span-1">
+                  <label className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Transfer To</label>
+                  <select
+                    value={transferTo}
+                    onChange={(e) => setTransferTo(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2 font-semibold text-white text-xs focus:outline-hidden focus:border-teal-500"
+                  >
+                    {pkg.subjects.map((s) => (
+                      <option key={s.subjectId} value={s.subjectId}>
+                        {s.subjectName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="sm:col-span-1">
+                  <label className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Classes Count</label>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 5].map((cnt) => (
+                      <button
+                        key={cnt}
+                        type="button"
+                        onClick={() => setTransferCount(cnt)}
+                        className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-colors ${
+                          transferCount === cnt
+                            ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-500/20"
+                            : "bg-slate-900 border border-slate-700 text-slate-300 hover:text-white"
+                        }`}
+                      >
+                        +{cnt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="sm:col-span-1 pt-3 sm:pt-0">
+                  <button
+                    type="button"
+                    onClick={handleApplyTransfer}
+                    className="w-full rounded-xl bg-teal-500 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-teal-400 shadow-md shadow-teal-500/20 transition-all active:scale-95"
+                  >
+                    Apply Transfer
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 1: SUBJECT-BY-SUBJECT ALLOCATION CONTROLS */}
+          <div className="space-y-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Detailed Subject Credit Allocations
             </h4>
-            <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+
+            <div className="divide-y divide-slate-800 rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden">
               {pkg.subjects.map((sub) => {
                 const currentVal = allocations[sub.subjectId] ?? sub.allocatedCredits;
+                const minAllowed = sub.consumedCredits;
                 const newRemaining = currentVal - sub.consumedCredits;
+                const availableToSchedule = Math.max(0, newRemaining - sub.reservedCredits);
 
                 return (
                   <div
                     key={sub.subjectId}
-                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"
                   >
-                    <div>
+                    <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span
-                          className="h-3 w-3 rounded-full"
+                          className="h-3 w-3 rounded-full shrink-0"
                           style={{ backgroundColor: sub.subjectColor }}
                         />
-                        <span className="font-bold text-slate-900 text-sm">
+                        <span className="font-bold text-white text-sm">
                           {sub.subjectName}
                         </span>
-                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                        <span className="rounded-md bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300 border border-slate-700">
                           {sub.subjectCode}
                         </span>
                       </div>
-                      <div className="mt-1 text-xs text-slate-500 space-x-2">
-                        <span>Consumed: <strong>{sub.consumedCredits}</strong></span>
+
+                      <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-2">
+                        <span>Consumed: <strong className="text-slate-200">{sub.consumedCredits}</strong></span>
                         <span>•</span>
-                        <span>Reserved: <strong>{sub.reservedCredits}</strong></span>
+                        <span>Reserved: <strong className="text-slate-200">{sub.reservedCredits}</strong></span>
                         <span>•</span>
-                        <span>Original: <strong>{sub.allocatedCredits}</strong></span>
+                        <span>
+                          Available to Schedule: <strong className="text-teal-400">{availableToSchedule}</strong>
+                        </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs text-slate-600 font-medium">
-                          New:
-                        </label>
+                    {/* Numeric Input + Increment/Decrement Buttons */}
+                    <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleDecrement(sub.subjectId, minAllowed)}
+                          disabled={currentVal <= minAllowed}
+                          className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          aria-label={`Decrease ${sub.subjectName} credits`}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+
                         <input
                           type="number"
-                          min={sub.consumedCredits}
+                          min={minAllowed}
                           max={pkg.totalEntitlement}
                           value={currentVal}
                           onChange={(e) =>
@@ -218,20 +373,25 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
                               parseInt(e.target.value) || 0
                             )
                           }
-                          className="w-20 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-bold text-slate-900 text-center focus:border-teal-500 focus:outline-hidden"
+                          className="w-16 h-9 rounded-xl border border-slate-700 bg-slate-950 px-2 py-1 text-sm font-bold text-white text-center font-mono tabular-nums focus:border-teal-500 focus:outline-hidden"
+                          aria-label={`${sub.subjectName} credit allocation`}
                         />
+
+                        <button
+                          type="button"
+                          onClick={() => handleIncrement(sub.subjectId)}
+                          className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                          aria-label={`Increase ${sub.subjectName} credits`}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
                       </div>
 
-                      <div className="text-right min-w-[90px]">
-                        <span className="text-[10px] text-slate-400 uppercase">
-                          New Remaining
-                        </span>
-                        <div
-                          className={`text-sm font-bold ${
-                            newRemaining >= 0 ? "text-teal-700" : "text-red-700"
-                          }`}
-                        >
-                          {newRemaining} Classes
+                      {/* Before and After badge */}
+                      <div className="text-right min-w-[80px]">
+                        <span className="text-[10px] text-slate-500 uppercase block">Before → After</span>
+                        <div className="font-mono font-bold text-slate-300 text-xs">
+                          {sub.allocatedCredits} → <span className="text-teal-400 font-black">{currentVal}</span>
                         </div>
                       </div>
                     </div>
@@ -241,93 +401,96 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
             </div>
           </div>
 
-          {/* Validation Errors & Conflict Warnings */}
+          {/* STEP 6: BEFORE AND AFTER REVIEW CARD */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-200">
+              <span>Before & After Reallocation Summary</span>
+              <span className="text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
+                No Fee Change (Equal Rate)
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+              {pkg.subjects.map((sub) => {
+                const newVal = allocations[sub.subjectId] ?? sub.allocatedCredits;
+                return (
+                  <span key={sub.subjectId} className="inline-flex items-center gap-1 font-medium text-slate-300">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: sub.subjectColor }} />
+                    {sub.subjectName}: <strong>{sub.allocatedCredits}</strong> → <strong className="text-teal-400">{newVal}</strong>
+                  </span>
+                );
+              })}
+              <span className="font-semibold text-slate-300 ml-auto">
+                Total: {pkg.totalEntitlement} classes (unchanged)
+              </span>
+            </div>
+          </div>
+
+          {/* VALIDATION CONSTRAINTS / CONFLICTS */}
           {validationResult && !validationResult.valid && (
-            <div className="rounded-xl border border-red-200 bg-red-50/80 p-4 text-xs text-red-800 space-y-1.5">
-              <div className="flex items-center gap-2 font-bold">
-                <AlertCircle className="h-4 w-4 text-red-600" />
-                Validation Constraints Blocked
+            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs text-rose-300 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-rose-400">
+                <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+                <span>Reallocation Constraint Blocked</span>
               </div>
-              <ul className="list-disc list-inside space-y-1">
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-rose-300">
                 {validationResult.errors.map((err: string, i: number) => (
                   <li key={i}>{err}</li>
                 ))}
               </ul>
-              {validationResult.affectedSessions?.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-red-200">
-                  <span className="font-semibold">Conflicting Scheduled Sessions:</span>
-                  <ul className="mt-1 space-y-0.5 text-[11px]">
-                    {validationResult.affectedSessions.map((s: any, idx: number) => (
-                      <li key={idx}>
-                        • {s.subjectName} with {s.teacherName} (ID: {s.sessionId})
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
           )}
 
-          {/* Success Validation Preview */}
           {validationResult && validationResult.valid && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3.5 text-xs text-emerald-800 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
               <span>
-                Valid allocation configuration. Sum matches {pkg.totalEntitlement} classes and all future reservations are satisfied.
+                Valid allocation configuration. Sum matches {pkg.totalEntitlement} classes and all future bookings are satisfied.
               </span>
             </div>
           )}
 
           {errorMessage && (
-            <div className="rounded-lg bg-red-100 p-3 text-xs text-red-800 font-medium">
+            <div className="rounded-xl bg-rose-500/20 border border-rose-500/30 p-3 text-xs text-rose-300 font-medium">
               {errorMessage}
             </div>
           )}
 
-          {/* Reason input */}
+          {/* STEP 5: AUDITED OPERATIONAL REASON */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Operational Reason (Audited) *
+            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
+              Operational Reason (Audited in Credit Ledger) *
             </label>
             <input
               type="text"
               required
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. Student requested Chemistry boost for upcoming CBSE term exams"
-              className="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm text-slate-900 focus:border-teal-500 focus:outline-hidden"
+              placeholder="e.g. Student requested Chemistry boost for upcoming exams"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:border-teal-500 focus:outline-hidden min-touch-target"
             />
             <p className="mt-1 text-[11px] text-slate-400">
-              Reason will be permanently recorded in the auditable class-credit ledger along with your username and timestamp.
+              Reason is permanently logged in the auditable credit ledger along with role and timestamp.
             </p>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-            <button
+          {/* STEP 7: CONFIRMATION CONTROLS */}
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+            <Button
               type="button"
+              variant="outline"
               onClick={onClose}
-              className="rounded-lg px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+              disabled={loading}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
+              loading={loading}
               disabled={loading || (validationResult && !validationResult.valid)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-teal-700 disabled:opacity-50 transition-all shadow-sm"
+              icon={ShieldCheck}
             >
-              {loading ? (
-                <>
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  Recording Reallocation...
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="h-4 w-4" />
-                  Confirm & Audit Reallocation
-                </>
-              )}
-            </button>
+              Confirm & Audit Reallocation
+            </Button>
           </div>
         </form>
       </div>

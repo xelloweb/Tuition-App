@@ -1,29 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { canVerifyPayments, requirePermission, requireUser } from "@/lib/auth";
+import { withErrorHandling } from "@/lib/api-errors";
 import { verifyAndAllocatePayment } from "@/lib/billing";
 
-export async function POST(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await context.params;
-    const user = await getCurrentUser();
-    const body = await req.json().catch(() => ({}));
-    const { invoiceId, notes } = body;
+type Ctx = { params: Promise<{ id: string }> };
 
-    const result = await verifyAndAllocatePayment({
-      paymentId: id,
-      invoiceId,
-      user,
-      notes,
-    });
+export const POST = withErrorHandling<Ctx>("POST /api/payments/[id]/verify", async (req, { params }) => {
+  const user = await requireUser();
+  requirePermission(canVerifyPayments(user.role), "Only Accounts staff or the owner can verify payments.");
 
-    return NextResponse.json({ success: true, payment: result });
-  } catch (err: any) {
-    return NextResponse.json(
-      { error: err.message || "Failed to verify payment" },
-      { status: 400 }
-    );
-  }
-}
+  const { id } = await params;
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const invoiceId = typeof body.invoiceId === "string" && body.invoiceId ? body.invoiceId : undefined;
+  const notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim().slice(0, 500) : undefined;
+
+  const result = await verifyAndAllocatePayment({ paymentId: id, invoiceId, user, notes });
+  return NextResponse.json({ success: true, payment: result });
+});

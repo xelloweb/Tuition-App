@@ -1,9 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, canAccessFinancial } from "@/lib/auth";
+import { isPastDue } from "@/lib/billing";
+import { AccessDenied } from "@/components/ui/AccessDenied";
 import { BillingClient } from "./BillingClient";
+
+export const dynamic = "force-dynamic";
 
 export default async function BillingPage() {
   const user = await getCurrentUser();
+  if (!canAccessFinancial(user.role)) {
+    return <AccessDenied message="Payments and invoices are available to the owner and Accounts staff." />;
+  }
 
   const invoices = await prisma.invoice.findMany({
     include: {
@@ -40,7 +47,7 @@ export default async function BillingPage() {
     if (inv.status !== "CANCELLED") {
       netBilled += inv.totalAmount;
       outstanding += inv.balanceDue;
-      if (inv.balanceDue > 0 && new Date(inv.dueDate) < now) {
+      if (inv.balanceDue > 0 && isPastDue(inv.dueDate, now)) {
         overdue += inv.balanceDue;
       }
     }

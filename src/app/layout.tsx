@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { cookies } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
+import { isValidTimeZone } from "@/lib/validation";
+import { isEphemeralDatabase } from "@/lib/prisma";
 import { AppShell } from "@/components/layout/AppShell";
 
 const geistSans = Geist({
@@ -26,6 +29,9 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const currentUser = await getCurrentUser();
+  const tzCookie = (await cookies()).get("xello_display_tz")?.value;
+  const decodedTz = tzCookie ? decodeURIComponent(tzCookie) : "";
+  const displayTimeZone = decodedTz && isValidTimeZone(decodedTz) ? decodedTz : "Asia/Kolkata";
 
   return (
     <html
@@ -33,7 +39,9 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">
-        <AppShell currentUser={currentUser}>{children}</AppShell>
+        <AppShell currentUser={currentUser} displayTimeZone={displayTimeZone} ephemeralStorage={isEphemeralDatabase}>
+          {children}
+        </AppShell>
       </body>
     </html>
   );

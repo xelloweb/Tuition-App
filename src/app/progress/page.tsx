@@ -1,9 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { AccessDenied } from "@/components/ui/AccessDenied";
 import { ProgressClient } from "./ProgressClient";
 
 export default async function ProgressPage() {
   const user = await getCurrentUser();
+  if (user.role === "ACCOUNTS") {
+    return <AccessDenied message="Progress reports are available to the owner, coordinators and trainers." />;
+  }
 
   const progressWhere: any = {};
   const assessmentWhere: any = {};

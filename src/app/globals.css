@@ -2,25 +2,64 @@
 
 @layer base {
   :root {
-    --primary: #0f766e;
-    --primary-hover: #115e59;
-    --primary-light: #ccfbf1;
-    --primary-dark: #134e4a;
-    --accent: #2563eb;
-    --bg-main: #f8fafc;
-    --surface: #ffffff;
-    --surface-border: #e2e8f0;
-    --text-primary: #0f172a;
-    --text-secondary: #475569;
-    --text-muted: #94a3b8;
+    --primary: #14b8a6;
+    --primary-hover: #0d9488;
+    --primary-light: #042f2e;
+    --primary-border: #134e4a;
+    --primary-dark: #0f766e;
+    --accent: #6366f1;
+    --bg-main: #070a12;
+    --surface: #0f172a;
+    --surface-border: #1e293b;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
   }
 }
 
 body {
-  background-color: var(--bg-main);
-  color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: #070a12;
+  color: #f8fafc;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular numerals for monetary figures, dates & balances */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Touch target guarantee */
+.min-touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Safe area padding utilities for mobile notched devices */
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 1rem));
+}
+
+.pt-safe {
+  padding-top: max(1rem, env(safe-area-inset-top, 1rem));
+}
+
+/* App Card styling */
+.app-card {
+  background-color: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.25rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app-card:hover {
+  border-color: rgba(20, 184, 166, 0.3);
 }
 
 /* Custom scrollbars */
@@ -29,32 +68,69 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #090d16;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #1e293b;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #334155;
+}
+
+/* Clean accessible focus indicators */
+*:focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 2px;
 }
 
 /* Smooth micro-transitions */
-button, a, input, select {
+button, a, input, select, textarea {
   transition-property: color, background-color, border-color, box-shadow, transform;
-  transition-duration: 150ms;
+  transition-duration: 120ms;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Print Styles */
 @media print {
-  .no-print {
+  .no-print, nav, aside, header, .mobile-bottom-nav, footer {
     display: none !important;
   }
   .print-only {
     display: block !important;
   }
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
   body {
     background: white !important;
     color: black !important;
   }
+  .invoice-card {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+  }
+}
+
+/* Dialog overlay: scrolls, and centres the dialog only when it fits.
+   `safe center` keeps the top of a tall dialog reachable on small screens;
+   browsers without `safe` support fall back to top alignment. */
+.modal-overlay {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  align-items: safe center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }

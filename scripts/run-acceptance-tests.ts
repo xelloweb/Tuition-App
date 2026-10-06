@@ -1,4 +1,5 @@
 import assert from "node:assert";
+import path from "node:path";
 import { prisma } from "../src/lib/prisma";
 import { calculatePackageBalances } from "../src/lib/package-calculations";
 import { validateReallocation, executeReallocation } from "../src/lib/reallocation";
@@ -6,6 +7,13 @@ import { submitSessionAttendance, correctAttendanceRecord } from "../src/lib/att
 import { verifyAndAllocatePayment, calculateStudentFinancialSummary } from "../src/lib/billing";
 import { formatInTimeZone } from "../src/lib/timezones";
 import { canMarkAttendance, canReallocatePackages, DEMO_USERS } from "../src/lib/auth";
+
+// These scenarios create records, so never point them at the development database.
+const dbUrl = process.env.DATABASE_URL ?? "";
+if (!dbUrl || dbUrl === "file:./dev.db" || (dbUrl.startsWith("file:") && path.resolve(dbUrl.slice(5)) === path.resolve(__dirname, "..", "prisma", "dev.db"))) {
+  console.error("Refusing to run acceptance tests against prisma/dev.db. Use `npm test`, which creates a disposable database.");
+  process.exit(1);
+}
 
 async function runTestSuite() {
   console.log("\n=======================================================");
@@ -32,10 +40,10 @@ async function runTestSuite() {
   // 1. Scenario 1: Create a student, two subjects, two teachers, and a 20-class package allocated 10/10.
   let student1Id = "";
   let pkg1Id = "";
-  let chemId = "sub-chem";
-  let engId = "sub-eng";
-  let rahulId = "tch-rahul";
-  let priyaId = "tch-priya";
+  const chemId = "sub-chem";
+  const engId = "sub-eng";
+  const rahulId = "tch-rahul";
+  const priyaId = "tch-priya";
 
   await scenario(1, "Create student, 2 subjects, 2 teachers, 20-class package allocated 10/10", async () => {
     const student = await prisma.student.create({

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { prisma } from "./prisma";
 import { UserRole, CurrentUser } from "./types";
+import { ApiError, forbiddenError } from "./api-errors";
 
 export const DEMO_USERS: Record<string, CurrentUser> = {
   admin: {
@@ -37,6 +38,11 @@ export const DEMO_USERS: Record<string, CurrentUser> = {
   },
 };
 
+/**
+ * DEMO IDENTITY ONLY: the role comes from the persona switcher cookie, which
+ * any browser can set. Replace with real authentication before production use;
+ * every permission check below assumes the identity it receives is genuine.
+ */
 export async function getCurrentUser(): Promise<CurrentUser> {
   const cookieStore = await cookies();
   const personaKey = cookieStore.get("xello_user_persona")?.value || "admin";
@@ -44,12 +50,54 @@ export async function getCurrentUser(): Promise<CurrentUser> {
   return user;
 }
 
+/** For API routes: resolves the caller or fails with 401 (expired / missing session). */
+export async function requireUser(): Promise<CurrentUser> {
+  const user = await getCurrentUser().catch(() => null);
+  if (!user) {
+    throw new ApiError(401, "UNAUTHENTICATED", "Your session has expired. Please sign in again.");
+  }
+  return user;
+}
+
+export function requirePermission(allowed: boolean, message?: string): void {
+  if (!allowed) throw forbiddenError(message);
+}
+
+/** Owner and coordinators manage academic records (students, enrolments, subjects, schedules). */
 export function canAccessAcademic(role: UserRole): boolean {
   return role === "OWNER" || role === "COORDINATOR";
 }
 
+export const canManageStudents = canAccessAcademic;
+export const canManageTeachers = canAccessAcademic;
+export const canScheduleSessions = canAccessAcademic;
+export const canCorrectAttendance = canAccessAcademic;
+
+/** Roles that may see the full student directory (teachers only see their own students). */
+export function canViewAllStudents(role: UserRole): boolean {
+  return role === "OWNER" || role === "COORDINATOR" || role === "ACCOUNTS";
+}
+
+/** Pay rates are financial data: only the owner may set them. */
+export function canManageTeacherRates(role: UserRole): boolean {
+  return role === "OWNER";
+}
+
+export function canViewTeacherRates(
+  role: UserRole,
+  viewerTeacherId?: string | null,
+  teacherId?: string
+): boolean {
+  if (role === "OWNER" || role === "ACCOUNTS") return true;
+  return role === "TEACHER" && !!viewerTeacherId && viewerTeacherId === teacherId;
+}
+
 export function canAccessFinancial(role: UserRole): boolean {
   return role === "OWNER" || role === "ACCOUNTS";
+}
+
+export function canLogFollowUps(role: UserRole): boolean {
+  return role === "OWNER" || role === "COORDINATOR" || role === "ACCOUNTS";
 }
 
 export function canReallocatePackages(role: UserRole): boolean {
@@ -74,5 +122,24 @@ export function canMarkAttendance(
     // Teacher can only mark attendance for their own sessions!
     return !!teacherId && !!sessionTeacherId && teacherId === sessionTeacherId;
   }
+  return false;
+}
+
+/** A teacher may see a student they are assigned to or have a session with. */
+export async function teacherCanAccessStudent(
+  teacherId: string | null | undefined,
+  studentId: string
+): Promise<boolean> {
+  if (!teacherId) return false;
+  const [enrolment, session] = await Promise.all([
+    prisma.subjectEnrollment.findFirst({ where: { studentId, teacherId }, select: { id: true } }),
+    prisma.session.findFirst({ where: { studentId, teacherId }, select: { id: true } }),
+  ]);
+  return Boolean(enrolment || session);
+}
+
+export async function canViewStudent(user: CurrentUser, studentId: string): Promise<boolean> {
+  if (canViewAllStudents(user.role)) return true;
+  if (user.role === "TEACHER") return teacherCanAccessStudent(user.teacherId, studentId);
   return false;
 }

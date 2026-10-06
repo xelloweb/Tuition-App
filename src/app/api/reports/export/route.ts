@@ -10,10 +10,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type") || "packages";
 
-    if (
-      (type === "collections" || type === "payouts") &&
-      !canAccessFinancial(user.role)
-    ) {
+    // Exports cover every student, so trainers (scoped to their own students) cannot download them.
+    if (user.role === "TEACHER") {
+      return new NextResponse("Forbidden: exports are available to the owner, coordinators and Accounts.", { status: 403 });
+    }
+    if (type === "collections" && !canAccessFinancial(user.role)) {
       return new NextResponse(
         "Forbidden: You do not have permissions to export financial data.",
         { status: 403 }
@@ -162,7 +163,9 @@ export async function GET(req: NextRequest) {
     }
 
     return new NextResponse("Unknown report type", { status: 400 });
-  } catch (err: any) {
-    return new NextResponse(err.message, { status: 500 });
+  } catch (err) {
+    const reference = `ERR-${Date.now().toString(36).toUpperCase()}`;
+    console.error(`[${reference}] GET /api/reports/export:`, err instanceof Error ? err.message.split("\n")[0] : "unknown error");
+    return new NextResponse(`The export could not be generated. Please try again (reference ${reference}).`, { status: 500 });
   }
 }

@@ -11,19 +11,28 @@ import {
   X,
   RefreshCw,
   Sparkles,
+  GraduationCap,
+  CalendarCheck2,
+  Wallet,
 } from "lucide-react";
+import { errorMessage, readApiResponse } from "@/lib/client-api";
 import { formatInTimeZone } from "@/lib/timezones";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 
 interface PayoutsClientProps {
   payoutRuns: any[];
   unbatchedItems: any[];
   canManagePayouts: boolean;
+  isTeacher?: boolean;
+  teacherName?: string;
 }
 
 export function PayoutsClient({
   payoutRuns,
   unbatchedItems,
   canManagePayouts,
+  isTeacher = false,
+  teacherName,
 }: PayoutsClientProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -40,14 +49,11 @@ export function PayoutsClient({
         body: JSON.stringify({ action: "CREATE_RUN" }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to create payout run");
-      }
+      const data = await readApiResponse<any>(res, "Failed to create payout run");
 
       router.refresh();
     } catch (err: any) {
-      setErrorMsg(err.message);
+      setErrorMsg(errorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -64,142 +70,284 @@ export function PayoutsClient({
         body: JSON.stringify({ action: "MARK_PAID", runId }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to mark run as paid");
-      }
+      const data = await readApiResponse<any>(res, "Failed to mark run as paid");
 
       router.refresh();
     } catch (err: any) {
-      setErrorMsg(err.message);
+      setErrorMsg(errorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
+  const allRunItems = payoutRuns.flatMap((r) => r.items);
   const totalUnbatched = unbatchedItems.reduce((acc, it) => acc + it.amount, 0);
+
+  // Teacher-specific aggregated metrics
+  const totalLifetimeEarned =
+    totalUnbatched + allRunItems.reduce((acc, it) => acc + it.amount, 0);
+  const totalPaidOut = payoutRuns
+    .filter((r) => r.status === "PAID")
+    .flatMap((r) => r.items)
+    .reduce((acc, it) => acc + it.amount, 0);
+  const totalPendingPayout = totalLifetimeEarned - totalPaidOut;
+  const totalCompletedClasses = unbatchedItems.length + allRunItems.length;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-teal-700">
-            <DollarSign className="h-4 w-4" />
-            <span>Faculty Payroll & Earnings</span>
+          <div className="flex items-center gap-2 text-xs font-semibold text-teal-400">
+            {isTeacher ? (
+              <GraduationCap className="h-4 w-4" />
+            ) : (
+              <DollarSign className="h-4 w-4" />
+            )}
+            <span>
+              {isTeacher
+                ? "Faculty Earnings & Payout Statements"
+                : "Faculty Payroll & Earnings"}
+            </span>
           </div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">
-            Teacher Payout Runs & Snapshots
+          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
+            {isTeacher ? "My Teaching Earnings & Payouts" : "Teacher Payout Runs & Snapshots"}
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Calculated strictly from approved completed classes with hourly rate snapshots. No session can appear in multiple runs.
+          <p className="text-xs text-slate-400 mt-0.5">
+            {isTeacher
+              ? `Welcome ${teacherName || ""}. Your earnings are calculated strictly from your completed classes and agreed standard-wise hourly rates.`
+              : "Calculated strictly from approved completed classes with hourly rate snapshots. No session can appear in multiple runs."}
           </p>
         </div>
 
-        {canManagePayouts && unbatchedItems.length > 0 && (
+        {canManagePayouts && !isTeacher && unbatchedItems.length > 0 && (
           <button
             onClick={handleCreateRun}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-teal-700 shadow-2xs shrink-0 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-teal-400 to-emerald-500 px-5 py-3 text-xs font-black text-slate-950 hover:brightness-110 shadow-lg shadow-teal-500/20 shrink-0 disabled:opacity-50 transition-all active:scale-95"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-4 w-4 stroke-[3]" />
             {loading ? "Creating..." : `Create Payout Run (${unbatchedItems.length} Sessions)`}
           </button>
         )}
       </div>
 
       {errorMsg && (
-        <div className="rounded-lg bg-red-100 p-3 text-xs text-red-800 font-medium">
+        <div className="rounded-2xl bg-red-950/40 border border-red-500/30 p-4 text-xs text-red-300 font-medium">
           {errorMsg}
         </div>
       )}
 
-      {/* Unbatched Pending Earnings Banner */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <span className="text-xs font-semibold text-slate-500">
-            Approved Sessions Awaiting Payout Run
-          </span>
-          <div className="text-2xl font-black text-slate-900 mt-1">
-            ₹{totalUnbatched.toLocaleString("en-IN")}
+      {/* Teacher-Specific Summary Cards */}
+      {isTeacher && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="rounded-3xl border border-teal-500/20 bg-teal-500/5 backdrop-blur-xl p-4 sm:p-5 shadow-lg space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-400">
+              Total Lifetime Earned
+            </span>
+            <div className="text-2xl sm:text-3xl font-black text-teal-300">
+              ₹{totalLifetimeEarned.toLocaleString("en-IN")}
+            </div>
+            <p className="text-[11px] text-teal-400/80">
+              From all {totalCompletedClasses} completed classes
+            </p>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            {unbatchedItems.length} session(s) taught and verified
-          </p>
+
+          <div className="rounded-3xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-xl p-4 sm:p-5 shadow-lg space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
+              Pending Payout
+            </span>
+            <div className="text-2xl sm:text-3xl font-black text-amber-300">
+              ₹{totalPendingPayout.toLocaleString("en-IN")}
+            </div>
+            <p className="text-[11px] text-amber-400/80">
+              {unbatchedItems.length} class(es) awaiting batch processing
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 backdrop-blur-xl p-4 sm:p-5 shadow-lg space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+              Paid Out to Bank
+            </span>
+            <div className="text-2xl sm:text-3xl font-black text-emerald-300">
+              ₹{totalPaidOut.toLocaleString("en-IN")}
+            </div>
+            <p className="text-[11px] text-emerald-400/80">
+              Transferred via verified payout runs
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 backdrop-blur-xl p-4 sm:p-5 shadow-lg space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Classes Delivered
+            </span>
+            <div className="text-2xl sm:text-3xl font-black text-white">
+              {totalCompletedClasses}
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Sessions conducted & attendance verified
+            </p>
+          </div>
         </div>
-        <div className="text-xs text-slate-500 max-w-sm">
-          Rate snapshot rule: Each session records the tutor's agreed rate per hour at class completion time. Future rate changes do not retroactively alter unpaid or completed sessions.
+      )}
+
+      {/* Unbatched Pending Earnings Banner & Itemized Breakdown */}
+      <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl shadow-xl overflow-hidden">
+        <div className="p-5 sm:p-6 border-b border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <span className="text-xs font-semibold text-slate-400">
+              {isTeacher
+                ? "Conducted Classes Awaiting Payout Batch"
+                : "Approved Sessions Awaiting Payout Run"}
+            </span>
+            <div className="text-2xl sm:text-3xl font-black text-white mt-1">
+              ₹{totalUnbatched.toLocaleString("en-IN")}
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {unbatchedItems.length} session(s) taught and verified with standard-specific hourly rates
+            </p>
+          </div>
+          <div className="text-xs text-slate-400 max-w-sm rounded-2xl bg-slate-950/60 border border-slate-800 p-3">
+            Rate snapshot rule: Each session records your agreed standard rate per hour at class completion time. Future rate changes do not alter already conducted sessions.
+          </div>
         </div>
+
+        {unbatchedItems.length === 0 ? (
+          <div className="py-12 text-center text-xs text-slate-500">
+            No unbatched completed sessions pending right now.
+          </div>
+        ) : (
+          <div className="p-4 sm:p-5 bg-slate-950/40">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-3">
+              Class-by-Class Earnings Breakdown ({unbatchedItems.length} Sessions)
+            </span>
+            <div className="divide-y divide-slate-800/80 rounded-2xl border border-slate-800/80 bg-slate-900/70 overflow-hidden text-xs">
+              {unbatchedItems.map((item: any) => {
+                const hours = (item.durationMinutes / 60).toFixed(1);
+                const student = item.session?.student;
+                const subject = item.session?.subject;
+                return (
+                  <div
+                    key={item.id}
+                    className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-bold text-white">
+                          {item.teacher.name}
+                        </span>
+                        <span className="rounded-lg bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-[10px] font-semibold text-teal-300">
+                          {subject?.name || "Subject"}
+                        </span>
+                        {student && (
+                          <span className="rounded-lg bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 text-[10px] font-bold text-purple-300">
+                            {student.name} • {student.grade}
+                          </span>
+                        )}
+                        <StatusBadge status={item.status || "APPROVED"} size="sm" />
+                      </div>
+                      <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-2">
+                        <span>
+                          Class Date: {formatInTimeZone(item.sessionDate, "Asia/Kolkata")}
+                        </span>
+                        <span>•</span>
+                        <span>{item.notes || `${item.durationMinutes} mins class`}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 shrink-0 text-right">
+                      <div>
+                        <div className="text-[10px] text-slate-500 uppercase">Rate × Hours</div>
+                        <div className="font-semibold text-slate-300">
+                          ₹{item.rateSnapshot}/hr × {hours}h
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-500 uppercase">Earned</div>
+                        <div className="text-base font-black text-emerald-400">
+                          ₹{item.amount.toLocaleString("en-IN")}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Payout Runs List */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
-        <div className="p-4 border-b border-slate-100">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            Payout Batches & History ({payoutRuns.length})
+      <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl shadow-xl overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-slate-800/80">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            {isTeacher ? "My Processed Payout Batches & History" : `Payout Batches & History (${payoutRuns.length})`}
           </span>
         </div>
 
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-slate-800/80">
           {payoutRuns.length === 0 ? (
             <div className="py-12 text-center text-xs text-slate-500">
-              No payout runs created yet.
+              No payout batches processed yet.
             </div>
           ) : (
-            payoutRuns.map((run) => (
-              <div
-                key={run.id}
-                className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 text-xs"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-sm text-slate-900">
-                      {run.runNumber}
-                    </span>
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        run.status === "PAID"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-blue-100 text-blue-800"
-                      }`}
-                    >
-                      {run.status}
-                    </span>
-                    <span className="text-slate-600 font-semibold">
-                      {run.totalSessions} Sessions
-                    </span>
-                  </div>
-                  <div className="text-slate-500 mt-1">
-                    Period: {formatInTimeZone(run.periodStart, "Asia/Kolkata")} to{" "}
-                    {formatInTimeZone(run.periodEnd, "Asia/Kolkata")}
-                  </div>
-                  {run.approvedByName && (
-                    <div className="text-[11px] text-teal-700 mt-0.5">
-                      Approved by {run.approvedByName}
-                    </div>
-                  )}
-                </div>
+            payoutRuns.map((run) => {
+              const runTeacherItems = isTeacher
+                ? run.items.filter((it: any) => it.teacherId === unbatchedItems[0]?.teacherId || true)
+                : run.items;
+              const runTeacherTotal = isTeacher
+                ? runTeacherItems.reduce((acc: number, it: any) => acc + it.amount, 0)
+                : run.totalAmount;
 
-                <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
-                  <div className="text-right">
-                    <span className="text-[10px] uppercase text-slate-400">Total Payout</span>
-                    <div className="font-black text-base text-slate-900">
-                      ₹{run.totalAmount.toLocaleString("en-IN")}
+              return (
+                <div
+                  key={run.id}
+                  className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-800/40 text-xs transition-colors"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-sm text-white">
+                        {run.runNumber}
+                      </span>
+                      <StatusBadge status={run.status} size="sm" />
+                      <span className="text-slate-400 font-semibold">
+                        {runTeacherItems.length} Sessions
+                      </span>
                     </div>
+                    <div className="text-slate-400 mt-1">
+                      Period: {formatInTimeZone(run.periodStart, "Asia/Kolkata")} to{" "}
+                      {formatInTimeZone(run.periodEnd, "Asia/Kolkata")}
+                    </div>
+                    {run.approvedByName && (
+                      <div className="text-[11px] text-teal-400 mt-0.5">
+                        Approved by {run.approvedByName}
+                      </div>
+                    )}
                   </div>
 
-                  {canManagePayouts && run.status === "APPROVED" && (
-                    <button
-                      onClick={() => handleMarkPaid(run.id)}
-                      disabled={loading}
-                      className="rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white hover:bg-emerald-700 text-xs shadow-2xs"
-                    >
-                      Mark Paid
-                    </button>
-                  )}
+                  <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase text-slate-500">
+                        {isTeacher ? "Your Payout" : "Total Payout"}
+                      </span>
+                      <div className="font-black text-base text-white">
+                        ₹{runTeacherTotal.toLocaleString("en-IN")}
+                      </div>
+                    </div>
+
+                    {canManagePayouts && !isTeacher && run.status === "APPROVED" && (
+                      <button
+                        onClick={() => handleMarkPaid(run.id)}
+                        disabled={loading}
+                        className="rounded-xl bg-emerald-500 px-3.5 py-2 font-bold text-slate-950 hover:bg-emerald-400 text-xs shadow-md transition-all active:scale-95"
+                      >
+                        Mark Paid
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

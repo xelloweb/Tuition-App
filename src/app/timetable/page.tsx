@@ -1,9 +1,15 @@
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, canScheduleSessions } from "@/lib/auth";
+import { AccessDenied } from "@/components/ui/AccessDenied";
 import { TimetableClient } from "./TimetableClient";
+
+export const dynamic = "force-dynamic";
 
 export default async function TimetablePage() {
   const user = await getCurrentUser();
+  if (user.role === "ACCOUNTS") {
+    return <AccessDenied message="The timetable is available to the owner, coordinators and trainers." />;
+  }
 
   // If teacher, only view own sessions; if coordinator/owner, view all
   const sessionWhere: any = {};
@@ -14,19 +20,36 @@ export default async function TimetablePage() {
   const sessions = await prisma.session.findMany({
     where: sessionWhere,
     include: {
-      student: true,
-      teacher: true,
+      student: { select: { id: true, name: true, grade: true, timeZone: true, country: true, whatsappNumber: true } },
+      teacher: { select: { id: true, name: true } },
       subject: true,
-      package: true,
-      attendance: true,
+      package: { select: { id: true, name: true, packageNumber: true } },
+      attendance: { select: { id: true } },
     },
     orderBy: { scheduledStartTimeUtc: "asc" },
   });
 
   const students = await prisma.student.findMany({
     where: { status: "ACTIVE" },
-    include: {
-      packages: { where: { status: "ACTIVE" } },
+    select: {
+      id: true,
+      name: true,
+      studentCode: true,
+      grade: true,
+      country: true,
+      enrolments: { where: { status: "ACTIVE" }, select: { subjectId: true, teacherId: true } },
+      packages: {
+        where: { status: "ACTIVE" },
+        select: {
+          id: true,
+          name: true,
+          packageNumber: true,
+          durationMinutes: true,
+          expiryDate: true,
+          allocations: { select: { subjectId: true } },
+        },
+        orderBy: { startDate: "asc" },
+      },
     },
     orderBy: { name: "asc" },
   });
@@ -34,6 +57,7 @@ export default async function TimetablePage() {
   const teachers = await prisma.teacher.findMany({
     where: { active: true },
     orderBy: { name: "asc" },
+    select: { id: true, name: true, subjects: true },
   });
 
   const subjects = await prisma.subject.findMany({
@@ -46,6 +70,7 @@ export default async function TimetablePage() {
       students={students}
       teachers={teachers}
       subjects={subjects}
+      canSchedule={canScheduleSessions(user.role)}
     />
   );
 }

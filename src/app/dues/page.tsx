@@ -1,7 +1,16 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser, canLogFollowUps } from "@/lib/auth";
+import { daysPastDue } from "@/lib/billing";
+import { AccessDenied } from "@/components/ui/AccessDenied";
 import { DuesClient } from "./DuesClient";
 
+export const dynamic = "force-dynamic";
+
 export default async function DuesPage() {
+  const user = await getCurrentUser();
+  if (!canLogFollowUps(user.role)) {
+    return <AccessDenied message="Dues and follow-ups are available to the owner, coordinators and Accounts staff." />;
+  }
   const now = new Date();
 
   // Invoices with positive balanceDue
@@ -24,8 +33,8 @@ export default async function DuesPage() {
   const band30plus: any[] = [];
 
   for (const inv of unpaidInvoices) {
-    const diffTime = now.getTime() - new Date(inv.dueDate).getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    // Calendar days past the due date in IST (0 = due today; overdue starts the day after).
+    const diffDays = daysPastDue(inv.dueDate, now);
 
     if (diffDays === 0) {
       dueToday.push(inv);
@@ -56,7 +65,7 @@ export default async function DuesPage() {
   });
 
   // Packages nearing expiry (in next 14 days)
-  const fourteenDaysFuture = new Date(Date.now() + 14 * 24 * 3600 * 1000);
+  const fourteenDaysFuture = new Date(now.getTime() + 14 * 24 * 3600 * 1000);
   const expiringPackages = activePackages.filter((pkg) => {
     return (
       pkg.expiryDate &&

@@ -1,9 +1,16 @@
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, canCorrectAttendance, canViewTeacherRates } from "@/lib/auth";
+import { getTeacherRateForGrade } from "@/lib/rates";
+import { AccessDenied } from "@/components/ui/AccessDenied";
 import { AttendanceClient } from "./AttendanceClient";
+
+export const dynamic = "force-dynamic";
 
 export default async function AttendancePage() {
   const user = await getCurrentUser();
+  if (user.role === "ACCOUNTS") {
+    return <AccessDenied message="Attendance is managed by trainers and academic coordinators." />;
+  }
   const now = new Date();
 
   // If teacher, filter sessions to own; otherwise show all
@@ -44,16 +51,29 @@ export default async function AttendancePage() {
     orderBy: { markedAt: "desc" },
   });
 
-  const teacherAbsences = allRecords.filter(
-    (r) => r.sessionOutcome === "TEACHER_NO_SHOW"
-  );
+  // Pay rates leave the server only for roles allowed to see that trainer's rate.
+  const rateFor = (teacher: { id: string; defaultRate: number; gradeRates: string | null }, grade: string) =>
+    canViewTeacherRates(user.role, user.teacherId, teacher.id) ? getTeacherRateForGrade(teacher, grade) : null;
+  const publicTeacher = (t: { id: string; name: string }) => ({ id: t.id, name: t.name });
+
+  const sessionsForClient = missingSessions.map((s) => ({
+    ...s,
+    teacher: publicTeacher(s.teacher),
+    hourlyRate: rateFor(s.teacher, s.student.grade),
+  }));
+  const recordsForClient = allRecords.map((r) => ({
+    ...r,
+    session: { ...r.session, teacher: publicTeacher(r.session.teacher) },
+    hourlyRate: rateFor(r.session.teacher, r.session.student.grade),
+  }));
 
   return (
     <AttendanceClient
-      missingSessions={missingSessions}
-      allRecords={allRecords}
-      teacherAbsences={teacherAbsences}
+      missingSessions={sessionsForClient}
+      allRecords={recordsForClient}
+      teacherAbsences={recordsForClient.filter((r) => r.sessionOutcome === "TEACHER_NO_SHOW")}
       currentUserRole={user.role}
+      canCorrect={canCorrectAttendance(user.role)}
     />
   );
 }

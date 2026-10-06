@@ -42,6 +42,12 @@ export const TIMEZONES: TimeZoneOption[] = [
     offset: "+03:00",
     region: "Kuwait",
   },
+  {
+    value: "Asia/Bahrain",
+    label: "Arabia Standard Time (Bahrain)",
+    offset: "+03:00",
+    region: "Bahrain",
+  },
 ];
 
 export function formatInTimeZone(

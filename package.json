@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
-    "test": "tsx scripts/run-acceptance-tests.ts"
+    "test": "node scripts/run-tests.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

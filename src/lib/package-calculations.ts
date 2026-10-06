@@ -1,10 +1,16 @@
+import { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "./prisma";
-import { PackageBalanceBreakdown, SubjectBalanceCalculation } from "./types";
+import { PackageBalanceBreakdown, PackageStatus, SubjectBalanceCalculation } from "./types";
 
+/**
+ * Pass the transaction client when the result guards a write (scheduling,
+ * reallocation) so the balance is read inside the same transaction.
+ */
 export async function calculatePackageBalances(
-  packageId: string
+  packageId: string,
+  db: PrismaClient | Prisma.TransactionClient = prisma
 ): Promise<PackageBalanceBreakdown | null> {
-  const pkg = await prisma.studentPackage.findUnique({
+  const pkg = await db.studentPackage.findUnique({
     where: { id: packageId },
     include: {
       allocations: {
@@ -87,7 +93,7 @@ export async function calculatePackageBalances(
     totalReserved,
     totalAvailable,
     subjects: subjectsArray,
-    status: pkg.status as any,
+    status: pkg.status as PackageStatus,
     startDate: pkg.startDate.toISOString(),
     expiryDate: pkg.expiryDate ? pkg.expiryDate.toISOString() : null,
   };

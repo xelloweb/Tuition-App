@@ -1,39 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
-import { validateReallocation, executeReallocation } from "@/lib/reallocation";
+import { NextResponse } from "next/server";
+import { canReallocatePackages, requirePermission, requireUser } from "@/lib/auth";
+import { readJsonObject, withErrorHandling } from "@/lib/api-errors";
+import { executeReallocation, parseAllocations, validateReallocation } from "@/lib/reallocation";
 
-export async function POST(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await context.params;
-    const user = await getCurrentUser();
-    const body = await req.json();
-    const { allocations, reason, previewOnly, unallocatedCredits } = body;
+type Ctx = { params: Promise<{ id: string }> };
 
-    if (previewOnly) {
-      const validation = await validateReallocation(
-        id,
-        allocations,
-        unallocatedCredits || 0
-      );
-      return NextResponse.json(validation);
-    }
+export const POST = withErrorHandling<Ctx>("POST /api/packages/[id]/reallocate", async (req, { params }) => {
+  const user = await requireUser();
+  requirePermission(
+    canReallocatePackages(user.role),
+    "Only the owner or an academic coordinator can reallocate package classes."
+  );
 
-    const result = await executeReallocation(
-      id,
-      allocations,
-      reason,
-      user,
-      unallocatedCredits || 0
-    );
+  const { id } = await params;
+  const body = await readJsonObject(req);
+  const { allocations, unallocated } = parseAllocations(body.allocations, body.unallocatedCredits);
 
-    return NextResponse.json(result);
-  } catch (err: any) {
-    return NextResponse.json(
-      { error: err.message || "Failed to reallocate package" },
-      { status: 400 }
-    );
+  if (body.previewOnly === true) {
+    return NextResponse.json(await validateReallocation(id, allocations, unallocated));
   }
-}
+
+  const result = await executeReallocation(id, allocations, typeof body.reason === "string" ? body.reason : "", user, unallocated);
+  return NextResponse.json(result);
+});
