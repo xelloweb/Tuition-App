@@ -142,34 +142,17 @@ export function Header({ currentUser, displayTimeZone, onOpenMobile }: HeaderPro
           )}
         </div>
 
-        {/* Persona Switcher for Instant Testing (Desktop/Tablet) */}
-        <div className="hidden sm:flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/80 px-2.5 py-1.5 text-xs">
-          <span className="text-[11px] font-semibold text-slate-500 hidden lg:inline">
-            Role:
-          </span>
-          <select
-            defaultValue={
-              currentUser.role === "OWNER"
-                ? "admin"
-                : currentUser.role === "COORDINATOR"
-                ? "coordinator"
-                : currentUser.role === "ACCOUNTS"
-                ? "accounts"
-                : currentUser.email.includes("rahul")
-                ? "teacher_rahul"
-                : "teacher_priya"
-            }
-            onChange={(e) => handlePersonaChange(e.target.value)}
-            className="bg-transparent font-semibold text-slate-200 focus:outline-hidden cursor-pointer text-xs"
-            title="Switch Persona to test role-based permissions"
-            aria-label="Switch role persona"
+        <div className="hidden sm:flex items-center">
+          <button
+            onClick={() => {
+              // Using window.location.href because signOut from next-auth/react might require 'use client' and provider context.
+              // Actually, since we're using NextAuth, we can navigate to /api/auth/signout
+              window.location.href = '/api/auth/signout';
+            }}
+            className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 transition-colors"
           >
-            <option value="admin" className="bg-slate-900 text-slate-200">Owner / Admin</option>
-            <option value="coordinator" className="bg-slate-900 text-slate-200">Coordinator</option>
-            <option value="teacher_rahul" className="bg-slate-900 text-slate-200">Teacher (Rahul)</option>
-            <option value="teacher_priya" className="bg-slate-900 text-slate-200">Teacher (Priya)</option>
-            <option value="accounts" className="bg-slate-900 text-slate-200">Accounts Manager</option>
-          </select>
+            Sign Out
+          </button>
         </div>
 
         {/* User Role Badge */}

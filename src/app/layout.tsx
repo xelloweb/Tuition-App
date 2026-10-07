@@ -23,12 +23,25 @@ export const metadata: Metadata = {
     "Internal Operations Portal for Xello Tuition: Multi-subject package allocation, credit ledger, scheduling, billing, and teacher payouts for Kerala & GCC students.",
 };
 
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const currentUser = await getCurrentUser();
+  const session = await getServerSession(authOptions);
+  let currentUser = null;
+  if (session?.user) {
+    currentUser = {
+      id: (session.user as any).id,
+      name: session.user.name || "Unknown",
+      email: session.user.email || "",
+      role: (session.user as any).role,
+      teacherId: (session.user as any).teacherId || null,
+    };
+  }
   const tzCookie = (await cookies()).get("xello_display_tz")?.value;
   const decodedTz = tzCookie ? decodeURIComponent(tzCookie) : "";
   const displayTimeZone = decodedTz && isValidTimeZone(decodedTz) ? decodedTz : "Asia/Kolkata";
@@ -38,10 +51,14 @@ export default async function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">
-        <AppShell currentUser={currentUser} displayTimeZone={displayTimeZone} ephemeralStorage={isEphemeralDatabase}>
-          {children}
-        </AppShell>
+      <body className="min-h-full flex flex-col font-sans bg-[#070a12]">
+        {currentUser ? (
+          <AppShell currentUser={currentUser} displayTimeZone={displayTimeZone} ephemeralStorage={isEphemeralDatabase}>
+            {children}
+          </AppShell>
+        ) : (
+          children
+        )}
       </body>
     </html>
   );

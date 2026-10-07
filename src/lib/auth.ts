@@ -3,6 +3,9 @@ import { prisma } from "./prisma";
 import { UserRole, CurrentUser } from "./types";
 import { ApiError, forbiddenError } from "./api-errors";
 
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
 export const DEMO_USERS: Record<string, CurrentUser> = {
   admin: {
     id: "usr-admin",
@@ -38,21 +41,27 @@ export const DEMO_USERS: Record<string, CurrentUser> = {
   },
 };
 
-/**
- * DEMO IDENTITY ONLY: the role comes from the persona switcher cookie, which
- * any browser can set. Replace with real authentication before production use;
- * every permission check below assumes the identity it receives is genuine.
- */
+import { redirect } from "next/navigation";
+
 export async function getCurrentUser(): Promise<CurrentUser> {
-  const cookieStore = await cookies();
-  const personaKey = cookieStore.get("xello_user_persona")?.value || "admin";
-  const user = DEMO_USERS[personaKey] || DEMO_USERS.admin;
-  return user;
+  const session = await getServerSession(authOptions);
+  
+  if (session?.user) {
+    return {
+      id: (session.user as any).id,
+      name: session.user.name || "Unknown",
+      email: session.user.email || "",
+      role: (session.user as any).role as UserRole,
+      teacherId: (session.user as any).teacherId || null,
+    };
+  }
+  
+  redirect("/login");
 }
 
 /** For API routes: resolves the caller or fails with 401 (expired / missing session). */
 export async function requireUser(): Promise<CurrentUser> {
-  const user = await getCurrentUser().catch(() => null);
+  const user = await getCurrentUser();
   if (!user) {
     throw new ApiError(401, "UNAUTHENTICATED", "Your session has expired. Please sign in again.");
   }

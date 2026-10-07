@@ -230,6 +230,13 @@ export async function updateTeacher(id: string, fields: TeacherFields, user: Cur
 
     const updated = await tx.teacher.update({ where: { id }, data: fields });
 
+    if (fields.active !== undefined && existing.active !== fields.active) {
+      await tx.user.updateMany({
+        where: { teacherId: id },
+        data: { active: fields.active },
+      });
+    }
+
     const changes: Record<string, { from: unknown; to: unknown }> = {};
     for (const key of Object.keys(fields) as (keyof TeacherFields)[]) {
       if (existing[key] !== updated[key]) changes[key] = { from: existing[key], to: updated[key] };
@@ -272,7 +279,7 @@ export async function deleteTeacher(id: string, user: CurrentUser) {
   if (!teacher) throw notFoundError("This trainer no longer exists. Refresh the page.");
 
   const c = teacher._count;
-  if (c.enrolments || c.sessions || c.payoutItems || c.progressNotes || c.assessments || c.timetableSlots || teacher.user) {
+  if (c.enrolments || c.sessions || c.payoutItems || c.progressNotes || c.assessments || c.timetableSlots) {
     throw new ApiError(
       409,
       "HAS_HISTORY",
@@ -282,6 +289,9 @@ export async function deleteTeacher(id: string, user: CurrentUser) {
   }
 
   await prisma.$transaction(async (tx) => {
+    if (teacher.user) {
+      await tx.user.delete({ where: { id: teacher.user.id } });
+    }
     await tx.teacher.delete({ where: { id } });
     await tx.auditLog.create({
       data: {

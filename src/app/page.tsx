@@ -28,16 +28,20 @@ import { MetricCard } from "@/components/ui/MetricCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-export default async function DashboardPage() {
+import { TeacherPortal } from "@/components/teachers/TeacherPortal";
+
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const user = await getCurrentUser();
   const showFinancial = canAccessFinancial(user.role);
   const isTeacher = user.role === "TEACHER" && Boolean(user.teacherId);
 
+  const sp = await searchParams;
   const now = new Date();
-  // "Today" is the business (IST) calendar day, not the UTC day.
   const todayIst = localDateInZone(now, BUSINESS_TIME_ZONE);
-  const startOfDay = zonedTimeToUtc(todayIst, 0, BUSINESS_TIME_ZONE);
-  const endOfDay = new Date(zonedTimeToUtc(addDaysToLocalDate(todayIst, 1), 0, BUSINESS_TIME_ZONE).getTime() - 1);
+  const queryDateIst = sp.date || todayIst;
+  
+  const startOfDay = zonedTimeToUtc(queryDateIst, 0, BUSINESS_TIME_ZONE);
+  const endOfDay = new Date(zonedTimeToUtc(addDaysToLocalDate(queryDateIst, 1), 0, BUSINESS_TIME_ZONE).getTime() - 1);
 
   // Filter queries based on role
   const sessionWhere: any = {
@@ -65,6 +69,16 @@ export default async function DashboardPage() {
     },
     orderBy: { scheduledStartTimeUtc: "asc" },
   });
+
+  if (isTeacher) {
+    return (
+      <TeacherPortal 
+        teacherName={user.name} 
+        sessions={todaysSessions as any} 
+        currentDate={queryDateIst} 
+      />
+    );
+  }
 
   // Next class and earnings for teacher
   let nextClass: any = null;
