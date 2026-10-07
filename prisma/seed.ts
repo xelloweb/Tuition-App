@@ -60,7 +60,7 @@ async function wipeAllData() {
 
 async function main() {
   const [users, students] = await Promise.all([prisma.user.count(), prisma.student.count()]);
-  const resetRequested = true; // process.env.ALLOW_DB_RESET === RESET_PHRASE;
+  const resetRequested = process.env.ALLOW_DB_RESET === RESET_PHRASE;
   if ((users > 0 || students > 0) && !resetRequested) {
     console.log(`ℹ️  Database already initialised (${users} users, ${students} students). Seed skipped; nothing was changed.`);
     return;
