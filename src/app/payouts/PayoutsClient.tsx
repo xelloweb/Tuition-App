@@ -18,6 +18,7 @@ import {
 import { errorMessage, readApiResponse } from "@/lib/client-api";
 import { formatInTimeZone } from "@/lib/timezones";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { PayoutReportForm } from "@/components/reports/PayoutReportForm";
 
 interface PayoutsClientProps {
   payoutRuns: any[];
@@ -131,6 +132,12 @@ export function PayoutsClient({
           </button>
         )}
       </div>
+
+      {!isTeacher && (
+        <div className="flex justify-end">
+          <PayoutReportForm />
+        </div>
+      )}
 
       {errorMsg && (
         <div className="rounded-2xl bg-red-950/40 border border-red-500/30 p-4 text-xs text-red-300 font-medium">

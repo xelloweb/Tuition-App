@@ -225,6 +225,72 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    if (type === "payouts") {
+      const startDateStr = searchParams.get("startDate");
+      const endDateStr = searchParams.get("endDate");
+      
+      let dateFilter = {};
+      if (startDateStr && endDateStr) {
+        const start = new Date(startDateStr);
+        const end = new Date(endDateStr);
+        end.setHours(23, 59, 59, 999);
+        dateFilter = {
+          sessionDate: {
+            gte: start,
+            lte: end
+          }
+        };
+      }
+
+      const payoutItems = await prisma.payoutItem.findMany({
+        where: dateFilter,
+        include: {
+          teacher: true,
+          payoutRun: true,
+          session: {
+            include: { student: true, subject: true }
+          }
+        },
+        orderBy: { sessionDate: "desc" }
+      });
+
+      const headers = [
+        "Item ID",
+        "Payout Run ID",
+        "Teacher Name",
+        "Teacher Email",
+        "Session Date",
+        "Subject",
+        "Student",
+        "Duration (Mins)",
+        "Hourly Rate (INR)",
+        "Calculated Amount (INR)",
+        "Status"
+      ];
+
+      const rows = payoutItems.map((item) => [
+        item.id,
+        item.payoutRun?.runNumber || "UNBATCHED",
+        item.teacher.name,
+        item.teacher.email,
+        item.sessionDate.toISOString().split("T")[0],
+        item.session.subject.name,
+        item.session.student.name,
+        item.durationMinutes,
+        item.rateSnapshot,
+        item.amount,
+        item.status
+      ]);
+
+      const csv = generateSafeCsv(headers, rows);
+      return new NextResponse(csv, {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="xello_payouts_${startDateStr}_to_${endDateStr}.csv"`,
+        },
+      });
+    }
+
     return new NextResponse("Unknown report type", { status: 400 });
   } catch (err) {
     const reference = `ERR-${Date.now().toString(36).toUpperCase()}`;
