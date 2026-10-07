@@ -57,7 +57,8 @@ model Student {
   preferredTimings  String?
   learningGoals     String?
   coordinatorNotes  String?
-  status            String              @default("ACTIVE") // ACTIVE, PAUSED, COMPLETED, WITHDRAWN
+  status            String              @default("ACTIVE")
+  draftData         String?
   packages          StudentPackage[]
   enrolments        SubjectEnrollment[]
   sessions          Session[]

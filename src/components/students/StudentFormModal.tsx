@@ -55,6 +55,7 @@ export interface StudentFormRecord {
   preferredTimings: string | null;
   learningGoals: string | null;
   coordinatorNotes: string | null;
+  draftData?: string | null;
   enrolments?: { id: string; subjectId: string; teacherId: string | null; teacher?: { id: string; name: string; active?: boolean } | null }[];
 }
 
@@ -118,23 +119,36 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
   const formRef = useRef<HTMLFormElement>(null);
   const submittingRef = useRef(false);
   const [idempotencyKey] = useState(() => newIdempotencyKey());
+  const draftState = useMemo(() => {
+    if (student?.draftData) {
+      try {
+        return JSON.parse(student.draftData);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  }, [student]);
+
+  const [step, setStep] = useState(1);
+  const [slots, setSlots] = useState<{key: string, subjectId: string, teacherId: string, weekday: string, start: string, end: string}[]>(draftState?.slots ?? []);
 
   // 1. Student details
-  const [name, setName] = useState(student?.name ?? "");
-  const [grade, setGrade] = useState(student?.grade ?? "");
-  const [board, setBoard] = useState(student?.board ?? "CBSE");
-  const [medium, setMedium] = useState(student?.medium ?? "English");
+  const [name, setName] = useState(draftState?.name ?? student?.name ?? "");
+  const [grade, setGrade] = useState(draftState?.grade ?? student?.grade ?? "");
+  const [board, setBoard] = useState(draftState?.board ?? student?.board ?? "CBSE");
+  const [medium, setMedium] = useState(draftState?.medium ?? student?.medium ?? "English");
   const [status, setStatus] = useState(student?.status ?? "ACTIVE");
 
   // 2. Guardian & region
-  const [guardianName, setGuardianName] = useState(student?.guardianName ?? "");
-  const [whatsappNumber, setWhatsappNumber] = useState(student?.whatsappNumber ?? "+971 ");
-  const [email, setEmail] = useState(student?.email ?? "");
-  const [country, setCountry] = useState(student?.country ?? "UAE");
-  const [timeZone, setTimeZone] = useState(student?.timeZone ?? "Asia/Dubai");
-  const [preferredTimings, setPreferredTimings] = useState(student?.preferredTimings ?? "");
-  const [learningGoals, setLearningGoals] = useState(student?.learningGoals ?? "");
-  const [coordinatorNotes, setCoordinatorNotes] = useState(student?.coordinatorNotes ?? "");
+  const [guardianName, setGuardianName] = useState(draftState?.guardianName ?? student?.guardianName ?? "");
+  const [whatsappNumber, setWhatsappNumber] = useState(draftState?.whatsappNumber ?? student?.whatsappNumber ?? "+91 ");
+  const [email, setEmail] = useState(draftState?.email ?? student?.email ?? "");
+  const [country, setCountry] = useState(draftState?.country ?? student?.country ?? "India");
+  const timeZone = "Asia/Kolkata";
+  const [preferredTimings, setPreferredTimings] = useState(draftState?.preferredTimings ?? student?.preferredTimings ?? "");
+  const [learningGoals, setLearningGoals] = useState(draftState?.learningGoals ?? student?.learningGoals ?? "");
+  const [coordinatorNotes, setCoordinatorNotes] = useState(draftState?.coordinatorNotes ?? student?.coordinatorNotes ?? "");
 
   const [guardianMatches, setGuardianMatches] = useState<GuardianMatch[]>([]);
   const [lookedUpPhone, setLookedUpPhone] = useState("");
@@ -144,6 +158,7 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
   // 3. Subjects & trainers
   const [subjectsList, setSubjectsList] = useState<SubjectOption[]>(subjects);
   const [rows, setRows] = useState<Row[]>(() => {
+    if (draftState?.rows) return draftState.rows;
     if (isEdit && student?.enrolments?.length) {
       return student.enrolments.map((e) => ({
         key: e.id,
@@ -159,12 +174,12 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
   const [quickSubjectOpen, setQuickSubjectOpen] = useState(false);
 
   // 4. Package
-  const [includePackage, setIncludePackage] = useState(!isEdit);
-  const [packageName, setPackageName] = useState(isEdit ? "Credit Booster Package" : "Multi-Subject Booster Package");
-  const [totalCredits, setTotalCredits] = useState(isEdit ? "10" : "20");
-  const [packagePrice, setPackagePrice] = useState(isEdit ? "9000" : "18000");
-  const [startDate, setStartDate] = useState(today());
-  const [expiryDate, setExpiryDate] = useState("");
+  const [includePackage, setIncludePackage] = useState(draftState?.includePackage ?? !isEdit);
+  const [packageName, setPackageName] = useState(draftState?.packageName ?? (isEdit ? "Credit Booster Package" : "Multi-Subject Booster Package"));
+  const [totalCredits, setTotalCredits] = useState(draftState?.totalCredits ?? (isEdit ? "10" : "20"));
+  const [packagePrice, setPackagePrice] = useState(draftState?.packagePrice ?? (isEdit ? "9000" : "18000"));
+  const [startDate, setStartDate] = useState(draftState?.startDate ?? today());
+  const [expiryDate, setExpiryDate] = useState(draftState?.expiryDate ?? "");
 
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
@@ -199,7 +214,7 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
     setCountry(value);
     const option = findCountry(value);
     if (!option) return;
-    setTimeZone(option.timeZone);
+    
     if (linkedGuardian) return;
     const digits = whatsappNumber.replace(/\D/g, "");
     const isPrefixOnly = !digits || COUNTRIES.some((c) => c.dialCode.replace("+", "") === digits);
@@ -229,7 +244,6 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
     setGuardianName(g.name);
     setWhatsappNumber(g.whatsappNumber);
     if (findCountry(g.country)) setCountry(g.country);
-    if (g.timeZone) setTimeZone(g.timeZone);
     clearFieldError("guardianName", "whatsappNumber", "guardianId");
   };
 
@@ -263,24 +277,28 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
 
   const validate = (): Record<string, string> => {
     const errors: Record<string, string> = {};
-    if (!name.trim()) errors.name = "Student name is required.";
-    if (!grade.trim()) errors.grade = "Choose the class / grade.";
-    if (!linkedGuardian) {
-      if (!guardianName.trim()) errors.guardianName = "Parent / guardian name is required.";
-      const phone = checkInternationalPhone(whatsappNumber);
-      if (!phoneCanonical || !phone.ok) errors.whatsappNumber = phone.error || "Enter the WhatsApp number with country code.";
+    if (step === 1) {
+      if (!name.trim()) errors.name = "Student name is required.";
+      if (!grade.trim()) errors.grade = "Choose the class / grade.";
+      if (!linkedGuardian) {
+        if (!guardianName.trim()) errors.guardianName = "Parent / guardian name is required.";
+        const phone = checkInternationalPhone(whatsappNumber);
+        if (!phoneCanonical || !phone.ok) errors.whatsappNumber = phone.error || "Enter the WhatsApp number with country code.";
+      }
+      if (email.trim() && !isValidEmail(email.trim().toLowerCase())) errors.email = "Enter a valid email address or leave it blank.";
     }
-    if (email.trim() && !isValidEmail(email.trim().toLowerCase())) errors.email = "Enter a valid email address or leave it blank.";
 
-    if (!isEdit && rows.length === 0) errors.enrolments = "Add at least one subject.";
-    const seen = new Set<string>();
-    rows.forEach((r, i) => {
-      if (!r.subjectId) errors[`enrolments.${i}.subjectId`] = "Choose a subject.";
-      else if (seen.has(r.subjectId)) errors[`enrolments.${i}.subjectId`] = "This subject is already listed.";
-      seen.add(r.subjectId);
-    });
+    if (step === 2) {
+      if (!isEdit && rows.length === 0) errors.enrolments = "Add at least one subject.";
+      const seen = new Set<string>();
+      rows.forEach((r, i) => {
+        if (!r.subjectId) errors[`enrolments.${i}.subjectId`] = "Choose a subject.";
+        else if (seen.has(r.subjectId)) errors[`enrolments.${i}.subjectId`] = "This subject is already listed.";
+        seen.add(r.subjectId);
+      });
+    }
 
-    if (includePackage) {
+    if (step === 3 && includePackage) {
       const total = Number(totalCredits);
       if (!Number.isInteger(total) || total < 1 || total > 500) errors["package.totalCredits"] = "Enter a whole number of classes (1–500).";
       const price = Number(packagePrice);
@@ -296,10 +314,16 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
         errors["package.totalCredits"] = `Subject classes add up to ${allocatedTotal}, but the package total is ${total}. Adjust them or use "Set total".`;
       }
     }
+    
+    if (step === 4) {
+       slots.forEach((s, i) => {
+         if (!s.start || !s.end) errors[`slots.${i}`] = "Enter valid start and end times.";
+       });
+    }
     return errors;
   };
 
-  const buildPayload = () => {
+  const buildPayload = (isDraft = false) => {
     const enrolments = rows.map((r) => ({ subjectId: r.subjectId, teacherId: r.teacherId || null }));
     const pkg = includePackage
       ? {
@@ -311,33 +335,48 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
           allocations: rows.map((r) => ({ subjectId: r.subjectId, allocatedCredits: Number(r.credits || 0) })),
         }
       : null;
+    const mappedSlots = slots.map(s => ({
+      subjectId: s.subjectId,
+      teacherId: s.teacherId || null,
+      weekday: Number(s.weekday),
+      start: s.start,
+      end: s.end
+    }));
+    
+    const draftData = isDraft ? JSON.stringify({
+      name, grade, board, medium, guardianName, whatsappNumber, email, country, preferredTimings, learningGoals, coordinatorNotes, rows, includePackage, packageName, totalCredits, packagePrice, startDate, expiryDate, slots
+    }) : null;
+
     const common = {
-      name: name.trim(),
-      grade,
+      name: name.trim() || (isDraft ? "Draft Student" : ""),
+      grade: grade || (isDraft ? "TBD" : ""),
       board,
       medium,
       email: email.trim() || null,
       country,
-      timeZone,
+      timeZone: "Asia/Kolkata",
       preferredTimings: preferredTimings.trim() || null,
       learningGoals: learningGoals.trim() || null,
       coordinatorNotes: coordinatorNotes.trim() || null,
       enrolments,
+      slots: mappedSlots,
+      status: isDraft ? "DRAFT" : (isEdit ? status : "ACTIVE"),
+      draftData,
     };
     if (isEdit) {
-      return { ...common, status, guardianName: guardianName.trim(), whatsappNumber: whatsappNumber.trim(), newPackage: pkg };
+      return { ...common, guardianName: guardianName.trim() || (isDraft ? "TBD" : ""), whatsappNumber: whatsappNumber.trim() || (isDraft ? "" : ""), newPackage: pkg };
     }
     return linkedGuardian
       ? { ...common, guardianId: linkedGuardian.id, initialPackage: pkg }
-      : { ...common, guardianName: guardianName.trim(), whatsappNumber: whatsappNumber.trim(), initialPackage: pkg };
+      : { ...common, guardianName: guardianName.trim() || (isDraft ? "TBD" : ""), whatsappNumber: whatsappNumber.trim() || (isDraft ? "" : ""), initialPackage: pkg };
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent, isDraft = false) => {
+    if (e) e.preventDefault();
     if (submittingRef.current) return;
 
-    const errors = validate();
-    if (Object.keys(errors).length) {
+    const errors = isDraft ? {} : validate();
+    if (!isDraft && Object.keys(errors).length) {
       setFieldErrors(errors);
       setFormError("Please correct the highlighted fields.");
       focusField(formRef.current, Object.keys(errors)[0]);
@@ -352,7 +391,7 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = await apiRequest<{ student: any; replayed?: boolean; message?: string }>(
         isEdit ? `/api/students/${student!.id}` : "/api/students",
-        { method: isEdit ? "PATCH" : "POST", body: buildPayload(), idempotencyKey: isEdit ? undefined : idempotencyKey }
+        { method: isEdit ? "PATCH" : "POST", body: buildPayload(isDraft), idempotencyKey: isEdit ? undefined : idempotencyKey }
       );
       const unassigned = rows.filter((r) => !r.teacherId).length;
       const message = isEdit
@@ -420,6 +459,8 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
         />
 
         {/* Section 1 */}
+        {step === 1 && (
+          <>
         <div className="space-y-3">
           <h4 className="font-bold text-slate-400 uppercase tracking-wider text-[11px]">1. Student Academic Details</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -674,28 +715,7 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
               <FieldError message={err("country")} />
             </div>
 
-            <div>
-              <label htmlFor="student-tz" className="block font-medium text-slate-300 mb-1">
-                Display Time Zone <span className="text-rose-400">*</span>
-              </label>
-              <select
-                id="student-tz"
-                data-field="timeZone"
-                value={timeZone}
-                onChange={(e) => setTimeZone(e.target.value)}
-                className={inputClass(inputBase, !!err("timeZone"))}
-              >
-                {withCurrent(TIMEZONES.map((t) => t.value), timeZone).map((value) => {
-                  const tz = TIMEZONES.find((t) => t.value === value);
-                  return (
-                    <option key={value} value={value} className="bg-slate-900">
-                      {tz ? `${tz.label} (${tz.offset})` : value}
-                    </option>
-                  );
-                })}
-              </select>
-              <FieldError message={err("timeZone")} />
-            </div>
+
 
             <div>
               <label htmlFor="student-timings" className="block font-medium text-slate-300 mb-1">
@@ -746,7 +766,11 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
           </div>
         </div>
 
+          </>
+        )}
+
         {/* Section 3 */}
+        {step === 2 && (
         <div className="space-y-3 pt-3 border-t border-slate-800" data-field="enrolments" tabIndex={-1}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             <div>
@@ -876,7 +900,10 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
           )}
         </div>
 
+        )}
+
         {/* Section 4 */}
+        {step === 3 && (
         <div className="space-y-3 pt-3 border-t border-slate-800">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h4 className="font-bold text-slate-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
@@ -1038,38 +1065,139 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
             </div>
           )}
         </div>
+        )}
 
-        <div className="sticky bottom-0 -mx-5 sm:-mx-7 px-5 sm:px-7 py-3 bg-[#0c1220]/95 backdrop-blur border-t border-slate-800 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="rounded-xl px-4 py-2 min-h-[44px] font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-5 py-2.5 min-h-[44px] font-bold text-slate-950 hover:brightness-110 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-teal-300 disabled:opacity-50 shadow-lg shadow-teal-500/20 transition-all active:scale-95"
-          >
-            {submitting ? (
-              <>
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                Saving...
-              </>
-            ) : isEdit ? (
-              <>
-                <Save className="h-4 w-4" />
-                Save Changes
-              </>
-            ) : (
-              <>
-                <UserPlus className="h-4 w-4" />
-                Enroll Student
-              </>
+        {step === 4 && (
+          <div className="space-y-3 pt-3 border-t border-slate-800">
+            <h4 className="font-bold text-slate-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              <BookOpen className="h-3.5 w-3.5 text-teal-400" />
+              4. Weekly Class Schedule
+            </h4>
+            <p className="text-[11px] text-slate-400">Configure recurring weekly slots for the student. Times are in Indian Standard Time.</p>
+            
+            {rows.map((r) => {
+              const subject = subjectsList.find(s => s.id === r.subjectId);
+              if (!subject) return null;
+              const subjectSlots = slots.filter(s => s.subjectId === r.subjectId);
+              return (
+                <div key={r.key} className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-200">{subject.name}</span>
+                    <button type="button" onClick={() => setSlots(prev => [...prev, { key: Math.random().toString(), subjectId: r.subjectId, teacherId: r.teacherId || "", weekday: "1", start: "18:00", end: "19:00" }])} className="text-[11px] text-teal-300 hover:text-teal-200">
+                      + Add Slot
+                    </button>
+                  </div>
+                  {subjectSlots.length === 0 && <p className="text-[11px] text-slate-500">No slots added.</p>}
+                  {subjectSlots.map((slot) => (
+                    <div key={slot.key} className="flex flex-wrap items-center gap-2">
+                      <select value={slot.weekday} onChange={(e) => setSlots(prev => prev.map(s => s.key === slot.key ? {...s, weekday: e.target.value} : s))} className="rounded border bg-slate-900 p-1 text-xs text-white border-slate-700">
+                        <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
+                      </select>
+                      <input type="time" value={slot.start} onChange={(e) => setSlots(prev => prev.map(s => s.key === slot.key ? {...s, start: e.target.value} : s))} className="rounded border bg-slate-900 p-1 text-xs text-white border-slate-700" />
+                      <span className="text-slate-500">-</span>
+                      <input type="time" value={slot.end} onChange={(e) => setSlots(prev => prev.map(s => s.key === slot.key ? {...s, end: e.target.value} : s))} className="rounded border bg-slate-900 p-1 text-xs text-white border-slate-700" />
+                      <select value={slot.teacherId} onChange={(e) => setSlots(prev => prev.map(s => s.key === slot.key ? {...s, teacherId: e.target.value} : s))} className="rounded border bg-slate-900 p-1 text-xs text-white border-slate-700">
+                        <option value="">Subject Trainer</option>
+                        {teacherChoices.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                      <button type="button" onClick={() => setSlots(prev => prev.filter(s => s.key !== slot.key))} className="text-rose-400 p-1"><Trash2 className="h-3 w-3" /></button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {step === 5 && (
+          <div className="space-y-3 pt-3 border-t border-slate-800">
+            <h4 className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">5. Review & Confirm Admission</h4>
+            <div className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2 text-xs text-slate-300">
+              <p><strong>Student:</strong> {name || "TBD"} ({grade || "TBD"})</p>
+              <p><strong>Guardian:</strong> {guardianName || "TBD"} ({whatsappNumber})</p>
+              <p><strong>Subjects:</strong> {rows.length}</p>
+              <p><strong>Package:</strong> {includePackage ? `${totalCredits} classes (₹${packagePrice})` : "None"}</p>
+              <p><strong>Timetable Slots:</strong> {slots.length}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="sticky bottom-0 -mx-5 sm:-mx-7 px-5 sm:px-7 py-3 bg-[#0c1220]/95 backdrop-blur border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex gap-2">
+            {step > 1 && (
+              <button
+                type="button"
+                onClick={() => setStep(step - 1)}
+                disabled={submitting}
+                className="rounded-xl px-4 py-2 min-h-[44px] font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                Back
+              </button>
             )}
-          </button>
+            <button
+              type="button"
+              onClick={(e) => handleSubmit(e, true)}
+              disabled={submitting}
+              className="rounded-xl px-4 py-2 min-h-[44px] font-semibold text-amber-400 hover:bg-amber-500/10 border border-amber-500/30 transition-colors"
+            >
+              Save Draft
+            </button>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="rounded-xl px-4 py-2 min-h-[44px] font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+
+            {step < 5 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const errors = validate();
+                  if (Object.keys(errors).length > 0) {
+                    setFieldErrors(errors);
+                    setFormError("Please correct errors before proceeding.");
+                  } else {
+                    setFieldErrors({});
+                    setFormError("");
+                    setStep(step + 1);
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-teal-500/20 px-5 py-2.5 min-h-[44px] font-bold text-teal-300 hover:bg-teal-500/30 transition-colors"
+              >
+                Next Step
+              </button>
+            ) : (
+              <button
+                type="submit"
+                onClick={(e) => handleSubmit(e, false)}
+                disabled={submitting}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-5 py-2.5 min-h-[44px] font-bold text-slate-950 hover:brightness-110 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-teal-300 disabled:opacity-50 shadow-lg shadow-teal-500/20 transition-all active:scale-95"
+              >
+                {submitting ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    Saving...
+                  </>
+                ) : isEdit ? (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Save Changes
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="h-4 w-4" />
+                    Confirm Admission
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </form>
     </ModalShell>

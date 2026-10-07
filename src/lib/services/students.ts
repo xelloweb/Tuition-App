@@ -6,7 +6,7 @@ import { COUNTRY_VALUES, STUDENT_STATUS_VALUES, findCountry } from "../constants
 import { ApiError, notFoundError, relatedRecordError, validationError } from "../api-errors";
 import { nextCode, withCodeRetry } from "../codes";
 import { rememberIdempotentEntity, runIdempotent } from "../idempotency";
-import { retireEnrolmentSlots } from "./timetable";
+import { retireEnrolmentSlots, SlotInput } from "./timetable";
 
 type Tx = Prisma.TransactionClient;
 
@@ -48,6 +48,14 @@ export interface PackageInput {
   allocations: { subjectId: string; allocatedCredits: number }[];
 }
 
+export interface StudentSlotInput {
+  subjectId: string;
+  teacherId?: string | null;
+  weekday: number;
+  start: string;
+  end: string;
+}
+
 export interface StudentFields {
   name?: string;
   grade?: string;
@@ -65,6 +73,8 @@ export interface StudentFields {
   status?: string;
   enrolments?: EnrolmentInput[];
   newPackage?: PackageInput | null;
+  draftData?: string | null;
+  slots?: StudentSlotInput[];
 }
 
 const MAX_ENROLMENTS = 15;
@@ -149,18 +159,34 @@ export function parseStudentFields(body: Record<string, unknown>, { partial }: {
   const has = (key: string) => !partial || Object.prototype.hasOwnProperty.call(body, key);
   const f: StudentFields = {};
 
-  if (has("name")) f.name = v.requiredText("name", body.name, "Student name", 120);
-  if (has("grade")) f.grade = v.requiredText("grade", body.grade, "Class / grade", 60);
+  const isDraft = body.status === "DRAFT";
+
+  if (has("name")) {
+    f.name = isDraft 
+      ? v.optionalText("name", body.name, "Student name", 120) || "Draft Student"
+      : v.requiredText("name", body.name, "Student name", 120);
+  }
+  if (has("grade")) {
+    f.grade = isDraft
+      ? v.optionalText("grade", body.grade, "Class / grade", 60) || "TBD"
+      : v.requiredText("grade", body.grade, "Class / grade", 60);
+  }
   if (has("board")) f.board = v.optionalText("board", body.board, "Board", 80) ?? "CBSE";
   if (has("medium")) f.medium = v.optionalText("medium", body.medium, "Medium", 40) ?? "English";
 
   f.guardianId = partial ? undefined : optionalId(body.guardianId);
   const linkingExistingGuardian = Boolean(f.guardianId);
   if (has("guardianName") && !linkingExistingGuardian) {
-    f.guardianName = v.requiredText("guardianName", body.guardianName, "Parent / guardian name", 120);
+    f.guardianName = isDraft
+      ? v.optionalText("guardianName", body.guardianName, "Parent / guardian name", 120) || "TBD"
+      : v.requiredText("guardianName", body.guardianName, "Parent / guardian name", 120);
   }
   if (has("whatsappNumber") && !linkingExistingGuardian) {
-    f.whatsappNumber = v.phone("whatsappNumber", body.whatsappNumber, "WhatsApp number");
+    if (isDraft && !body.whatsappNumber) {
+      f.whatsappNumber = "+910000000000"; // Dummy for draft if missing
+    } else {
+      f.whatsappNumber = v.phone("whatsappNumber", body.whatsappNumber, "WhatsApp number");
+    }
   }
   if (has("email")) f.email = v.email("email", body.email, "Email", false);
 
@@ -171,14 +197,26 @@ export function parseStudentFields(body: Record<string, unknown>, { partial }: {
   if (has("preferredTimings")) f.preferredTimings = v.optionalText("preferredTimings", body.preferredTimings, "Preferred timings", 300);
   if (has("learningGoals")) f.learningGoals = v.optionalText("learningGoals", body.learningGoals, "Learning goals", 1000);
   if (has("coordinatorNotes")) f.coordinatorNotes = v.optionalText("coordinatorNotes", body.coordinatorNotes, "Coordinator notes", 2000);
-  if (partial && body.status !== undefined) f.status = v.oneOf("status", body.status, STUDENT_STATUS_VALUES, "Status");
+  
+  if (body.status !== undefined) {
+    f.status = v.oneOf("status", body.status, [...STUDENT_STATUS_VALUES, "DRAFT"], "Status");
+  }
+  
+  if (has("draftData")) {
+    f.draftData = typeof body.draftData === "string" ? body.draftData : null;
+  }
 
-  if (has("enrolments") && body.enrolments !== undefined) f.enrolments = parseEnrolments(v, body.enrolments);
+  if (has("enrolments") && body.enrolments !== undefined && !isDraft) f.enrolments = parseEnrolments(v, body.enrolments);
+  
+  if (has("slots") && body.slots !== undefined && !isDraft) {
+    f.slots = Array.isArray(body.slots) ? (body.slots as StudentSlotInput[]) : [];
+  }
 
   const packageBody = partial ? (body.newPackage ?? body.initialPackage) : body.initialPackage;
-  // On update, allocations may target the student's existing subjects too; checked in the service.
   const enrolledIds = f.enrolments ? f.enrolments.map((e) => e.subjectId) : null;
-  f.newPackage = parsePackage(v, packageBody, partial && !f.enrolments ? null : enrolledIds ?? []);
+  if (!isDraft) {
+    f.newPackage = parsePackage(v, packageBody, partial && !f.enrolments ? null : enrolledIds ?? []);
+  }
 
   if (v.hasErrors) throw validationError("Please correct the highlighted fields.", v.errors);
   return f;
@@ -331,12 +369,14 @@ export async function createStudent(fields: StudentFields, user: CurrentUser, id
               preferredTimings: fields.preferredTimings ?? null,
               learningGoals: fields.learningGoals ?? null,
               coordinatorNotes: fields.coordinatorNotes ?? null,
-              status: "ACTIVE",
+              status: fields.status ?? "ACTIVE",
+              draftData: fields.draftData ?? null,
             },
           });
 
+          const createdEnrolments = [];
           for (const enr of enrolments) {
-            await tx.subjectEnrollment.create({
+            createdEnrolments.push(await tx.subjectEnrollment.create({
               data: {
                 studentId: student.id,
                 subjectId: enr.subjectId,
@@ -344,7 +384,34 @@ export async function createStudent(fields: StudentFields, user: CurrentUser, id
                 status: "ACTIVE",
                 notes: enr.notes,
               },
-            });
+            }));
+          }
+          
+          if (fields.slots) {
+            for (const s of fields.slots) {
+              const enr = createdEnrolments.find(e => e.subjectId === s.subjectId);
+              if (!enr) continue;
+              
+              const startParts = s.start.split(":");
+              const endParts = s.end.split(":");
+              const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+              const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+              
+              await tx.timetableSlot.create({
+                data: {
+                  enrolmentId: enr.id,
+                  teacherId: s.teacherId,
+                  weekday: s.weekday,
+                  startMinutes,
+                  endMinutes,
+                  timeZone: "Asia/Kolkata",
+                  effectiveFrom: new Date(),
+                  createdByName: user.name,
+                  createdByRole: user.role,
+                  active: true
+                }
+              });
+            }
           }
 
           const pkg = fields.newPackage ? await createPackageForStudent(tx, student.id, fields.newPackage, user) : null;
@@ -359,6 +426,7 @@ export async function createStudent(fields: StudentFields, user: CurrentUser, id
               details: JSON.stringify({
                 studentCode,
                 name: student.name,
+                status: student.status,
                 guardianId: guardian.id,
                 linkedExistingGuardian: Boolean(fields.guardianId),
                 subjects: enrolments.length,
@@ -386,12 +454,12 @@ export async function updateStudent(id: string, f: StudentFields, user: CurrentU
       const changes: Record<string, { from: unknown; to: unknown }> = {};
       const scalarKeys = [
         "name", "grade", "board", "medium", "email", "country", "timeZone",
-        "preferredTimings", "learningGoals", "coordinatorNotes", "status",
+        "preferredTimings", "learningGoals", "coordinatorNotes", "status", "draftData"
       ] as const;
       const data: Prisma.StudentUpdateInput = {};
       for (const key of scalarKeys) {
         if (f[key] !== undefined && f[key] !== student[key]) {
-          changes[key] = { from: student[key], to: f[key] };
+          changes[key] = { from: key === "draftData" ? Boolean(student.draftData) : student[key], to: key === "draftData" ? Boolean(f.draftData) : f[key] };
           (data as Record<string, unknown>)[key] = f[key];
         }
       }
@@ -463,6 +531,43 @@ export async function updateStudent(id: string, f: StudentFields, user: CurrentU
           enrolmentChanges.push(`removed ${existing.subjectId}`);
         }
         if (enrolmentChanges.length) changes.enrolments = { from: null, to: enrolmentChanges };
+        
+        // Handle slot additions during update (e.g. confirming a draft)
+        if (f.slots) {
+          const currentEnrolments = await tx.subjectEnrollment.findMany({ where: { studentId: id, status: "ACTIVE" } });
+          const currentSlots = await tx.timetableSlot.findMany({ where: { enrolment: { studentId: id }, active: true } });
+          
+          for (const s of f.slots) {
+            const enr = currentEnrolments.find(e => e.subjectId === s.subjectId);
+            if (!enr) continue;
+            
+            const startParts = s.start.split(":");
+            const endParts = s.end.split(":");
+            const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+            const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+            
+            // Check if exact slot exists
+            const exists = currentSlots.some(cs => 
+              cs.enrolmentId === enr.id && cs.weekday === Number(s.weekday) && cs.startMinutes === startMinutes
+            );
+            if (!exists) {
+              await tx.timetableSlot.create({
+                data: {
+                  enrolmentId: enr.id,
+                  teacherId: s.teacherId,
+                  weekday: Number(s.weekday),
+                  startMinutes,
+                  endMinutes,
+                  timeZone: "Asia/Kolkata",
+                  effectiveFrom: new Date(),
+                  createdByName: user.name,
+                  createdByRole: user.role,
+                  active: true
+                }
+              });
+            }
+          }
+        }
       }
 
       let pkg = null;

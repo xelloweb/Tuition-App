@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { canManageStudents, requirePermission, requireUser } from "@/lib/auth";
 import { readJsonObject, validationError, withErrorHandling } from "@/lib/api-errors";
 import { deleteStudent, parseStudentFields, updateStudent } from "@/lib/services/students";
+import { generateTimetableOccurrences } from "@/lib/services/timetable";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -25,6 +26,14 @@ export const PATCH = withErrorHandling<Ctx>("PATCH /api/students/[id]", async (r
     siblingsUpdated > 0 ? `Guardian details were also updated for ${siblingsUpdated} sibling(s).` : null,
     packageNumber ? `Package ${packageNumber} created.` : null,
   ].filter(Boolean);
+
+  if (student.status !== "DRAFT" && fields.slots && fields.slots.length > 0) {
+    try {
+      await generateTimetableOccurrences(student.id, user);
+    } catch (e) {
+      console.error("Failed to generate timetable occurrences during student update", e);
+    }
+  }
 
   return NextResponse.json({
     success: true,
