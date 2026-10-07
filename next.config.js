@@ -4,9 +4,6 @@ const nextConfig = {
     "/*": ["./prisma/dev.db"],
     "/api/*": ["./prisma/dev.db"],
   },
-  experimental: {
-    turbopack: false,
-  },
 };
 
 module.exports = nextConfig;
