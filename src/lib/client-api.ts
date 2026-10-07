@@ -29,7 +29,7 @@ export class ClientApiError extends Error {
 }
 
 const FALLBACK_MESSAGES: Record<number, string> = {
-  401: "Your session has expired. Please sign in again, then retry — your entries have been kept.",
+  401: "Your session has expired. Sign in again in another tab, then retry here — your entries have been kept.",
   403: "You do not have permission to do this. Ask the owner if you need access.",
   404: "This record no longer exists. Refresh the page.",
   409: "This conflicts with an existing record. Review the details and try again.",
@@ -72,6 +72,10 @@ export async function apiRequest<T = Record<string, unknown>>(
     );
   }
 
+  if (res.redirected && new URL(res.url).pathname === "/login") {
+    throw new ClientApiError(401, "UNAUTHENTICATED", FALLBACK_MESSAGES[401]);
+  }
+
   let data: Record<string, unknown> | null = null;
   try {
     data = await res.json();
@@ -103,6 +107,9 @@ export async function apiRequest<T = Record<string, unknown>>(
 
 /** Parses a fetch Response the same way apiRequest does (for older call sites). */
 export async function readApiResponse<T = Record<string, unknown>>(res: Response, fallback: string): Promise<T> {
+  if (res.redirected && new URL(res.url).pathname === "/login") {
+    throw new ClientApiError(401, "UNAUTHENTICATED", FALLBACK_MESSAGES[401]);
+  }
   let data: Record<string, unknown> | null = null;
   try {
     data = await res.json();

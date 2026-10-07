@@ -37,12 +37,6 @@ export function MobileMoreDrawer({
 
   if (!isOpen) return null;
 
-  const handlePersonaChange = (personaKey: string) => {
-    document.cookie = `xello_user_persona=${personaKey}; path=/; max-age=86400`;
-    router.refresh();
-    onClose();
-  };
-
   const handleTzChange = (tz: string) => {
     document.cookie = `xello_display_tz=${encodeURIComponent(tz)}; path=/; max-age=86400`;
     router.refresh();
@@ -167,41 +161,29 @@ export function MobileMoreDrawer({
             })}
           </div>
 
-          {/* Persona Switcher Section */}
+          {/* Account (signed-in user) */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 space-y-2.5">
             <span className="text-[11px] font-bold uppercase tracking-wider text-teal-400 flex items-center gap-1.5">
               <UserCheck className="h-3.5 w-3.5" />
-              Switch Test Role Persona
+              Signed in as
             </span>
+            <div className="text-xs">
+              <div className="font-bold text-white">{currentUser.name}</div>
+              <div className="text-slate-400 break-all">{currentUser.email}</div>
+            </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handlePersonaChange("admin")}
-                className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-left font-semibold text-slate-200 hover:border-teal-500 hover:bg-teal-500/10 transition-colors"
+              <a
+                href="/account/password"
+                className="p-2.5 min-h-[44px] flex items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700 font-semibold text-slate-200 hover:border-teal-500 hover:bg-teal-500/10 transition-colors"
               >
-                👑 Owner / Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePersonaChange("coordinator")}
-                className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-left font-semibold text-slate-200 hover:border-teal-500 hover:bg-teal-500/10 transition-colors"
+                Change password
+              </a>
+              <a
+                href="/api/auth/signout"
+                className="p-2.5 min-h-[44px] flex items-center justify-center rounded-xl bg-rose-500/10 border border-rose-500/30 font-semibold text-rose-300 hover:bg-rose-500/20 transition-colors"
               >
-                🛡️ Coordinator
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePersonaChange("teacher_rahul")}
-                className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-left font-semibold text-slate-200 hover:border-teal-500 hover:bg-teal-500/10 transition-colors"
-              >
-                🎓 Teacher (Rahul)
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePersonaChange("accounts")}
-                className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-left font-semibold text-slate-200 hover:border-teal-500 hover:bg-teal-500/10 transition-colors"
-              >
-                💼 Accounts
-              </button>
+                Sign out
+              </a>
             </div>
           </div>
 

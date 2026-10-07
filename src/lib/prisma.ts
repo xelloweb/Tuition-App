@@ -8,8 +8,9 @@ function getDatabaseUrl() {
     return process.env.DATABASE_URL;
   }
 
-  // When running on Vercel Serverless
-  if (process.env.VERCEL) {
+  // When running on Vercel Serverless. Vercel sets VERCEL=1; any other value
+  // (e.g. VERCEL="false" copied into another host's env) must not trigger this.
+  if (process.env.VERCEL === "1") {
     // Each serverless instance works on its own temporary copy of the bundled
     // file: writes are not shared between instances and are lost on cold start.
     console.warn(
@@ -40,7 +41,8 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /** True when running on Vercel against the bundled SQLite file (non-persistent). */
-export const isEphemeralDatabase = Boolean(process.env.VERCEL) && !(process.env.DATABASE_URL && !process.env.DATABASE_URL.startsWith("file:"));
+export const isEphemeralDatabase =
+  process.env.VERCEL === "1" && !(process.env.DATABASE_URL && !process.env.DATABASE_URL.startsWith("file:"));
 
 export const prisma =
   globalForPrisma.prisma ??

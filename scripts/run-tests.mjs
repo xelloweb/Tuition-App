@@ -26,7 +26,15 @@ function run(label, command, args) {
 let failed = false;
 try {
   run("Apply migrations to a fresh test database", "npx", ["prisma", "migrate", "deploy"]);
-  run("Seed fictional demo data", "npx", ["tsx", "prisma/seed.ts"]);
+  run("Load fictional test fixtures", "npx", ["tsx", "scripts/test-fixtures.ts"]);
+
+  // The deploy-time seed must never touch a database that already has data.
+  console.log("\n▶ Bootstrap seed leaves a populated database untouched");
+  const seed = spawnSync("npx", ["tsx", "prisma/seed.ts"], { cwd: root, env, encoding: "utf8" });
+  if (seed.status !== 0 || !/Seed skipped; nothing was changed/.test(seed.stdout)) {
+    throw new Error(`bootstrap seed did not skip a populated database:\n${seed.stdout}\n${seed.stderr}`);
+  }
+  console.log(seed.stdout.trim());
   run("Acceptance scenarios", "npx", ["tsx", "scripts/run-acceptance-tests.ts"]);
   const files = readdirSync(path.join(root, "tests"))
     .filter((f) => f.endsWith(".test.ts") && (process.env.TEST_BASE_URL || f !== "http.test.ts"))

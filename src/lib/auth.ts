@@ -1,10 +1,9 @@
-import { cookies } from "next/headers";
+import { getServerSession } from "next-auth/next";
+import { redirect } from "next/navigation";
 import { prisma } from "./prisma";
 import { UserRole, CurrentUser } from "./types";
 import { ApiError, forbiddenError } from "./api-errors";
-
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "./auth-options";
 
 export const DEMO_USERS: Record<string, CurrentUser> = {
   admin: {
@@ -41,27 +40,37 @@ export const DEMO_USERS: Record<string, CurrentUser> = {
   },
 };
 
-import { redirect } from "next/navigation";
+/** Fixtures for tests; production identities come from signed-in accounts. */
 
-export async function getCurrentUser(): Promise<CurrentUser> {
+/**
+ * Signed-in user, re-read from the database on every request so a deactivated
+ * account or changed role takes effect immediately (session tokens last 30 days).
+ */
+export async function getSessionUser(): Promise<CurrentUser | null> {
   const session = await getServerSession(authOptions);
-  
-  if (session?.user) {
-    return {
-      id: (session.user as any).id,
-      name: session.user.name || "Unknown",
-      email: session.user.email || "",
-      role: (session.user as any).role as UserRole,
-      teacherId: (session.user as any).teacherId || null,
-    };
-  }
-  
-  redirect("/login");
+  const sessionUserId = (session?.user as { id?: string } | undefined)?.id;
+  if (!sessionUserId) return null;
+  const user = await prisma.user.findUnique({ where: { id: sessionUserId } });
+  if (!user || !user.active) return null;
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role as UserRole,
+    teacherId: user.teacherId ?? null,
+  };
 }
 
-/** For API routes: resolves the caller or fails with 401 (expired / missing session). */
+/** For pages: the signed-in user, or a redirect to the login page. */
+export async function getCurrentUser(): Promise<CurrentUser> {
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
+  return user;
+}
+
+/** For API routes: the signed-in user, or a 401 the client shows as "session expired". */
 export async function requireUser(): Promise<CurrentUser> {
-  const user = await getCurrentUser();
+  const user = await getSessionUser();
   if (!user) {
     throw new ApiError(401, "UNAUTHENTICATED", "Your session has expired. Please sign in again.");
   }

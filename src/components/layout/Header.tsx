@@ -36,11 +36,6 @@ export function Header({ currentUser, displayTimeZone, onOpenMobile }: HeaderPro
     return () => clearInterval(interval);
   }, [selectedTz]);
 
-  const handlePersonaChange = (personaKey: string) => {
-    document.cookie = `xello_user_persona=${personaKey}; path=/; max-age=86400`;
-    router.refresh();
-  };
-
   const handleTzChange = (tz: string) => {
     setSelectedTz(tz);
     document.cookie = `xello_display_tz=${encodeURIComponent(tz)}; path=/; max-age=86400`;
@@ -142,7 +137,13 @@ export function Header({ currentUser, displayTimeZone, onOpenMobile }: HeaderPro
           )}
         </div>
 
-        <div className="hidden sm:flex items-center">
+        <div className="hidden sm:flex items-center gap-2">
+          <a
+            href="/account/password"
+            className="rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+          >
+            Change Password
+          </a>
           <button
             onClick={() => {
               // Using window.location.href because signOut from next-auth/react might require 'use client' and provider context.

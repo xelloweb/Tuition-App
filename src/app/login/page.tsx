@@ -96,9 +96,6 @@ export default function LoginPage() {
         </form>
       </div>
       
-      <p className="mt-8 text-xs text-slate-500">
-        Demo Accounts: admin@xellotuition.com / demo123 (if no password set)
-      </p>
     </div>
   );
 }

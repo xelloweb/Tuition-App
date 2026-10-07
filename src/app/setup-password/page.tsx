@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GraduationCap, ArrowRight, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { apiRequest, errorMessage } from "@/lib/client-api";
 
 export default function SetupPasswordPage() {
   const router = useRouter();
@@ -35,8 +36,8 @@ export default function SetupPasswordPage() {
       setError("Passwords do not match.");
       return;
     }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters long.");
+    if (password.length < 10) {
+      setError("Password must be at least 10 characters long.");
       return;
     }
 
@@ -44,23 +45,13 @@ export default function SetupPasswordPage() {
     setError("");
 
     try {
-      const res = await fetch("/api/auth/setup-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to set password");
-      }
-
+      await apiRequest("/api/auth/setup-password", { method: "POST", body: { token, password } });
       setSuccess(true);
       setTimeout(() => {
         router.push("/login");
       }, 3000);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(errorMessage(err, "Could not set the password. Try again."));
       setLoading(false);
     }
   };
@@ -109,7 +100,7 @@ export default function SetupPasswordPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-hidden transition-all"
-                  placeholder="At least 8 characters"
+                  placeholder="At least 10 characters"
                 />
               </div>
               <div className="space-y-1.5">

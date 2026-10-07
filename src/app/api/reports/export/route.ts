@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth";
 import { generateSafeCsv } from "@/lib/export-csv";
 import { canAccessFinancial } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await getCurrentUser();
+    const user = await getSessionUser();
+    if (!user) {
+      return new NextResponse("Your session has expired. Please sign in again.", { status: 401 });
+    }
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type") || "packages";
 
