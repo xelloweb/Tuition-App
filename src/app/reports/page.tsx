@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, canAccessFinancial } from "@/lib/auth";
 import { AccessDenied } from "@/components/ui/AccessDenied";
+import { PaymentReportForm } from "@/components/reports/PaymentReportForm";
 import {
   BarChart3,
   Download,
@@ -123,6 +124,8 @@ export default async function ReportsPage() {
                 Download Invoices CSV
               </a>
             </div>
+            
+            <PaymentReportForm />
           ) : (
             <div className="rounded-2xl border border-slate-800/60 p-5 space-y-3 bg-slate-950/30">
               <div className="font-bold text-slate-500 text-sm">

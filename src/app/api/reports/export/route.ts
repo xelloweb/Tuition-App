@@ -164,6 +164,66 @@ export async function GET(req: NextRequest) {
         },
       });
     }
+    
+    if (type === "payments") {
+      const startDateStr = searchParams.get("startDate");
+      const endDateStr = searchParams.get("endDate");
+      
+      let dateFilter = {};
+      if (startDateStr && endDateStr) {
+        // Assume YYYY-MM-DD
+        const start = new Date(startDateStr);
+        const end = new Date(endDateStr);
+        end.setHours(23, 59, 59, 999);
+        dateFilter = {
+          paymentDate: {
+            gte: start,
+            lte: end
+          }
+        };
+      }
+
+      const payments = await prisma.payment.findMany({
+        where: dateFilter,
+        include: {
+          student: true,
+          invoice: true
+        },
+        orderBy: { paymentDate: "desc" }
+      });
+
+      const headers = [
+        "Payment ID",
+        "Payment Date",
+        "Student Code",
+        "Student Name",
+        "Amount (INR)",
+        "Method",
+        "Reference",
+        "Invoice Number",
+        "Notes"
+      ];
+
+      const rows = payments.map((p) => [
+        p.id,
+        p.paymentDate.toISOString().split("T")[0],
+        p.student.studentCode,
+        p.student.name,
+        p.amount,
+        p.paymentMethod,
+        p.reference || "",
+        p.invoice?.invoiceNumber || "",
+        p.notes || ""
+      ]);
+
+      const csv = generateSafeCsv(headers, rows);
+      return new NextResponse(csv, {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="xello_payments_${startDateStr}_to_${endDateStr}.csv"`,
+        },
+      });
+    }
 
     return new NextResponse("Unknown report type", { status: 400 });
   } catch (err) {
