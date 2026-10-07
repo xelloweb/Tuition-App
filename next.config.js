@@ -1,10 +1,9 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   outputFileTracingIncludes: {
     "/*": ["./prisma/dev.db"],
     "/api/*": ["./prisma/dev.db"],
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
