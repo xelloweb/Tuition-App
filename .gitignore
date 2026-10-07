@@ -51,3 +51,8 @@ next-env.d.ts
 *.xlsx
 *.xls
 insert-trainers.txt
+
+# Real student/trainer data must never be committed (the repository was public).
+scripts/students-raw-data.ts
+scripts/import-students-*.ts
+private-data/

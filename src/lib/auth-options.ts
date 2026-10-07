@@ -71,29 +71,10 @@ export const authOptions: NextAuthOptions = {
           );
         }
 
-        let user = await prisma.user.findUnique({ where: { email } });
-        const expectedSeed = (process.env.SEED_ADMIN_PASSWORD && process.env.SEED_ADMIN_PASSWORD.length >= 12)
-          ? process.env.SEED_ADMIN_PASSWORD
-          : "xelloadmin1234";
-
-        if (!user && email === "admin@xellotuition.com" && (password === "xelloadmin1234" || password === expectedSeed)) {
-          const hash = await bcrypt.hash(password, 12);
-          user = await prisma.user.create({
-            data: {
-              id: "usr-admin",
-              name: "Devanand Nambiar (Admin / Owner)",
-              email: "admin@xellotuition.com",
-              role: "OWNER",
-              passwordHash: hash,
-              active: true,
-            },
-          });
-        }
-
+        const user = await prisma.user.findUnique({ where: { email } });
         if (!user || !user.active) {
           throw new Error("Invalid email or password.");
         }
-
         const signedIn = {
           id: user.id,
           name: user.name,
@@ -102,17 +83,6 @@ export const authOptions: NextAuthOptions = {
           teacherId: user.teacherId,
           sessionVersion: user.sessionVersion,
         };
-
-        if (user.role === "OWNER" && (password === "xelloadmin1234" || password === expectedSeed)) {
-          if (!user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
-            const newHash = await bcrypt.hash(password, 12);
-            await prisma.user.update({
-              where: { id: user.id },
-              data: { passwordHash: newHash, inviteToken: null, inviteExpiresAt: null },
-            });
-          }
-          return signedIn;
-        }
 
         if (!user.passwordHash) {
           if (demoLoginAllowed() && password === "demo123" && user.role !== "TEACHER") return signedIn;

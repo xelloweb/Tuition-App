@@ -100,6 +100,19 @@ describe("HTTP API", { skip: !BASE }, () => {
     assert.equal(await signIn(EMAILS.admin, "demo123"), null, "public demo password does not work");
   });
 
+  test("no public way to take over a login: the fixed owner password fails and the open reset endpoint is gone", async () => {
+    assert.equal(await signIn(EMAILS.admin, "xelloadmin1234"), null, "the password committed on 8 Oct 2026 does not open the owner account");
+    assert.ok(await signIn(EMAILS.admin, PASSWORD), "the owner's real password still works, so the attempt changed nothing");
+    const reset = await call(null, "POST", "/api/auth/forgot-password", { email: EMAILS.admin, newPassword: "attacker-password-123" });
+    // The address now reaches NextAuth's catch-all, which rejects unknown actions without touching any account.
+    assert.ok(reset.status >= 400, `no unauthenticated password reset (got ${reset.status})`);
+    assert.doesNotMatch(JSON.stringify(reset.json ?? {}), /success|resetToken/);
+    assert.ok(await signIn(EMAILS.admin, PASSWORD));
+    const page = await fetch(`${BASE}/forgot-password`);
+    assert.equal(page.status, 200);
+    assert.match(await page.text(), /Ask the owner for a new password link/);
+  });
+
   test("change password: wrong current password is refused; the new password works and every old session ends", async () => {
     const before = await sessionFor("accounts");
     const wrong = await call("accounts", "POST", "/api/auth/change-password", { currentPassword: "nope", newPassword: "a-much-better-passphrase" });

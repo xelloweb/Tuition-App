@@ -44,11 +44,13 @@ describe("password rules", () => {
     assert.ok(isPublishedPassword("demo123"));
     assert.ok(isPublishedPassword(" DEMO123 "));
     assert.ok(!isPublishedPassword("demo1234"));
+    assert.ok(isPublishedPassword("xelloadmin1234"), "the owner password committed on 8 Oct 2026");
   });
 
   test("new passwords need 10+ characters and must not be published", () => {
     assert.match(newPasswordProblem("short") ?? "", /at least 10/);
     assert.equal(newPasswordProblem("a-long-enough-passphrase"), null);
     assert.match(newPasswordProblem("x".repeat(201)) ?? "", /200/);
+    assert.match(newPasswordProblem("xelloadmin1234") ?? "", /publicly known/);
   });
 });

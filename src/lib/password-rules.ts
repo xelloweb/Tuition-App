@@ -2,13 +2,16 @@
  * Password rules shared by the forms (instant feedback) and the API routes.
  *
  * Published passwords appeared in this public repository's history (the old
- * demo setup). Production refuses them for sign-in, and they can never be chosen
- * again, so a leaked default cannot open an account.
+ * demo setup, and a fixed owner password committed on 8 Oct 2026). Production
+ * refuses them for sign-in, and they can never be chosen again, so a leaked
+ * default cannot open an account.
  */
 export const MIN_PASSWORD_LENGTH = 10;
 export const MAX_PASSWORD_LENGTH = 200;
 
-const PUBLISHED_PASSWORDS = new Set(["demo123"]);
+/** Exactly as published (the deploy safety step compares stored hashes against these). */
+export const PUBLISHED_PASSWORD_LIST = ["demo123", "xelloadmin1234"];
+const PUBLISHED_PASSWORDS = new Set(PUBLISHED_PASSWORD_LIST);
 
 export function isPublishedPassword(password: string): boolean {
   return PUBLISHED_PASSWORDS.has(password.trim().toLowerCase());

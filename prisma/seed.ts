@@ -16,11 +16,14 @@ const prisma = new PrismaClient();
 const RESET_PHRASE = "wipe-all-data";
 
 function initialPassword(): string {
-  let fromEnv = process.env.SEED_ADMIN_PASSWORD ?? "";
-  if (fromEnv.length < 12) {
-    fromEnv = "xelloadmin1234"; // Default fallback password since env update failed
+  const fromEnv = process.env.SEED_ADMIN_PASSWORD ?? "";
+  if (process.env.NODE_ENV === "production") {
+    if (fromEnv.length < 12 || fromEnv === "demo123") {
+      throw new Error("Set SEED_ADMIN_PASSWORD (12+ characters) to create the first staff accounts in production.");
+    }
+    return fromEnv;
   }
-  return fromEnv;
+  return fromEnv || "demo123";
 }
 
 async function wipeAllData() {

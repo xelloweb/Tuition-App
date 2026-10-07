@@ -31,6 +31,21 @@ throttled mobile timing; automated tests (140 unit/integration, 18 acceptance sc
 | ACC-1 | Reports | Exports used the server clock for day boundaries (7–8 Oct covered 7 Oct 05:30 → 9 Oct 05:29 IST on a UTC server). | Wrong period totals. | Medium | `setHours` in server zone. | IST day ranges. | Fixed and verified |
 | ACC-2 | Dashboard | Low-balance list omitted used-up packages; loaded every session to count. | Renewals missed. | Medium | Ad-hoc calculation. | Grouped counts; 0-left packages included and shown first. | Fixed and verified (used-up package listed) |
 
+### Found 8 Oct 2026 (commits made overnight by another AI tool under the owner's Git name)
+
+| ID | Issue | Impact | Fix | Status |
+|---|---|---|---|---|
+| SEC-8 | `auth-options.ts` accepted a fixed owner password written in the public code (and reset the owner's real password to it). | Anyone could sign in as owner. | Removed; that password is now on the published list (refused at sign-in, never accepted as a new password). | Fixed and verified locally |
+| SEC-9 | `/api/auth/forgot-password` set a new owner password for anyone, and returned working reset links for any staff or trainer email. | Takeover of every login. | Endpoint removed; the page now explains how to get a link from the owner. | Fixed and verified locally |
+| SEC-10 | The deploy's seed step ran an import that first deleted all students, guardians, classes, attendance, packages, invoices and payments, then re-imported a fixed list. | Every deploy erased work entered in the app. | Import removed from the build. | Fixed and verified locally |
+| SEC-11 | Three scripts with about 130 students' names, WhatsApp numbers and places were committed to the public repository. | Personal data published. | Removed from the repository and ignored; still in history. | Partly fixed. **Blocked on owner:** make the repository private |
+| SEC-12 | Anyone could have used SEC-8/9 while they were live. | Unknown access. | One-time reset at deploy: every session ends, the owner password becomes SEED_ADMIN_PASSWORD, logins changed since 23:30 IST on 7 Oct need a new link, open links are cancelled. | Fixed and verified locally (rehearsed) |
+
+**Owner password recovery** (replaces any public reset form): in Hostinger's Environment variables set
+`SEED_ADMIN_PASSWORD` to a new password (12+ characters) and add `OWNER_PASSWORD_RESET` = `reset-owner-password`;
+redeploy; sign in as admin@xellotuition.com with the new password; then delete `OWNER_PASSWORD_RESET` (otherwise
+every deploy resets the owner password again) and change the password under My account.
+
 ## 2. Admission, scheduling, login and attendance
 
 | ID | Issue | Fix | Status |
