@@ -108,6 +108,19 @@ describe("HTTP API", { skip: !BASE }, () => {
     assert.equal(await signIn(EMAILS.accounts, PASSWORD), null, "old password no longer works");
   });
 
+  test("my account: users change their own display name; signed-out and blank names are refused", async () => {
+    assert.equal((await call(null, "POST", "/api/auth/profile", { name: "Someone" })).status, 401);
+    assert.equal((await call("admin", "POST", "/api/auth/profile", { name: "  " })).status, 400);
+    const ok = await call("admin", "POST", "/api/auth/profile", { name: "Shamrood" });
+    assert.equal(ok.status, 200, ok.text);
+    const account = await page("admin", "/account");
+    assert.equal(account.status, 200);
+    assert.match(await account.text(), /Shamrood/);
+    const oldLink = await page("admin", "/account/password");
+    assert.ok([303, 307, 308].includes(oldLink.status));
+    assert.match(oldLink.headers.get("location") ?? "", /\/account$/);
+  });
+
   test("add trainer: owner succeeds, the trainer appears in the list, a retry does not duplicate", async () => {
     const body = {
       name: `HTTP Trainer ${run}`,

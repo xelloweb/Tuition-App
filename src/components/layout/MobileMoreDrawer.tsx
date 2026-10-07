@@ -1,5 +1,6 @@
 "use client";
 
+import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -173,17 +174,18 @@ export function MobileMoreDrawer({
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <a
-                href="/account/password"
+                href="/account"
                 className="p-2.5 min-h-[44px] flex items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700 font-semibold text-slate-200 hover:border-teal-500 hover:bg-teal-500/10 transition-colors"
               >
-                Change password
+                My account
               </a>
-              <a
-                href="/api/auth/signout"
+              <button
+                type="button"
+                onClick={() => signOut({ callbackUrl: "/login" })}
                 className="p-2.5 min-h-[44px] flex items-center justify-center rounded-xl bg-rose-500/10 border border-rose-500/30 font-semibold text-rose-300 hover:bg-rose-500/20 transition-colors"
               >
                 Sign out
-              </a>
+              </button>
             </div>
           </div>
 

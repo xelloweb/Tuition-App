@@ -118,7 +118,7 @@ async function main() {
     data: [
       {
         id: "usr-admin",
-        name: "Devanand Nambiar (Admin / Owner)",
+        name: "Shamrood",
         email: "admin@xellotuition.com",
         role: "OWNER",
         passwordHash,
@@ -143,7 +143,7 @@ async function main() {
   
   console.log(
     process.env.NODE_ENV === "production"
-      ? "🎉 Initialisation complete. Sign in as admin@xellotuition.com with the SEED_ADMIN_PASSWORD value, then change it under Account."
+      ? "🎉 Initialisation complete. Sign in as admin@xellotuition.com with the SEED_ADMIN_PASSWORD value, then change it under My Account."
       : `🎉 Initialisation complete. Local sign-in: admin@xellotuition.com / ${password === "demo123" ? "demo123" : "(SEED_ADMIN_PASSWORD)"}`
   );
 }

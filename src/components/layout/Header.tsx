@@ -139,10 +139,10 @@ export function Header({ currentUser, displayTimeZone, onOpenMobile }: HeaderPro
 
         <div className="hidden sm:flex items-center gap-2">
           <a
-            href="/account/password"
+            href="/account"
             className="rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
           >
-            Change Password
+            My Account
           </a>
           <button
             onClick={() => {
