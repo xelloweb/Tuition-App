@@ -161,3 +161,36 @@ export async function calculateStudentFinancialSummary(studentId: string) {
     paymentsCount: payments.length,
   };
 }
+
+/**
+ * Organisation-wide money position in INR (all invoices and payments are
+ * recorded in INR). Billed and received are all-time totals; outstanding,
+ * overdue and advance are balances as of `now` (overdue uses IST due dates).
+ */
+export async function calculateFinancialSummary(now: Date = new Date()) {
+  const [invoices, verified] = await Promise.all([
+    prisma.invoice.findMany({ where: { status: { not: "CANCELLED" } }, select: { totalAmount: true, balanceDue: true, dueDate: true } }),
+    prisma.payment.findMany({ where: { isVerified: true }, select: { amount: true, allocations: { select: { amount: true } } } }),
+  ]);
+  let billed = 0;
+  let outstanding = 0;
+  let overdue = 0;
+  let overdueInvoices = 0;
+  let dueToday = 0;
+  for (const inv of invoices) {
+    billed += inv.totalAmount;
+    outstanding += inv.balanceDue;
+    if (inv.balanceDue > 0 && isPastDue(inv.dueDate, now)) {
+      overdue += inv.balanceDue;
+      overdueInvoices++;
+    }
+    if (inv.balanceDue > 0 && daysPastDue(inv.dueDate, now) === 0 && !isPastDue(inv.dueDate, now)) dueToday++;
+  }
+  let received = 0;
+  let allocated = 0;
+  for (const p of verified) {
+    received += p.amount;
+    for (const a of p.allocations) allocated += a.amount;
+  }
+  return { currency: "INR" as const, billed, received, outstanding, overdue, overdueInvoices, dueToday, advance: Math.max(0, received - allocated) };
+}

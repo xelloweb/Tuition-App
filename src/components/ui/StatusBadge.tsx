@@ -46,12 +46,12 @@ export function StatusBadge({
   switch (normalized) {
     case "ACTIVE":
       label = "Active";
-      bg = "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.15)]";
+      bg = "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
       Icon = CheckCircle2;
       break;
     case "COMPLETED":
       label = "Completed";
-      bg = "bg-teal-500/15 text-teal-300 border-teal-500/30 shadow-[0_0_8px_rgba(20,184,166,0.15)]";
+      bg = "bg-teal-500/15 text-teal-300 border-teal-500/30";
       Icon = CheckCircle2;
       break;
     case "SCHEDULED":
@@ -67,7 +67,7 @@ export function StatusBadge({
       break;
     case "PAID":
       label = "Paid in Full";
-      bg = "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.15)]";
+      bg = "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
       Icon = ShieldCheck;
       break;
     case "PARTIAL":
@@ -77,7 +77,7 @@ export function StatusBadge({
       break;
     case "OVERDUE":
       label = "Overdue";
-      bg = "bg-rose-500/15 text-rose-300 border-rose-500/30 shadow-[0_0_8px_rgba(244,63,94,0.15)]";
+      bg = "bg-rose-500/15 text-rose-300 border-rose-500/30";
       Icon = AlertCircle;
       break;
     case "CANCELLED":
@@ -91,13 +91,13 @@ export function StatusBadge({
       Icon = AlertCircle;
       break;
     case "TEACHER_NO_SHOW":
-      label = "Teacher Absent (0 Deduct)";
+      label = "Trainer absent (no class used)";
       bg = "bg-rose-500/15 text-rose-300 border-rose-500/30";
       Icon = AlertCircle;
       break;
     case "APPROVED":
       label = "Approved";
-      bg = "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.15)]";
+      bg = "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
       Icon = ShieldCheck;
       break;
     case "REVERSED":
@@ -107,7 +107,7 @@ export function StatusBadge({
       break;
     case "INACTIVE":
       label = "Inactive";
-      bg = "bg-slate-800 text-slate-500 border-slate-700";
+      bg = "bg-slate-800 text-slate-400 border-slate-700";
       Icon = XCircle;
       break;
     case "PAUSED":
@@ -139,7 +139,7 @@ export function StatusBadge({
 
   const sizeClasses =
     size === "sm"
-      ? "text-[11px] px-2.5 py-0.5 gap-1"
+      ? "text-xs px-2.5 py-0.5 gap-1"
       : "text-xs px-3 py-1 gap-1.5 font-semibold";
 
   return (

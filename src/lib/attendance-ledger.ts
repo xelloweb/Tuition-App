@@ -5,6 +5,7 @@ import { canCorrectAttendance, canMarkAttendance } from "./auth";
 import { ApiError, conflictError, forbiddenError, notFoundError, uniqueTargetIncludes, validationError } from "./api-errors";
 import { FieldCollector } from "./validation";
 import { getTeacherRateForGrade } from "./rates";
+import { resolveOpenRequests } from "./services/correction-requests";
 
 export { getTeacherRateForGrade };
 
@@ -32,7 +33,8 @@ export function parseAttendanceBody(body: Record<string, unknown>) {
     max: 300,
     fallback: 60,
   });
-  const topicCovered = v.optionalText("topicCovered", body.topicCovered, "Topic covered", 500) ?? "General curriculum session";
+  // Never invent a topic: an empty field is stored as "Not recorded".
+  const topicCovered = v.optionalText("topicCovered", body.topicCovered, "Topic covered", 500) ?? "Not recorded";
   const homework = v.optionalText("homework", body.homework, "Homework", 1000) ?? undefined;
   const studentProgressNote = v.optionalText("studentProgressNote", body.studentProgressNote, "Progress note", 1000) ?? undefined;
   if (v.hasErrors) throw validationError("Please correct the highlighted fields.", v.errors);
@@ -326,6 +328,9 @@ export async function correctAttendanceRecord(
         reversedByName: wasConsumed && !shouldBeConsumed ? user.name : record.reversedByName,
       },
     });
+
+    // A trainer's open request for this class is answered by this correction.
+    await resolveOpenRequests(tx, record.id, user, reason.trim());
 
     await tx.auditLog.create({
       data: {

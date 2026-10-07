@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { ModalShell } from "@/components/ui/ModalShell";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Users,
   Search,
@@ -26,6 +27,8 @@ import { Button } from "@/components/ui/Button";
 import { GRADE_FILTER_OPTIONS } from "@/lib/grades";
 import { COUNTRIES, STUDENT_STATUSES } from "@/lib/constants";
 import { apiRequest, ClientApiError, errorMessage } from "@/lib/client-api";
+import { formatInTimeZone } from "@/lib/timezones";
+import type { AdmissionDraftItem } from "@/lib/services/admission-drafts";
 
 interface StudentsClientProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,6 +36,8 @@ interface StudentsClientProps {
   subjects: SubjectOption[];
   teachers: TeacherOption[];
   canAddStudent: boolean;
+  /** Unfinished admissions (owner / coordinator only). */
+  drafts?: AdmissionDraftItem[];
   isTeacherView?: boolean;
 }
 
@@ -48,10 +53,18 @@ interface Overlay {
 
 const PAGE_SIZE = 30;
 
-export function StudentsClient({ students, subjects, teachers, canAddStudent, isTeacherView = false }: StudentsClientProps) {
+export function StudentsClient({ students, subjects, teachers, canAddStudent, drafts = [], isTeacherView = false }: StudentsClientProps) {
   const router = useRouter();
   const [overlay, setOverlay] = useState<Overlay>({ base: students, upserts: [], removedIds: [] });
-  const [addModalOpen, setAddModalOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const [addModalOpen, setAddModalOpen] = useState(() => canAddStudent && searchParams.get("admit") === "1");
+  const [resumeDraft, setResumeDraft] = useState<AdmissionDraftItem | null>(null);
+  // The dashboard's "Admit a student" link (?admit=1) opens the admission form; the query is then removed.
+  useEffect(() => {
+    if (searchParams.get("admit") === "1") router.replace("/students", { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [deletingDraftId, setDeletingDraftId] = useState<string | null>(null);
   const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
   const [deletingStudent, setDeletingStudent] = useState<StudentRow | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -65,6 +78,20 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
   const [selectedStatus, setSelectedStatus] = useState("CURRENT");
   const [lowBalanceOnly, setLowBalanceOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  const handleDeleteDraft = async (draft: AdmissionDraftItem) => {
+    if (!confirm(`Delete the admission draft for “${draft.label}”? This cannot be undone.`)) return;
+    setDeletingDraftId(draft.id);
+    try {
+      await apiRequest(`/api/admission-drafts/${draft.id}`, { method: "DELETE" });
+      setBanner({ tone: "success", text: `Draft “${draft.label}” deleted.` });
+      router.refresh();
+    } catch (err) {
+      setBanner({ tone: "error", text: errorMessage(err, "Could not delete the draft.") });
+    } finally {
+      setDeletingDraftId(null);
+    }
+  };
 
   const studentsList = useMemo(() => {
     const active = overlay.base === students ? overlay : { upserts: [] as StudentRow[], removedIds: [] as string[] };
@@ -225,17 +252,17 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
             <Users className="h-4 w-4" />
             <span>Academic Registry</span>
           </div>
-          <h2 className="text-xl sm:text-3xl font-black tracking-tight text-white mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-white mt-1">
             {isTeacherView ? "My Students" : "Students Directory"}
-          </h2>
+          </h1>
           <p className="text-xs text-slate-400 mt-0.5">
             Profiles for Kerala and GCC expatriate students (UAE, Saudi Arabia, Qatar, Oman, Kuwait, Bahrain).
           </p>
         </div>
 
         {canAddStudent && (
-          <Button onClick={() => setAddModalOpen(true)} icon={Plus} className="w-full sm:w-auto">
-            Add New Student
+          <Button onClick={() => { setResumeDraft(null); setAddModalOpen(true); }} icon={Plus} className="w-full sm:w-auto">
+            Admit a student
           </Button>
         )}
       </div>
@@ -264,18 +291,47 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
         </div>
       )}
 
+      {canAddStudent && drafts.length > 0 && (
+        <section aria-labelledby="drafts-heading" className="rounded-card border border-amber-300/40 bg-surface p-4">
+          <h2 id="drafts-heading" className="text-lg font-semibold text-ink">
+            Admission drafts ({drafts.length})
+          </h2>
+          <p className="text-sm text-ink-muted">Unfinished admissions. Nothing is created for a draft until it is confirmed.</p>
+          <ul className="mt-3 divide-y divide-line">
+            {drafts.map((d) => (
+              <li key={d.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="font-semibold text-ink break-words">{d.label}</p>
+                  <p className="text-sm text-ink-subtle">
+                    Last saved by {d.updatedByName} on {formatInTimeZone(d.updatedAt)} IST
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => { setResumeDraft(d); setAddModalOpen(true); }}>
+                    Continue
+                  </Button>
+                  <Button size="sm" variant="outline" loading={deletingDraftId === d.id} onClick={() => handleDeleteDraft(d)}>
+                    Delete<span className="sr-only"> draft for {d.label}</span>
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Search and Filters Bar */}
-      <div className="rounded-2xl sm:rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-3 sm:p-4 shadow-xl shadow-black/30 space-y-3">
+      <div className="rounded-2xl border border-slate-800/80 bg-slate-900 p-3 sm:p-4 space-y-3">
         <div className="flex items-center gap-2">
           <div className="relative flex-1 min-w-0">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setFilter(setSearchQuery)(e.target.value)}
               placeholder="Search by name, student ID, guardian or phone..."
               aria-label="Search students"
-              className="w-full rounded-xl border border-slate-700 bg-slate-900/90 pl-10 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:border-teal-500 focus:ring-1 focus:ring-teal-500 min-touch-target"
+              className="w-full rounded-xl border border-slate-700 bg-slate-900/90 pl-10 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder:text-slate-400 focus:outline-hidden focus:border-teal-500 focus:ring-1 focus:ring-teal-500 min-touch-target"
             />
             {searchQuery && (
               <button
@@ -296,7 +352,7 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
             <Filter className="h-4 w-4 text-teal-400" />
             <span>Filters</span>
             {activeFiltersCount > 0 && (
-              <span className="rounded-full bg-teal-500 text-slate-950 px-1.5 text-[10px] font-black">{activeFiltersCount}</span>
+              <span className="rounded-full bg-teal-500 text-slate-950 px-1.5 text-xs font-bold">{activeFiltersCount}</span>
             )}
           </button>
         </div>
@@ -305,12 +361,12 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
           {rowFilters.country}
           {rowFilters.grade}
           {rowFilters.status}
-          <label className="flex items-center gap-2 cursor-pointer rounded-xl border border-slate-700 bg-slate-800/90 px-3 py-1.5 min-h-[36px] select-none hover:bg-slate-700 transition-colors">
+          <label className="flex items-center gap-2 cursor-pointer rounded-xl border border-slate-700 bg-slate-800/90 px-3 py-1.5 min-h-[44px] select-none hover:bg-slate-700 transition-colors">
             <input
               type="checkbox"
               checked={lowBalanceOnly}
               onChange={(e) => setFilter(setLowBalanceOnly)(e.target.checked)}
-              className="h-4 w-4 rounded accent-teal-500"
+              className="h-5 w-5 rounded accent-teal-500"
             />
             <span className="font-semibold text-slate-300">≤3 Classes Left</span>
           </label>
@@ -324,7 +380,7 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
       </div>
 
       {/* Student List */}
-      <div className="rounded-2xl sm:rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl shadow-2xl shadow-black/40 overflow-hidden">
+      <div className="rounded-2xl border border-slate-800/80 bg-slate-900 overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs font-bold uppercase tracking-wider text-teal-400">
             Students ({filteredStudents.length}{filteredStudents.length !== studentsList.length ? ` of ${studentsList.length}` : ""})
@@ -335,7 +391,7 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
         <div className="divide-y divide-slate-800/60">
           {filteredStudents.length === 0 ? (
             <div className="p-6 sm:p-14 text-center">
-              <div className="flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-3xl border border-dashed border-slate-800 bg-slate-900/40">
+              <div className="flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-2xl border border-dashed border-slate-800 bg-slate-900/40">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-800/90 border border-slate-700/80 text-teal-400">
                   <Users className="h-7 w-7 text-teal-400" />
                 </div>
@@ -379,7 +435,7 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
                           </span>
                           <StatusBadge status={student.status} size="sm" />
                           {isLowBalance && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold text-rose-300 border border-rose-500/30">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-bold text-rose-300 border border-rose-500/30">
                               <AlertTriangle className="h-3 w-3" /> Low Balance
                             </span>
                           )}
@@ -391,7 +447,7 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
                           </span>
                           <span className="flex items-center gap-1 text-slate-400">
                             <Globe className="h-3 w-3 text-teal-400" />
-                            {student.country} ({student.timeZone})
+                            {student.country}
                           </span>
                         </div>
 
@@ -399,7 +455,7 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
                           {student.enrolments?.map((enr: StudentRow) => (
                             <span
                               key={enr.id}
-                              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium text-slate-300 bg-slate-800/90 border border-slate-700/80"
+                              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium text-slate-300 bg-slate-800/90 border border-slate-700/80"
                             >
                               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: enr.subject?.color || "#14b8a6" }} />
                               {enr.subject?.name}{" "}
@@ -412,15 +468,15 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
                       <div className={`flex items-center justify-between sm:justify-end gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/60 shrink-0 ${canAddStudent ? "pr-24 sm:pr-24" : ""}`}>
                         {activePkg ? (
                           <div className="text-left sm:text-right">
-                            <span className="text-[10px] uppercase font-bold text-slate-500 block">Classes Balance</span>
+                            <span className="text-xs uppercase font-bold text-slate-400 block">Classes Balance</span>
                             <div className="text-sm font-bold text-white tabular-nums font-mono">
-                              <span className={isLowBalance ? "text-rose-400 font-black" : "text-teal-400 font-black"}>{remaining}</span> /{" "}
+                              <span className={isLowBalance ? "text-rose-400 font-bold" : "text-teal-400 font-bold"}>{remaining}</span> /{" "}
                               {activePkg.totalCredits} Available
                             </div>
-                            <div className="text-[11px] text-slate-400">{consumed} taught</div>
+                            <div className="text-xs text-slate-400">{consumed} taught</div>
                           </div>
                         ) : (
-                          <div className="text-xs text-slate-500 italic">No active package</div>
+                          <div className="text-xs text-slate-400 italic">No active package</div>
                         )}
                         <div className="flex items-center gap-1 text-xs font-bold text-teal-300 bg-teal-500/15 px-3 py-1.5 rounded-xl border border-teal-500/30 sm:bg-transparent sm:border-0 sm:p-0">
                           <span className="sm:hidden">Profile</span>
@@ -473,11 +529,9 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
 
       {/* Mobile Filter Sheet */}
       {filterSheetOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end sm:hidden">
-          <div className="fixed inset-0 bg-black/75 backdrop-blur-md" onClick={() => setFilterSheetOpen(false)} />
-          <div className="relative z-10 max-h-[85dvh] overflow-y-auto rounded-t-3xl bg-[#0c1220] p-5 shadow-2xl border-t border-slate-800 pb-safe space-y-4 text-white">
+        <ModalShell labelledBy="filter-title" onClose={() => setFilterSheetOpen(false)} maxWidth="max-w-md"><div className="space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <h3 className="font-bold text-base text-white">Filter Students</h3>
+              <h2 id="filter-title" className="text-lg font-semibold text-ink">Filter students</h2>
               <button onClick={() => setFilterSheetOpen(false)} aria-label="Close filters" className="p-2 text-slate-400 hover:text-white transition-colors">
                 <X className="h-5 w-5" />
               </button>
@@ -502,7 +556,7 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
                     type="checkbox"
                     checked={lowBalanceOnly}
                     onChange={(e) => setFilter(setLowBalanceOnly)(e.target.checked)}
-                    className="h-4 w-4 rounded-sm accent-teal-500"
+                    className="h-5 w-5 rounded-sm accent-teal-500"
                   />
                   <span className="font-bold text-slate-200">Only Low Balance (≤3 classes)</span>
                 </label>
@@ -517,17 +571,20 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, is
                 Show {filteredStudents.length} students
               </Button>
             </div>
-          </div>
-        </div>
+          </div></ModalShell>
       )}
 
       {addModalOpen && (
         <AddStudentModal
+          key={resumeDraft?.id ?? "new"}
           subjects={subjects}
           teachers={teachers}
-          onClose={() => setAddModalOpen(false)}
+          draft={resumeDraft}
+          onDraftsChanged={() => router.refresh()}
+          onClose={() => { setAddModalOpen(false); setResumeDraft(null); }}
           onSuccess={(newStudent, message) => {
             setAddModalOpen(false);
+            setResumeDraft(null);
             resetFilters();
             applyOverlay({ upserts: [newStudent] });
             setBanner({ tone: "success", text: message, href: `/students/${newStudent.id}` });

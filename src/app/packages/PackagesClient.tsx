@@ -53,9 +53,9 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
             <Layers className="h-4 w-4" />
             <span>Shared Credit Balance Architecture</span>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-white mt-1">
             Packages & Subject Allocations
-          </h2>
+          </h1>
           <p className="text-xs text-slate-400 mt-0.5">
             Multi-subject packages with shared pool, non-billing reallocation, and auditable class credit ledgers.
           </p>
@@ -63,7 +63,7 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
       </div>
 
       {/* Concept Explainer Banner */}
-      <div className="rounded-3xl border border-teal-500/20 bg-teal-500/5 backdrop-blur-md p-5 text-xs text-teal-200">
+      <div className="rounded-2xl border border-teal-500/20 bg-teal-500/5 p-5 text-xs text-teal-200">
         <div className="flex items-start gap-3">
           <Sparkles className="h-5 w-5 text-teal-400 mt-0.5 shrink-0" />
           <div className="space-y-1">
@@ -84,7 +84,7 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
         </div>
 
         {packages.length === 0 ? (
-          <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-12 text-center text-xs text-slate-500 shadow-xl">
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-900 p-12 text-center text-xs text-slate-400 shadow-xl">
             No active student packages enrolled. When students enroll with a package, their shared credit balance and subject split will appear here.
           </div>
         ) : (
@@ -92,7 +92,7 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
             {packages.map((pkg) => (
               <div
                 key={pkg.packageId}
-                className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-6 shadow-xl hover:border-slate-700/80 transition-all space-y-5"
+                className="rounded-2xl border border-slate-800/80 bg-slate-900 p-6 shadow-xl hover:border-slate-700/80 transition-all space-y-5"
               >
                 {/* Card Top: Package Info & Student */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
@@ -145,15 +145,15 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
                 {/* Balance Summary Counters */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 text-center">
                   <div>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
                       1. Entitled
                     </span>
-                    <div className="text-xl font-black text-white mt-0.5">
+                    <div className="text-xl font-bold text-white mt-0.5">
                       {pkg.totalEntitlement}
                     </div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
                       2. Consumed
                     </span>
                     <div className="text-xl font-bold text-slate-300 mt-0.5">
@@ -161,7 +161,7 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
                     </div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-teal-400 font-bold uppercase tracking-wider">
+                    <span className="text-xs text-teal-400 font-bold uppercase tracking-wider">
                       3. Remaining
                     </span>
                     <div className="text-xl font-bold text-teal-300 mt-0.5">
@@ -169,7 +169,7 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
                     </div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">
+                    <span className="text-xs text-blue-400 font-bold uppercase tracking-wider">
                       4. Reserved
                     </span>
                     <div className="text-xl font-bold text-blue-300 mt-0.5">
@@ -177,7 +177,7 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
                     </div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">
+                    <span className="text-xs text-emerald-400 font-bold uppercase tracking-wider">
                       5. Available
                     </span>
                     <div className="text-xl font-bold text-emerald-300 mt-0.5">
@@ -207,7 +207,7 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
                               {sub.subjectName}
                             </span>
                           </div>
-                          <span className="text-[10px] font-semibold text-slate-400 font-mono">
+                          <span className="text-xs font-semibold text-slate-400 font-mono">
                             {sub.subjectCode}
                           </span>
                         </div>
@@ -230,27 +230,27 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
                           />
                         </div>
 
-                        <div className="grid grid-cols-4 gap-1 text-[11px] text-center pt-1 border-t border-slate-800/80">
+                        <div className="grid grid-cols-4 gap-1 text-xs text-center pt-1 border-t border-slate-800/80">
                           <div>
-                            <div className="text-[10px] text-slate-500 uppercase">Alloc</div>
+                            <div className="text-xs text-slate-400 uppercase">Alloc</div>
                             <div className="font-bold text-white">
                               {sub.allocatedCredits}
                             </div>
                           </div>
                           <div>
-                            <div className="text-[10px] text-slate-500 uppercase">Used</div>
+                            <div className="text-xs text-slate-400 uppercase">Used</div>
                             <div className="font-bold text-slate-400">
                               {sub.consumedCredits}
                             </div>
                           </div>
                           <div>
-                            <div className="text-[10px] text-teal-400 uppercase">Remain</div>
+                            <div className="text-xs text-teal-400 uppercase">Remain</div>
                             <div className="font-bold text-teal-300">
                               {sub.remainingCredits}
                             </div>
                           </div>
                           <div>
-                            <div className="text-[10px] text-emerald-400 uppercase">Avail</div>
+                            <div className="text-xs text-emerald-400 uppercase">Avail</div>
                             <div className="font-bold text-emerald-300">
                               {sub.availableCredits}
                             </div>
@@ -267,7 +267,7 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
       </div>
 
       {/* Reusable Templates Reference */}
-      <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-6 shadow-xl space-y-4">
+      <div className="rounded-2xl border border-slate-800/80 bg-slate-900 p-6 shadow-xl space-y-4">
         <h3 className="text-sm font-bold text-white">
           Standard Package Templates ({templates.length})
         </h3>
@@ -282,7 +282,7 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
             >
               <div className="flex items-center justify-between">
                 <span className="font-bold text-xs text-white">{tpl.name}</span>
-                <span className="font-black text-xs text-teal-300">
+                <span className="font-bold text-xs text-teal-300">
                   ₹{tpl.defaultPrice.toLocaleString("en-IN")}
                 </span>
               </div>
@@ -290,7 +290,7 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
                 {tpl.totalCredits} Classes • {tpl.durationMinutes} mins per session
               </div>
               {tpl.notes && (
-                <div className="text-[11px] text-slate-500 italic">
+                <div className="text-xs text-slate-400 italic">
                   {tpl.notes}
                 </div>
               )}

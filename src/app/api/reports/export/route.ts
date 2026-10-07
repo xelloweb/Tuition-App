@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { generateSafeCsv } from "@/lib/export-csv";
 import { canAccessFinancial } from "@/lib/auth";
+import { dayRangeInZone } from "@/lib/zoned-time";
 
 export async function GET(req: NextRequest) {
   try {
@@ -171,16 +172,10 @@ export async function GET(req: NextRequest) {
       
       let dateFilter = {};
       if (startDateStr && endDateStr) {
-        // Assume YYYY-MM-DD
-        const start = new Date(startDateStr);
-        const end = new Date(endDateStr);
-        end.setHours(23, 59, 59, 999);
-        dateFilter = {
-          receivedDate: {
-            gte: start,
-            lte: end
-          }
-        };
+        // Whole IST days, whatever the server's clock zone.
+        const range = dayRangeInZone(startDateStr, endDateStr);
+        if (!range) return new NextResponse("Choose a valid date range: the start date must be on or before the end date.", { status: 400 });
+        dateFilter = { receivedDate: range };
       }
 
       const payments = await prisma.payment.findMany({
@@ -234,15 +229,10 @@ export async function GET(req: NextRequest) {
       
       let dateFilter = {};
       if (startDateStr && endDateStr) {
-        const start = new Date(startDateStr);
-        const end = new Date(endDateStr);
-        end.setHours(23, 59, 59, 999);
-        dateFilter = {
-          sessionDate: {
-            gte: start,
-            lte: end
-          }
-        };
+        // Whole IST days, whatever the server's clock zone.
+        const range = dayRangeInZone(startDateStr, endDateStr);
+        if (!range) return new NextResponse("Choose a valid date range: the start date must be on or before the end date.", { status: 400 });
+        dateFilter = { sessionDate: range };
       }
 
       const payoutItems = await prisma.payoutItem.findMany({

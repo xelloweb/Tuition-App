@@ -27,9 +27,9 @@ export function ProgressClient({
             <FileText className="h-4 w-4" />
             <span>Academic Growth & Parent Support</span>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-white mt-1">
             Progress Reports & Assessments
-          </h2>
+          </h1>
           <p className="text-xs text-slate-400 mt-0.5">
             Subject-wise learning milestones, homework completion tracking, and parent concern tickets.
           </p>
@@ -66,14 +66,14 @@ export function ProgressClient({
       {activeTab === "progress" && (
         <div className="space-y-4">
           {progressList.length === 0 ? (
-            <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-12 text-center text-xs text-slate-500 shadow-xl">
+            <div className="rounded-2xl border border-slate-800/80 bg-slate-900 p-12 text-center text-xs text-slate-400 shadow-xl">
               No monthly progress reviews published yet. Tutors record monthly learning milestones after regular classes.
             </div>
           ) : (
             progressList.map((prog) => (
               <div
                 key={prog.id}
-                className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-6 shadow-xl space-y-4"
+                className="rounded-2xl border border-slate-800/80 bg-slate-900 p-6 shadow-xl space-y-4"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
                   <div>
@@ -89,7 +89,7 @@ export function ProgressClient({
                       </span>
                     </div>
                     <div className="text-xs text-slate-400 mt-1">
-                      Tutor: {prog.teacher.name} • Student Grade: {prog.student.grade} ({prog.student.country})
+                      Trainer: {prog.teacher.name} • Student Grade: {prog.student.grade} ({prog.student.country})
                     </div>
                   </div>
 
@@ -108,7 +108,7 @@ export function ProgressClient({
                     </div>
                   )}
                   <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 text-slate-300">
-                    <strong className="text-white">Teacher&apos;s Evaluation:</strong> {prog.teacherFeedback}
+                    <strong className="text-white">Trainer&apos;s evaluation:</strong> {prog.teacherFeedback}
                   </div>
                   {prog.coordinatorNotes && (
                     <div className="text-teal-200 bg-teal-500/5 p-3.5 rounded-2xl border border-teal-500/20">
@@ -124,10 +124,10 @@ export function ProgressClient({
 
       {/* Tab 2: Assessments */}
       {activeTab === "assessments" && (
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl shadow-xl overflow-hidden">
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-900 shadow-xl overflow-hidden">
           <div className="divide-y divide-slate-800/80">
             {assessments.length === 0 ? (
-              <div className="py-14 text-center text-xs text-slate-500">
+              <div className="py-14 text-center text-xs text-slate-400">
                 No test assessments recorded yet. Test marks and evaluations will appear here.
               </div>
             ) : (
@@ -141,7 +141,7 @@ export function ProgressClient({
                       <span className="font-bold text-sm text-white">
                         {test.assessmentTitle}
                       </span>
-                      <span className="rounded-lg bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-[10px] font-semibold text-teal-300">
+                      <span className="rounded-lg bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-xs font-semibold text-teal-300">
                         {test.subject.name}
                       </span>
                       <span className="text-slate-400">
@@ -159,7 +159,7 @@ export function ProgressClient({
                   </div>
 
                   <div className="text-right shrink-0">
-                    <div className="text-base font-black text-white">
+                    <div className="text-base font-bold text-white">
                       {test.score} / {test.maxScore}
                     </div>
                     <div className="text-xs font-bold text-teal-300">
@@ -177,25 +177,25 @@ export function ProgressClient({
       {activeTab === "concerns" && (
         <div className="space-y-4">
           {concerns.length === 0 ? (
-            <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-12 text-center text-xs text-slate-500 shadow-xl">
+            <div className="rounded-2xl border border-slate-800/80 bg-slate-900 p-12 text-center text-xs text-slate-400 shadow-xl">
               No open parent concerns. All student requirements are satisfied!
             </div>
           ) : (
             concerns.map((con) => (
               <div
                 key={con.id}
-                className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-5 shadow-xl space-y-2 text-xs"
+                className="rounded-2xl border border-slate-800/80 bg-slate-900 p-5 shadow-xl space-y-2 text-xs"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm text-white">
                       {con.student.name} (Parent Concern)
                     </span>
-                    <span className="rounded-lg bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 text-[10px] font-bold text-purple-300">
+                    <span className="rounded-lg bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 text-xs font-bold text-purple-300">
                       {con.category}
                     </span>
                     <span
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${
+                      className={`px-2 py-0.5 rounded-lg text-xs font-bold border ${
                         con.status === "RESOLVED"
                           ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
                           : "bg-amber-500/10 border-amber-500/20 text-amber-300"
@@ -204,7 +204,7 @@ export function ProgressClient({
                       {con.status}
                     </span>
                   </div>
-                  <span className="text-slate-500">
+                  <span className="text-slate-400">
                     {formatInTimeZone(con.reportedDate, "Asia/Kolkata")}
                   </span>
                 </div>

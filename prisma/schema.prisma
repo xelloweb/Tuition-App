@@ -25,6 +25,8 @@ model User {
   passwordHash    String?
   inviteToken     String?  @unique
   inviteExpiresAt DateTime?
+  /// Bumped when the password is set, reset or revoked; sessions signed with an older value stop working.
+  sessionVersion  Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -101,6 +103,18 @@ model Teacher {
   active         Boolean             @default(true)
   defaultRate    Int                 @default(500) // Base Hourly rate in INR
   gradeRates     String? // JSON string: rates per standard/grade e.g. {"10th Grade": 500, "11th Grade": 600, "12th Grade": 700}
+  /// Optional profile details (e.g. from the trainer sign-up form). Bank details are never stored.
+  location       String?
+  qualification  String?
+  syllabus       String?
+  devices        String?
+  /// "Mon, Tue, …" in week order
+  availableDays  String?
+  availableTimes String?
+  /// WhatsApp number when different from the phone number
+  whatsapp       String?
+  /// Internal notes: shown to staff, never to the trainer
+  notes          String?
   user           User?
   enrolments     SubjectEnrollment[]
   timetableSlots TimetableSlot[]
@@ -276,6 +290,7 @@ model AttendanceRecord {
   reversedAt            DateTime?
   reversedByName        String?
   revisions             AttendanceRevision[]
+  correctionRequests    AttendanceCorrectionRequest[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
 }
@@ -506,4 +521,40 @@ model IdempotencyKey {
   scope     String
   entityId  String
   createdAt DateTime @default(now())
+}
+
+/// Unfinished admissions. A draft never creates a student, guardian or code;
+/// confirming it creates the real records and removes the draft in one transaction.
+model AdmissionDraft {
+  id            String   @id @default(cuid())
+  /// Student name for the drafts list ("Untitled admission" when not yet typed).
+  label         String
+  /// JSON snapshot of the admission form.
+  data          String
+  createdByName String
+  updatedByName String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+/// A trainer's request to change attendance they already submitted. Staff resolve
+/// it with the audited correction (never by editing as the trainer) or decline it.
+model AttendanceCorrectionRequest {
+  id                  String           @id @default(cuid())
+  attendanceRecordId  String
+  attendanceRecord    AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+  requestedByUserId   String
+  requestedByName     String
+  requestedOutcome    String?
+  requestedAttendance String?
+  reason              String
+  /// OPEN, RESOLVED (corrected by staff) or DECLINED
+  status              String           @default("OPEN")
+  resolvedByName      String?
+  resolutionNote      String?
+  createdAt           DateTime         @default(now())
+  resolvedAt          DateTime?
+
+  @@index([status])
+  @@index([attendanceRecordId])
 }

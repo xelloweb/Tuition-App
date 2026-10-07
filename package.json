@@ -4,12 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push --skip-generate && npm run seed && next build --webpack",
+    "build": "prisma generate && prisma db push --skip-generate && npm run seed && npm run secure-accounts && next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "seed": "npx tsx prisma/seed.ts",
     "test": "node scripts/run-tests.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "secure-accounts": "npx tsx scripts/secure-accounts.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

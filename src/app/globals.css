@@ -1,5 +1,32 @@
 @import "tailwindcss";
 
+/*
+ * Xello design tokens. Use these (bg-canvas, bg-surface, text-ink-muted,
+ * border-line, bg-brand, rounded-card...) in new and refactored UI.
+ * Text colours meet WCAG AA (4.5:1) on canvas, surface and raised backgrounds;
+ * line-strong meets 3:1 for input boundaries.
+ */
+@theme {
+  --color-canvas: #0b1120;
+  --color-surface: #111827;
+  --color-raised: #1e293b;
+  --color-line: #334155;
+  --color-line-strong: #64748b;
+  --color-ink: #f8fafc;
+  --color-ink-muted: #cbd5e1;
+  --color-ink-subtle: #a3b1c6;
+  --color-brand: #2dd4bf;
+  --color-brand-hover: #5eead4;
+  --color-brand-text: #5eead4;
+  --color-brand-ink: #042f2e;
+  --color-success: #6ee7b7;
+  --color-warning: #fcd34d;
+  --color-danger: #fda4af;
+  --color-info: #7dd3fc;
+  --radius-control: 0.75rem;
+  --radius-card: 1rem;
+}
+
 @layer base {
   :root {
     --primary: #14b8a6;
@@ -20,7 +47,7 @@
 }
 
 body {
-  background-color: #070a12;
+  background-color: #0b1120;
   color: #f8fafc;
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -49,17 +76,9 @@ body {
 
 /* App Card styling */
 .app-card {
-  background-color: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 1.25rem;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.app-card:hover {
-  border-color: rgba(20, 184, 166, 0.3);
+  background-color: #111827;
+  border: 1px solid #334155;
+  border-radius: 1rem;
 }
 
 /* Custom scrollbars */
@@ -80,7 +99,7 @@ body {
 
 /* Clean accessible focus indicators */
 *:focus-visible {
-  outline: 2px solid #0d9488;
+  outline: 2px solid #5eead4;
   outline-offset: 2px;
 }
 

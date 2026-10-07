@@ -21,9 +21,9 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div
-      className={`flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 backdrop-blur-xl ${className}`}
+      className={`flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 ${className}`}
     >
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-800/90 border border-slate-700/80 text-teal-400 shadow-[0_0_20px_rgba(20,184,166,0.15)]">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-800/90 border border-slate-700/80 text-teal-400">
         <Icon className="h-7 w-7 text-teal-400" />
       </div>
       <h3 className="mt-4 text-base font-extrabold text-white">{title}</h3>

@@ -25,7 +25,7 @@ import {
   UserCog,
   X,
 } from "lucide-react";
-import { formatInTimeZone } from "@/lib/timezones";
+import { formatInTimeZone, formatDateOnly } from "@/lib/timezones";
 import { apiRequest, ClientApiError, errorMessage } from "@/lib/client-api";
 import { ReallocateModal } from "@/components/packages/ReallocateModal";
 import { CreditLedgerModal } from "@/components/packages/CreditLedgerModal";
@@ -93,18 +93,18 @@ export function StudentDetailClient({
   if (notFound || !student) {
     return (
       <div className="space-y-6 max-w-lg mx-auto py-16 text-center px-4">
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/60 backdrop-blur-xl p-8 sm:p-10 space-y-4 shadow-xl">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 sm:p-10 space-y-4 shadow-xl">
           <div className="mx-auto w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
             <Users className="h-7 w-7" />
           </div>
-          <h2 className="text-xl font-bold text-white">Student Profile Not Found</h2>
+          <h1 className="text-xl font-bold text-white">Student profile not found</h1>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
             This student record does not exist or was removed. Return to the directory to see all registered students.
           </p>
           <div className="pt-2">
             <Link
               href="/students"
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-500 px-5 py-2.5 min-h-[44px] text-xs font-bold text-slate-950 hover:bg-teal-400 transition-colors shadow-lg shadow-teal-500/20"
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-500 px-5 py-2.5 min-h-[44px] text-xs font-bold text-slate-950 hover:bg-teal-400 transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
               Return to Students Directory
@@ -211,17 +211,17 @@ export function StudentDetailClient({
       )}
 
       {/* Header */}
-      <div className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 backdrop-blur-md p-4 sm:p-6 shadow-2xl">
+      <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-2xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-xl sm:text-2xl font-black text-white break-words">{student.name}</h2>
+              <h1 className="text-2xl font-bold text-white break-words">{student.name}</h1>
               <StatusBadge status={student.status} size="md" />
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
               <span className="font-semibold text-slate-200">{student.grade} • {student.board} ({student.medium})</span>
               <span className="flex items-center gap-1 font-medium text-slate-300"><MapPin className="h-3.5 w-3.5 text-teal-400" />{student.country}</span>
-              <span className="flex items-center gap-1 font-medium text-slate-300"><Clock className="h-3.5 w-3.5 text-teal-400" />{student.timeZone}</span>
+              <span className="flex items-center gap-1 font-medium text-slate-300"><Clock className="h-3.5 w-3.5 text-teal-400" aria-hidden="true" />Times in IST</span>
             </div>
           </div>
 
@@ -233,7 +233,7 @@ export function StudentDetailClient({
                 )}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2.5 min-h-[44px] text-xs font-bold text-slate-950 hover:brightness-110 shadow-lg shadow-emerald-500/20 transition-all"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-teal-400 px-4 py-2.5 min-h-[44px] text-xs font-bold text-slate-950 hover:brightness-110 transition-all"
               >
                 <MessageCircle className="h-4 w-4" />
                 WhatsApp Parent
@@ -267,7 +267,7 @@ export function StudentDetailClient({
 
       {activeTab === "overview" && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 p-5 sm:p-6 shadow-xl space-y-4">
+          <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-5 sm:p-6 shadow-xl space-y-4">
             <h3 className="text-sm font-bold text-white border-b border-slate-800 pb-2">Academic & Contact Profile</h3>
             <dl className="space-y-2.5 text-xs">
               {[
@@ -275,8 +275,8 @@ export function StudentDetailClient({
                 ["Parent / Guardian", <span key="g" className="font-bold text-white">{student.guardianName}</span>],
                 ["WhatsApp Contact", <span key="w" className="font-mono text-white">{student.whatsappNumber}</span>],
                 ["Email Address", <span key="e" className="text-slate-200 break-all">{student.email || "Not provided"}</span>],
-                ["Country & Timezone", <span key="t" className="font-semibold text-white">{student.country} • {student.timeZone}</span>],
-                ["Joining Date", <span key="j" className="font-semibold text-white">{formatInTimeZone(student.joiningDate, student.timeZone)}</span>],
+                ["Country", <span key="t" className="font-semibold text-white">{student.country}</span>],
+                ["Joining Date", <span key="j" className="font-semibold text-white">{formatDateOnly(student.joiningDate)}</span>],
               ].map(([label, value]) => (
                 <div key={label as string} className="flex justify-between gap-3 py-1 border-b border-slate-800/60 last:border-0">
                   <dt className="text-slate-400 shrink-0">{label}</dt>
@@ -286,7 +286,7 @@ export function StudentDetailClient({
             </dl>
           </div>
 
-          <div className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 p-5 sm:p-6 shadow-xl space-y-4">
+          <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-5 sm:p-6 shadow-xl space-y-4">
             <h3 className="text-sm font-bold text-white border-b border-slate-800 pb-2">Learning Goals & Timings</h3>
             <div className="space-y-3 text-xs">
               <div>
@@ -309,7 +309,7 @@ export function StudentDetailClient({
       )}
 
       {activeTab === "subjects" && (
-        <div className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-5">
+        <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
             <div>
               <div className="flex items-center gap-2">
@@ -321,7 +321,7 @@ export function StudentDetailClient({
             {permissions.canManage && (
               <button
                 onClick={() => setEnrollModal({})}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-4 py-2 min-h-[44px] text-xs font-bold text-slate-950 hover:brightness-110 shadow-lg shadow-teal-500/20 transition-all"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-400 px-4 py-2 min-h-[44px] text-xs font-bold text-slate-950 hover:brightness-110 transition-all"
               >
                 <Plus className="h-4 w-4" /> Enroll Another Subject
               </button>
@@ -330,18 +330,18 @@ export function StudentDetailClient({
 
           {enrolments.length === 0 ? (
             <div className="text-center py-12 rounded-2xl border border-dashed border-slate-800 bg-slate-900/30">
-              <BookOpen className="h-10 w-10 text-slate-600 mx-auto mb-2" />
+              <BookOpen className="h-10 w-10 text-slate-400 mx-auto mb-2" />
               <p className="text-sm font-semibold text-slate-300">No subjects enrolled yet</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {enrolments.map((enr) => (
-                <div key={enr.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3.5">
+                <div key={enr.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3.5">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span className="h-3.5 w-3.5 rounded-full ring-2 ring-white/10 shrink-0" style={{ backgroundColor: enr.subject?.color || "#06b6d4" }} />
                       <span className="font-bold text-sm text-white truncate">{enr.subject?.name}</span>
-                      <span className="rounded-md bg-slate-800 px-1.5 py-0.5 text-[10px] font-mono text-slate-400">{enr.subject?.code}</span>
+                      <span className="rounded-md bg-slate-800 px-1.5 py-0.5 text-xs font-mono text-slate-400">{enr.subject?.code}</span>
                     </div>
                     {permissions.canManage && (
                       <button
@@ -349,7 +349,7 @@ export function StudentDetailClient({
                         disabled={unenrollLoadingId === enr.id}
                         title="Unenroll subject"
                         aria-label={`Unenroll ${enr.subject?.name}`}
-                        className="rounded-lg p-2 min-h-[40px] min-w-[40px] flex items-center justify-center text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all disabled:opacity-50"
+                        className="rounded-lg p-2 min-h-[40px] min-w-[40px] flex items-center justify-center text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all disabled:opacity-50"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -399,28 +399,27 @@ export function StudentDetailClient({
               view={timetable}
               teachers={availableTeachers}
               canEdit={permissions.canSchedule}
-              viewerTimeZone={viewerTimeZone}
               onSaved={() => router.refresh()}
             />
           )}
 
-          <div className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
+          <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
             <h3 className="text-sm font-bold text-white">All Sessions ({sessions.length})</h3>
             <div className="divide-y divide-slate-800/80">
               {sessions.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-500">No sessions on schedule.</div>
+                <div className="py-8 text-center text-xs text-slate-400">No sessions on schedule.</div>
               ) : (
                 sessions.map((ses) => (
                   <div key={ses.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-bold text-white">{ses.subject?.name}</span>
-                        <span className="rounded-md bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-300 border border-slate-700">Trainer: {ses.teacher?.name}</span>
+                        <span className="rounded-md bg-slate-800 px-1.5 py-0.5 text-xs text-slate-300 border border-slate-700">Trainer: {ses.teacher?.name}</span>
                         <StatusBadge status={ses.status} size="sm" />
-                        {ses.timetableSlotId && <span className="rounded-md bg-teal-500/10 border border-teal-500/30 px-1.5 py-0.5 text-[10px] text-teal-300">Weekly</span>}
+                        {ses.timetableSlotId && <span className="rounded-md bg-teal-500/10 border border-teal-500/30 px-1.5 py-0.5 text-xs text-teal-300">Weekly</span>}
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        {formatInTimeZone(ses.scheduledStartTimeUtc, "Asia/Kolkata")} IST • {formatInTimeZone(ses.scheduledStartTimeUtc, student.timeZone)} ({student.country} local)
+                      <div className="text-xs text-slate-400 mt-0.5">
+                        {formatInTimeZone(ses.scheduledStartTimeUtc, "Asia/Kolkata")} IST
                       </div>
                     </div>
                   </div>
@@ -434,12 +433,12 @@ export function StudentDetailClient({
       {activeTab === "packages" && (
         <div className="space-y-6">
           {balances.length === 0 && (
-            <div className="rounded-3xl border border-dashed border-slate-800 p-8 text-center text-xs text-slate-400">
+            <div className="rounded-2xl border border-dashed border-slate-800 p-8 text-center text-xs text-slate-400">
               No packages yet.{permissions.canManage ? " Use Edit Student → “Issue a New Package” to add one." : ""}
             </div>
           )}
           {balances.map((pkg) => (
-            <div key={pkg.packageId} className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-5">
+            <div key={pkg.packageId} className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-base font-bold text-white">{pkg.packageName}</span>
@@ -456,7 +455,7 @@ export function StudentDetailClient({
                   {permissions.canReallocate && (
                     <button
                       onClick={() => setSelectedForRealloc(pkg)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-3.5 py-2 min-h-[40px] text-xs font-bold text-slate-950 hover:brightness-110 shadow-lg shadow-teal-500/20 transition-all"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-teal-400 px-3.5 py-2 min-h-[40px] text-xs font-bold text-slate-950 hover:brightness-110 transition-all"
                     >
                       <Sparkles className="h-3.5 w-3.5" /> Reallocate Classes
                     </button>
@@ -473,26 +472,26 @@ export function StudentDetailClient({
                   ["Available", pkg.totalAvailable, "text-emerald-400"],
                 ].map(([label, value, color]) => (
                   <div key={label as string}>
-                    <span className="text-[11px] text-slate-400 font-medium">{label}</span>
-                    <div className={`text-lg font-black ${color}`}>{value}</div>
+                    <span className="text-xs text-slate-400 font-medium">{label}</span>
+                    <div className={`text-lg font-bold ${color}`}>{value}</div>
                   </div>
                 ))}
               </div>
               {pkg.unallocatedCredits > 0 && (
-                <p className="text-[11px] text-amber-300">{pkg.unallocatedCredits} class(es) are not yet allocated to a subject.</p>
+                <p className="text-xs text-amber-300">{pkg.unallocatedCredits} class(es) are not yet allocated to a subject.</p>
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {pkg.subjects.map((sub) => (
-                  <div key={sub.subjectId} className="rounded-2xl border border-slate-800 p-4 space-y-2 bg-slate-900/60">
+                  <div key={sub.subjectId} className="rounded-2xl border border-slate-800 p-4 space-y-2 bg-slate-900">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: sub.subjectColor }} />
                         <span className="text-xs font-bold text-white">{sub.subjectName}</span>
                       </div>
-                      <span className="text-[10px] font-semibold text-slate-400">{sub.subjectCode}</span>
+                      <span className="text-xs font-semibold text-slate-400">{sub.subjectCode}</span>
                     </div>
-                    <div className="grid grid-cols-4 gap-1 text-[11px] text-center pt-2 border-t border-slate-800">
+                    <div className="grid grid-cols-4 gap-1 text-xs text-center pt-2 border-t border-slate-800">
                       {[
                         ["Alloc", sub.allocatedCredits, "text-white"],
                         ["Used", sub.consumedCredits, "text-slate-300"],
@@ -500,7 +499,7 @@ export function StudentDetailClient({
                         ["Avail", sub.availableCredits, "text-emerald-400"],
                       ].map(([label, value, color]) => (
                         <div key={label as string}>
-                          <div className="text-[10px] text-slate-400">{label}</div>
+                          <div className="text-xs text-slate-400">{label}</div>
                           <div className={`font-bold ${color}`}>{value}</div>
                         </div>
                       ))}
@@ -514,11 +513,11 @@ export function StudentDetailClient({
       )}
 
       {activeTab === "attendance" && (
-        <div className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
+        <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
           <h3 className="text-sm font-bold text-white">Attendance & Class Delivery Records</h3>
           <div className="divide-y divide-slate-800/80">
             {sessions.filter((s) => s.attendance).length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-500">No attendance records yet.</div>
+              <div className="py-8 text-center text-xs text-slate-400">No attendance records yet.</div>
             ) : (
               sessions
                 .filter((s) => s.attendance)
@@ -528,15 +527,15 @@ export function StudentDetailClient({
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-bold text-white">{ses.subject?.name}</span>
                         <StatusBadge status={ses.attendance.sessionOutcome} size="sm" />
-                        <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300 border border-slate-700">{ses.attendance.studentAttendance}</span>
+                        <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300 border border-slate-700">{ses.attendance.studentAttendance}</span>
                         {ses.attendance.isReversed && <StatusBadge status="REVERSED" size="sm" />}
                       </div>
-                      <span className="text-slate-400 text-[11px]">{formatInTimeZone(ses.scheduledStartTimeUtc, "Asia/Kolkata")} IST</span>
+                      <span className="text-slate-400 text-xs">{formatInTimeZone(ses.scheduledStartTimeUtc, "Asia/Kolkata")} IST</span>
                     </div>
                     <div className="text-slate-300"><strong className="text-white">Topic:</strong> {ses.attendance.topicCovered}</div>
                     {ses.attendance.homework && <div className="text-slate-400"><strong className="text-slate-300">Homework:</strong> {ses.attendance.homework}</div>}
                     {ses.attendance.studentProgressNote && (
-                      <div className="text-teal-300 bg-teal-500/10 border border-teal-500/20 p-2.5 rounded-xl text-[11px]">
+                      <div className="text-teal-300 bg-teal-500/10 border border-teal-500/20 p-2.5 rounded-xl text-xs">
                         <strong>Trainer Note:</strong> {ses.attendance.studentProgressNote}
                       </div>
                     )}
@@ -557,7 +556,7 @@ export function StudentDetailClient({
               ["Overdue", financialSummary.overdue, "text-rose-400"],
             ].map(([label, value, color]) => (
               <div key={label as string} className="rounded-2xl border border-slate-800 bg-[#0c1220]/80 p-4">
-                <span className="text-[11px] text-slate-400 font-medium">{label}</span>
+                <span className="text-xs text-slate-400 font-medium">{label}</span>
                 <div className={`text-lg sm:text-xl font-bold font-mono ${color}`}>₹{Number(value).toLocaleString("en-IN")}</div>
               </div>
             ))}
@@ -566,10 +565,10 @@ export function StudentDetailClient({
             <p className="text-xs text-teal-300">Unallocated verified advance: ₹{financialSummary.unallocatedAdvances.toLocaleString("en-IN")}</p>
           )}
 
-          <div className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
+          <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
             <h3 className="text-sm font-bold text-white">Invoices</h3>
             <div className="divide-y divide-slate-800/80">
-              {invoices.length === 0 && <div className="py-6 text-center text-xs text-slate-500">No invoices yet.</div>}
+              {invoices.length === 0 && <div className="py-6 text-center text-xs text-slate-400">No invoices yet.</div>}
               {invoices.map((inv) => (
                 <div key={inv.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                   <div>
@@ -578,28 +577,28 @@ export function StudentDetailClient({
                       <StatusBadge status={inv.status} size="sm" />
                     </div>
                     <div className="text-slate-400 mt-0.5">
-                      Due: {formatInTimeZone(inv.dueDate, "Asia/Kolkata")} • Total: ₹{inv.totalAmount.toLocaleString("en-IN")}
+                      Due: {formatDateOnly(inv.dueDate)} • Total: ₹{inv.totalAmount.toLocaleString("en-IN")}
                     </div>
                   </div>
                   <div className="sm:text-right">
                     <div className="font-bold text-white">Balance Due: ₹{inv.balanceDue.toLocaleString("en-IN")}</div>
-                    <div className="text-[11px] text-slate-400">Paid: ₹{inv.paidAmount.toLocaleString("en-IN")}</div>
+                    <div className="text-xs text-slate-400">Paid: ₹{inv.paidAmount.toLocaleString("en-IN")}</div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
+          <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
             <h3 className="text-sm font-bold text-white">Payment Records & Proofs</h3>
             <div className="divide-y divide-slate-800/80">
-              {payments.length === 0 && <div className="py-6 text-center text-xs text-slate-500">No payments recorded.</div>}
+              {payments.length === 0 && <div className="py-6 text-center text-xs text-slate-400">No payments recorded.</div>}
               {payments.map((pay) => (
                 <div key={pay.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono font-bold text-white">{pay.paymentNumber}</span>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${pay.isVerified ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-400" : "bg-amber-500/15 border border-amber-500/30 text-amber-400"}`}>
+                      <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${pay.isVerified ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-400" : "bg-amber-500/15 border border-amber-500/30 text-amber-400"}`}>
                         {pay.isVerified ? "VERIFIED" : "PROOF UPLOADED (UNVERIFIED)"}
                       </span>
                     </div>
@@ -614,12 +613,12 @@ export function StudentDetailClient({
       )}
 
       {activeTab === "progress" && (
-        <div className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
+        <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
           <h3 className="text-sm font-bold text-white">Monthly Progress & Assessments</h3>
-          {progressReports.length === 0 && <div className="py-6 text-center text-xs text-slate-500">No progress reports yet.</div>}
+          {progressReports.length === 0 && <div className="py-6 text-center text-xs text-slate-400">No progress reports yet.</div>}
           <div className="space-y-4">
             {progressReports.map((prog) => (
-              <div key={prog.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-2 text-xs">
+              <div key={prog.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-2 text-xs">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-bold text-sm text-white">{prog.subject?.name} • Month: {prog.monthYear}</span>
                   <span className="rounded-lg bg-teal-500/15 border border-teal-500/30 px-2 py-0.5 text-xs font-bold text-teal-400">Homework: {prog.homeworkCompletionRate}%</span>
@@ -634,11 +633,11 @@ export function StudentDetailClient({
       )}
 
       {activeTab === "followups" && permissions.showFollowUps && (
-        <div className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
+        <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
           <h3 className="text-sm font-bold text-white">Communication & Due Follow-up Queue</h3>
           <div className="divide-y divide-slate-800/80">
             {followUps.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-500">No follow-ups logged for this student.</div>
+              <div className="py-8 text-center text-xs text-slate-400">No follow-ups logged for this student.</div>
             ) : (
               followUps.map((fol) => (
                 <div key={fol.id} className="py-3.5 space-y-1 text-xs">
@@ -658,28 +657,28 @@ export function StudentDetailClient({
 
       {activeTab === "activity" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-3">
+          <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-3">
             <h3 className="text-sm font-bold text-white">Profile & Timetable Changes</h3>
             {activity.length === 0 ? (
-              <p className="text-xs text-slate-500">No recorded changes yet.</p>
+              <p className="text-xs text-slate-400">No recorded changes yet.</p>
             ) : (
               <ul className="divide-y divide-slate-800/80 text-xs">
                 {activity.map((a) => (
                   <li key={a.id} className="py-2.5">
                     <div className="flex flex-wrap justify-between gap-2">
                       <span className="font-semibold text-white">{ACTION_LABELS[a.action] ?? a.action}</span>
-                      <span className="text-[11px] text-slate-500">{formatInTimeZone(a.createdAt, "Asia/Kolkata")} IST</span>
+                      <span className="text-xs text-slate-400">{formatInTimeZone(a.createdAt, "Asia/Kolkata")} IST</span>
                     </div>
-                    <div className="text-[11px] text-slate-400">by {a.actorName}</div>
+                    <div className="text-xs text-slate-400">by {a.actorName}</div>
                   </li>
                 ))}
               </ul>
             )}
           </div>
-          <div className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-3">
+          <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-3">
             <h3 className="text-sm font-bold text-white">Credit Ledger Events</h3>
             {ledger.length === 0 ? (
-              <p className="text-xs text-slate-500">No credit events yet.</p>
+              <p className="text-xs text-slate-400">No credit events yet.</p>
             ) : (
               <ul className="divide-y divide-slate-800/80 text-xs">
                 {ledger.map((l) => (
@@ -690,8 +689,8 @@ export function StudentDetailClient({
                         {l.creditsDelta > 0 ? `+${l.creditsDelta}` : l.creditsDelta}
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-400">{l.reason}</div>
-                    <div className="text-[10px] text-slate-500">{l.actorName} · {formatInTimeZone(l.createdAt, "Asia/Kolkata")} IST</div>
+                    <div className="text-xs text-slate-400">{l.reason}</div>
+                    <div className="text-xs text-slate-400">{l.actorName} · {formatInTimeZone(l.createdAt, "Asia/Kolkata")} IST</div>
                   </li>
                 ))}
               </ul>

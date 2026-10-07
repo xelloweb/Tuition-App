@@ -5,7 +5,7 @@ import { AlertCircle } from "lucide-react";
 export function FieldError({ id, message }: { id?: string; message?: string | null }) {
   if (!message) return null;
   return (
-    <p id={id} role="alert" className="mt-1 flex items-start gap-1 text-[11px] font-medium text-rose-300">
+    <p id={id} role="alert" className="mt-1 flex items-start gap-1 text-xs font-medium text-rose-300">
       <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
       <span>{message}</span>
     </p>
@@ -40,7 +40,7 @@ export function FormErrorSummary({
         <span>{message || "Please correct the highlighted fields."}</span>
       </div>
       {entries.length > 0 && (
-        <ul className="list-disc pl-8 space-y-0.5 text-[11px] text-rose-300">
+        <ul className="list-disc pl-8 space-y-0.5 text-xs text-rose-300">
           {entries.map(([field, msg]) => (
             <li key={field}>
               {onFocusField ? (

@@ -5,11 +5,11 @@ import { ShieldAlert, ArrowLeft } from "lucide-react";
 export function AccessDenied({ message = "Your role does not have access to this page." }: { message?: string }) {
   return (
     <div className="max-w-lg mx-auto py-16 px-4 text-center">
-      <div className="rounded-3xl border border-slate-800 bg-slate-900/60 backdrop-blur-xl p-8 sm:p-10 space-y-4 shadow-xl">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 sm:p-10 space-y-4 shadow-xl">
         <div className="mx-auto w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-300">
           <ShieldAlert className="h-7 w-7" />
         </div>
-        <h2 className="text-xl font-bold text-white">Access restricted</h2>
+        <h1 className="text-xl font-bold text-white">Access restricted</h1>
         <p className="text-xs text-slate-400">{message}</p>
         <Link
           href="/"

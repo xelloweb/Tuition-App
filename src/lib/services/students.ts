@@ -2,11 +2,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { CurrentUser } from "../types";
 import { FieldCollector, checkInternationalPhone, phonesMatch } from "../validation";
-import { COUNTRY_VALUES, STUDENT_STATUS_VALUES, findCountry } from "../constants";
+import { BUSINESS_TIME_ZONE, COUNTRY_VALUES, STUDENT_STATUS_VALUES, findCountry } from "../constants";
 import { ApiError, notFoundError, relatedRecordError, validationError } from "../api-errors";
 import { nextCode, withCodeRetry } from "../codes";
 import { rememberIdempotentEntity, runIdempotent } from "../idempotency";
-import { retireEnrolmentSlots, SlotInput } from "./timetable";
+import { applyTimetableInTransaction, retireEnrolmentSlots, SlotInput } from "./timetable";
 
 type Tx = Prisma.TransactionClient;
 
@@ -75,6 +75,8 @@ export interface StudentFields {
   newPackage?: PackageInput | null;
   draftData?: string | null;
   slots?: StudentSlotInput[];
+  /** Admission draft to remove once the student is created (same transaction). */
+  draftId?: string | null;
 }
 
 const MAX_ENROLMENTS = 15;
@@ -159,64 +161,63 @@ export function parseStudentFields(body: Record<string, unknown>, { partial }: {
   const has = (key: string) => !partial || Object.prototype.hasOwnProperty.call(body, key);
   const f: StudentFields = {};
 
-  const isDraft = body.status === "DRAFT";
-
-  if (has("name")) {
-    f.name = isDraft 
-      ? v.optionalText("name", body.name, "Student name", 120) || "Draft Student"
-      : v.requiredText("name", body.name, "Student name", 120);
+  // Unfinished admissions are saved as admission drafts, never as placeholder students.
+  if (!partial && body.status === "DRAFT") {
+    throw validationError("Save unfinished admissions with “Save draft” in the admission form.");
   }
-  if (has("grade")) {
-    f.grade = isDraft
-      ? v.optionalText("grade", body.grade, "Class / grade", 60) || "TBD"
-      : v.requiredText("grade", body.grade, "Class / grade", 60);
-  }
+  if (has("name")) f.name = v.requiredText("name", body.name, "Student name", 120);
+  if (has("grade")) f.grade = v.requiredText("grade", body.grade, "Class / grade", 60);
   if (has("board")) f.board = v.optionalText("board", body.board, "Board", 80) ?? "CBSE";
   if (has("medium")) f.medium = v.optionalText("medium", body.medium, "Medium", 40) ?? "English";
 
   f.guardianId = partial ? undefined : optionalId(body.guardianId);
   const linkingExistingGuardian = Boolean(f.guardianId);
   if (has("guardianName") && !linkingExistingGuardian) {
-    f.guardianName = isDraft
-      ? v.optionalText("guardianName", body.guardianName, "Parent / guardian name", 120) || "TBD"
-      : v.requiredText("guardianName", body.guardianName, "Parent / guardian name", 120);
+    f.guardianName = v.requiredText("guardianName", body.guardianName, "Parent / guardian name", 120);
   }
   if (has("whatsappNumber") && !linkingExistingGuardian) {
-    if (isDraft && !body.whatsappNumber) {
-      f.whatsappNumber = "+910000000000"; // Dummy for draft if missing
-    } else {
-      f.whatsappNumber = v.phone("whatsappNumber", body.whatsappNumber, "WhatsApp number");
-    }
+    f.whatsappNumber = v.phone("whatsappNumber", body.whatsappNumber, "WhatsApp number");
   }
   if (has("email")) f.email = v.email("email", body.email, "Email", false);
 
   if (has("country")) f.country = v.oneOf("country", body.country, COUNTRY_VALUES, "Country", "India");
-  if (has("timeZone")) {
-    f.timeZone = v.timeZone("timeZone", body.timeZone, findCountry(f.country)?.timeZone ?? "Asia/Kolkata");
-  }
+  // India time only: every student is scheduled in IST.
+  if (has("timeZone")) f.timeZone = "Asia/Kolkata";
   if (has("preferredTimings")) f.preferredTimings = v.optionalText("preferredTimings", body.preferredTimings, "Preferred timings", 300);
   if (has("learningGoals")) f.learningGoals = v.optionalText("learningGoals", body.learningGoals, "Learning goals", 1000);
   if (has("coordinatorNotes")) f.coordinatorNotes = v.optionalText("coordinatorNotes", body.coordinatorNotes, "Coordinator notes", 2000);
-  
-  if (body.status !== undefined) {
-    f.status = v.oneOf("status", body.status, [...STUDENT_STATUS_VALUES, "DRAFT"], "Status");
-  }
-  
-  if (has("draftData")) {
-    f.draftData = typeof body.draftData === "string" ? body.draftData : null;
-  }
 
-  if (has("enrolments") && body.enrolments !== undefined && !isDraft) f.enrolments = parseEnrolments(v, body.enrolments);
-  
-  if (has("slots") && body.slots !== undefined && !isDraft) {
-    f.slots = Array.isArray(body.slots) ? (body.slots as StudentSlotInput[]) : [];
+  if (body.status !== undefined) {
+    // "DRAFT" stays readable for students saved by the old admission form.
+    f.status = v.oneOf("status", body.status, partial ? [...STUDENT_STATUS_VALUES, "DRAFT"] : [...STUDENT_STATUS_VALUES], "Status");
+  }
+  if (partial && has("draftData")) f.draftData = typeof body.draftData === "string" ? body.draftData : null;
+  if (!partial) f.draftId = optionalId(body.draftId);
+
+  if (has("enrolments") && body.enrolments !== undefined) f.enrolments = parseEnrolments(v, body.enrolments);
+
+  // Weekly slots: shape only here; times, overlaps and trainer clashes are
+  // checked by the timetable plan inside the save transaction.
+  if (body.slots !== undefined) {
+    if (!Array.isArray(body.slots)) v.add("slots", "Weekly slots must be a list.");
+    else if (body.slots.length > 100) v.add("slots", "A timetable can have up to 100 weekly slots.");
+    else {
+      f.slots = (body.slots as unknown[]).map((raw) => {
+        const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+        return {
+          subjectId: typeof r.subjectId === "string" ? r.subjectId : "",
+          teacherId: typeof r.teacherId === "string" && r.teacherId ? r.teacherId : null,
+          weekday: Number(r.weekday),
+          start: typeof r.start === "string" ? r.start : "",
+          end: typeof r.end === "string" ? r.end : "",
+        };
+      });
+    }
   }
 
   const packageBody = partial ? (body.newPackage ?? body.initialPackage) : body.initialPackage;
   const enrolledIds = f.enrolments ? f.enrolments.map((e) => e.subjectId) : null;
-  if (!isDraft) {
-    f.newPackage = parsePackage(v, packageBody, partial && !f.enrolments ? null : enrolledIds ?? []);
-  }
+  f.newPackage = parsePackage(v, packageBody, partial && !f.enrolments ? null : enrolledIds ?? []);
 
   if (v.hasErrors) throw validationError("Please correct the highlighted fields.", v.errors);
   return f;
@@ -319,12 +320,28 @@ export async function createPackageForStudent(tx: Tx, studentId: string, input: 
   return { packageId: pkg.id, packageNumber, invoiceNumber };
 }
 
-export async function createStudent(fields: StudentFields, user: CurrentUser, idempotencyKey: string | null) {
+/** Admission summary for the confirmation message and the dry-run check. */
+export interface AdmissionBooking {
+  weeklySlots: number;
+  bookedClasses: number;
+  notBooked: string[];
+}
+
+class DryRunComplete extends Error {
+  constructor(readonly booking: AdmissionBooking | null) {
+    super("dry run");
+  }
+}
+
+/**
+ * Creates a student with enrolments, an optional package and weekly slots in
+ * one transaction. With `dryRun`, every check runs and the transaction is
+ * rolled back, so the admission form can show problems before confirming.
+ */
+async function saveAdmission(fields: StudentFields, user: CurrentUser, idempotencyKey: string | null, dryRun: boolean) {
   const enrolments = fields.enrolments ?? [];
-  return runIdempotent(
-    "CREATE_STUDENT",
-    idempotencyKey,
-    () =>
+  let booking: AdmissionBooking | null = null;
+  const save = () =>
       withCodeRetry(["student", "package", "invoice"], () =>
         prisma.$transaction(async (tx) => {
           await assertSubjectsExist(tx, enrolments);
@@ -374,7 +391,7 @@ export async function createStudent(fields: StudentFields, user: CurrentUser, id
             },
           });
 
-          const createdEnrolments = [];
+          const createdEnrolments: { id: string; subjectId: string }[] = [];
           for (const enr of enrolments) {
             createdEnrolments.push(await tx.subjectEnrollment.create({
               data: {
@@ -387,34 +404,31 @@ export async function createStudent(fields: StudentFields, user: CurrentUser, id
             }));
           }
           
-          if (fields.slots) {
-            for (const s of fields.slots) {
-              const enr = createdEnrolments.find(e => e.subjectId === s.subjectId);
-              if (!enr) continue;
-              
-              const startParts = s.start.split(":");
-              const endParts = s.end.split(":");
-              const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
-              const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
-              
-              await tx.timetableSlot.create({
-                data: {
-                  enrolmentId: enr.id,
-                  teacherId: s.teacherId,
-                  weekday: s.weekday,
-                  startMinutes,
-                  endMinutes,
-                  timeZone: "Asia/Kolkata",
-                  effectiveFrom: new Date(),
-                  createdByName: user.name,
-                  createdByRole: user.role,
-                  active: true
-                }
-              });
-            }
+          const pkg = fields.newPackage ? await createPackageForStudent(tx, student.id, fields.newPackage, user) : null;
+
+          // Weekly slots go through the timetable plan (times, overlaps, trainer
+          // clashes, credit-aware booking) inside this transaction, so an admission
+          // is saved complete or not at all. Per-slot errors use the payload index.
+          if (fields.slots?.length) {
+            const plan = await applyTimetableInTransaction(
+              tx,
+              student.id,
+              {
+                timeZone: BUSINESS_TIME_ZONE,
+                slots: fields.slots.map((slot) => ({
+                  enrolmentId: createdEnrolments.find((e) => e.subjectId === slot.subjectId)?.id,
+                  teacherId: slot.teacherId ?? null,
+                  weekday: slot.weekday,
+                  start: slot.start,
+                  end: slot.end,
+                })),
+              },
+              user
+            );
+            booking = { weeklySlots: plan.slots.length, bookedClasses: plan.occurrences.length, notBooked: plan.issues.map((i) => i.message) };
           }
 
-          const pkg = fields.newPackage ? await createPackageForStudent(tx, student.id, fields.newPackage, user) : null;
+          if (fields.draftId) await tx.admissionDraft.deleteMany({ where: { id: fields.draftId } });
 
           await tx.auditLog.create({
             data: {
@@ -436,13 +450,41 @@ export async function createStudent(fields: StudentFields, user: CurrentUser, id
               }),
             },
           });
+          if (dryRun) throw new DryRunComplete(booking);
           await rememberIdempotentEntity(tx, "CREATE_STUDENT", idempotencyKey, student.id);
 
           return tx.student.findUniqueOrThrow({ where: { id: student.id }, include: studentListInclude });
-        })
-      ),
+        }, { timeout: 20000, maxWait: 10000 })
+      );
+
+  if (dryRun) {
+    try {
+      await save();
+    } catch (err) {
+      if (err instanceof DryRunComplete) return { result: null, replayed: false, booking: err.booking };
+      throw err;
+    }
+    throw new Error("Dry run did not complete.");
+  }
+  const { result, replayed } = await runIdempotent(
+    "CREATE_STUDENT",
+    idempotencyKey,
+    save,
     (id) => prisma.student.findUnique({ where: { id }, include: studentListInclude })
   );
+  return { result, replayed, booking: replayed ? null : booking };
+}
+
+/** Saves an admission (student, enrolments, package, weekly slots and first bookings) atomically. */
+export async function createStudent(fields: StudentFields, user: CurrentUser, idempotencyKey: string | null) {
+  const { result, replayed, booking } = await saveAdmission(fields, user, idempotencyKey, false);
+  return { result: result!, replayed, booking };
+}
+
+/** Runs every admission check and rolls back: nothing is saved. */
+export async function checkAdmission(fields: StudentFields, user: CurrentUser) {
+  const { booking } = await saveAdmission(fields, user, null, true);
+  return { booking };
 }
 
 export async function updateStudent(id: string, f: StudentFields, user: CurrentUser) {
@@ -532,43 +574,12 @@ export async function updateStudent(id: string, f: StudentFields, user: CurrentU
         }
         if (enrolmentChanges.length) changes.enrolments = { from: null, to: enrolmentChanges };
         
-        // Handle slot additions during update (e.g. confirming a draft)
-        if (f.slots) {
-          const currentEnrolments = await tx.subjectEnrollment.findMany({ where: { studentId: id, status: "ACTIVE" } });
-          const currentSlots = await tx.timetableSlot.findMany({ where: { enrolment: { studentId: id }, active: true } });
-          
-          for (const s of f.slots) {
-            const enr = currentEnrolments.find(e => e.subjectId === s.subjectId);
-            if (!enr) continue;
-            
-            const startParts = s.start.split(":");
-            const endParts = s.end.split(":");
-            const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
-            const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
-            
-            // Check if exact slot exists
-            const exists = currentSlots.some(cs => 
-              cs.enrolmentId === enr.id && cs.weekday === Number(s.weekday) && cs.startMinutes === startMinutes
-            );
-            if (!exists) {
-              await tx.timetableSlot.create({
-                data: {
-                  enrolmentId: enr.id,
-                  teacherId: s.teacherId,
-                  weekday: Number(s.weekday),
-                  startMinutes,
-                  endMinutes,
-                  timeZone: "Asia/Kolkata",
-                  effectiveFrom: new Date(),
-                  createdByName: user.name,
-                  createdByRole: user.role,
-                  active: true
-                }
-              });
-            }
-          }
-        }
+        // Weekly slots are edited in the student's timetable editor. The only
+        // exception is confirming a draft saved by the old admission form.
       }
+
+      const confirmingLegacyDraft = student.status === "DRAFT" && f.status === "ACTIVE";
+      let legacyBooking: AdmissionBooking | null = null;
 
       let pkg = null;
       if (f.newPackage) {
@@ -586,6 +597,27 @@ export async function updateStudent(id: string, f: StudentFields, user: CurrentU
         changes.newPackage = { from: null, to: pkg };
       }
 
+      if (confirmingLegacyDraft && f.slots?.length) {
+        const current = await tx.subjectEnrollment.findMany({ where: { studentId: id, status: "ACTIVE" }, select: { id: true, subjectId: true } });
+        const plan = await applyTimetableInTransaction(
+          tx,
+          id,
+          {
+            timeZone: BUSINESS_TIME_ZONE,
+            slots: f.slots.map((slot) => ({
+              enrolmentId: current.find((e) => e.subjectId === slot.subjectId)?.id,
+              teacherId: slot.teacherId ?? null,
+              weekday: slot.weekday,
+              start: slot.start,
+              end: slot.end,
+            })),
+          },
+          user
+        );
+        legacyBooking = { weeklySlots: plan.slots.length, bookedClasses: plan.occurrences.length, notBooked: plan.issues.map((i) => i.message) };
+        changes.timetable = { from: null, to: legacyBooking };
+      }
+
       await tx.auditLog.create({
         data: {
           entityType: "STUDENT",
@@ -598,8 +630,8 @@ export async function updateStudent(id: string, f: StudentFields, user: CurrentU
       });
 
       const updated = await tx.student.findUniqueOrThrow({ where: { id }, include: studentListInclude });
-      return { student: updated, siblingsUpdated, packageNumber: pkg?.packageNumber ?? null };
-    })
+      return { student: updated, siblingsUpdated, packageNumber: pkg?.packageNumber ?? null, booking: legacyBooking };
+    }, { timeout: 20000, maxWait: 10000 })
   );
 }
 

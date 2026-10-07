@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, canManageStudents } from "@/lib/auth";
 import { listStudentsFor } from "@/lib/services/students";
+import { listDrafts } from "@/lib/services/admission-drafts";
 import { StudentsClient } from "./StudentsClient";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export default async function StudentsPage() {
   const canManage = canManageStudents(user.role);
 
   // Teachers receive only the students assigned to them (filtered on the server).
-  const [students, subjects, teachers] = await Promise.all([
+  const [students, subjects, teachers, drafts] = await Promise.all([
     listStudentsFor(user),
     prisma.subject.findMany({
       orderBy: { name: "asc" },
@@ -24,6 +25,8 @@ export default async function StudentsPage() {
           select: { id: true, name: true, subjects: true, active: true },
         })
       : Promise.resolve([]),
+    // Admission drafts are only loaded for roles that can work on admissions.
+    canManage ? listDrafts() : Promise.resolve([]),
   ]);
 
   return (
@@ -32,6 +35,7 @@ export default async function StudentsPage() {
       subjects={subjects}
       teachers={teachers}
       canAddStudent={canManage}
+      drafts={drafts}
       isTeacherView={user.role === "TEACHER"}
     />
   );

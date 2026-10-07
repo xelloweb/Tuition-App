@@ -16,6 +16,7 @@ const EMAILS: Record<string, string> = {
   accounts: "accounts@xellotuition.com",
   teacher_rahul: "teacher.rahul@xellotuition.com",
   teacher_priya: "teacher.priya@xellotuition.com",
+  unlinked: "unlinked.trainer@example.test",
 };
 const sessions = new Map<string, string>();
 
@@ -99,13 +100,64 @@ describe("HTTP API", { skip: !BASE }, () => {
     assert.equal(await signIn(EMAILS.admin, "demo123"), null, "public demo password does not work");
   });
 
-  test("change password: wrong current password is refused; the new password works", async () => {
+  test("change password: wrong current password is refused; the new password works and every old session ends", async () => {
+    const before = await sessionFor("accounts");
     const wrong = await call("accounts", "POST", "/api/auth/change-password", { currentPassword: "nope", newPassword: "a-much-better-passphrase" });
     assert.equal(wrong.status, 400);
     const ok = await call("accounts", "POST", "/api/auth/change-password", { currentPassword: PASSWORD, newPassword: "a-much-better-passphrase" });
     assert.equal(ok.status, 200, ok.text);
-    assert.ok(await signIn(EMAILS.accounts, "a-much-better-passphrase"));
+    const stale = await fetch(`${BASE}/api/students`, { headers: { Cookie: before } });
+    assert.equal(stale.status, 401, "sessions signed before the change no longer work");
+    sessions.delete("accounts");
+    const fresh = await signIn(EMAILS.accounts, "a-much-better-passphrase");
+    assert.ok(fresh);
     assert.equal(await signIn(EMAILS.accounts, PASSWORD), null, "old password no longer works");
+    // Put the fixture password back for the tests that follow.
+    const back = await fetch(`${BASE}/api/auth/change-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: fresh! },
+      body: JSON.stringify({ currentPassword: "a-much-better-passphrase", newPassword: PASSWORD }),
+    });
+    assert.equal(back.status, 200);
+  });
+
+  test("a login still on the published demo password cannot sign in", async () => {
+    assert.equal(await signIn("legacy.demo@example.test", "demo123"), null);
+  });
+
+  test("users & logins: owner-only; links work once; reset and switch-off end sessions; no self lock-out", async () => {
+    const email = `new.staff.${run}@example.test`;
+    assert.equal((await call("coordinator", "POST", "/api/users", { name: "Someone", email, role: "ACCOUNTS" })).status, 403);
+    assert.equal((await call("accounts", "PATCH", "/api/users/usr-admin", { active: false })).status, 403);
+
+    const created = await call("admin", "POST", "/api/users", { name: `New Staff ${run}`, email, role: "ACCOUNTS" });
+    assert.equal(created.status, 201, created.text);
+    const staffId = (created.json!.user as { id: string }).id;
+    const token = new URL(created.json!.setupLink as string).searchParams.get("token")!;
+    assert.equal((await call("admin", "POST", "/api/users", { name: "Duplicate", email, role: "ACCOUNTS" })).status, 409);
+
+    assert.equal((await call(null, "POST", "/api/auth/setup-password", { token, password: "staff-passphrase-123" })).status, 200);
+    assert.equal((await call(null, "POST", "/api/auth/setup-password", { token, password: "staff-passphrase-456" })).status, 400, "a link works once");
+    const firstCookie = await signIn(email, "staff-passphrase-123");
+    assert.ok(firstCookie);
+
+    const reset = await call("admin", "POST", `/api/users/${staffId}/reset-link`);
+    assert.equal(reset.status, 200, reset.text);
+    assert.equal((await fetch(`${BASE}/api/students`, { headers: { Cookie: firstCookie! } })).status, 401, "reset ends sessions");
+    assert.equal(await signIn(email, "staff-passphrase-123"), null, "reset revokes the old password");
+
+    const token2 = new URL(reset.json!.setupLink as string).searchParams.get("token")!;
+    assert.equal((await call(null, "POST", "/api/auth/setup-password", { token: token2, password: "staff-passphrase-789" })).status, 200);
+    const secondCookie = await signIn(email, "staff-passphrase-789");
+    assert.ok(secondCookie);
+    assert.equal((await call("admin", "PATCH", `/api/users/${staffId}`, { active: false })).status, 200);
+    assert.equal((await fetch(`${BASE}/api/students`, { headers: { Cookie: secondCookie! } })).status, 401, "switching off ends sessions");
+    assert.equal(await signIn(email, "staff-passphrase-789"), null, "switched-off logins cannot sign in");
+
+    assert.equal((await call("admin", "PATCH", "/api/users/usr-admin", { active: false })).status, 409, "no self switch-off");
+    assert.equal((await call("admin", "POST", "/api/users/usr-admin/reset-link")).status, 409, "own password changes go through My Account");
+    assert.equal((await page("admin", "/users")).status, 200);
+    assert.match(await (await page("coordinator", "/users")).text(), /managed by the owner/);
   });
 
   test("my account: users change their own display name; signed-out and blank names are refused", async () => {
@@ -183,14 +235,20 @@ describe("HTTP API", { skip: !BASE }, () => {
     assert.equal(assign.status, 200, assign.text);
     const tt = await call("coordinator", "GET", `/api/students/${studentId}/timetable`);
     const enrolmentId = ((tt.json!.timetable as { enrolments: { id: string }[] }).enrolments)[0].id;
-    const preview = await call("coordinator", "POST", `/api/students/${studentId}/timetable`, {
+    const otherZone = await call("coordinator", "POST", `/api/students/${studentId}/timetable`, {
       timeZone: "Asia/Dubai",
+      slots: [{ enrolmentId, weekday: 0, start: "20:00", end: "21:00" }],
+    });
+    assert.equal(otherZone.status, 400, "India time only: other zones are refused");
+    assert.match(String((otherZone.json!.fieldErrors as Record<string, string>).timeZone), /IST/);
+    const preview = await call("coordinator", "POST", `/api/students/${studentId}/timetable`, {
+      timeZone: "Asia/Kolkata",
       previewOnly: true,
       slots: [{ enrolmentId, weekday: 0, start: "20:00", end: "21:00" }, { enrolmentId, weekday: 1, start: "19:00", end: "20:00" }],
     });
     assert.equal(preview.status, 200, preview.text);
     const saved = await call("coordinator", "POST", `/api/students/${studentId}/timetable`, {
-      timeZone: "Asia/Dubai",
+      timeZone: "Asia/Kolkata",
       slots: [{ enrolmentId, weekday: 0, start: "20:00", end: "21:00" }, { enrolmentId, weekday: 1, start: "19:00", end: "20:00" }],
     });
     assert.equal(saved.status, 200, saved.text);
@@ -214,6 +272,19 @@ describe("HTTP API", { skip: !BASE }, () => {
     assert.equal((await call("teacher_rahul", "POST", "/api/follow-ups", { studentId })).status, 403);
     assert.equal((await call("teacher_rahul", "GET", "/api/reports/export?type=attendance")).status, 403);
     assert.equal((await call("teacher_rahul", "GET", `/api/students/${studentId}/timetable`)).status, 403, "not assigned to this student");
+  });
+
+  test("a trainer login without a linked trainer profile sees no one's data", async () => {
+    for (const path of ["/", "/attendance", "/timetable", "/payouts", "/progress"]) {
+      const res = await page("unlinked", path);
+      assert.equal(res.status, 200, path);
+      const html = await res.text();
+      assert.match(html, /not linked to a trainer profile/, path);
+      assert.doesNotMatch(html, /Rahul Varma|Priya Menon/, `${path} shows no other trainer`);
+    }
+    const students = await call("unlinked", "GET", "/api/students");
+    assert.equal(students.status, 200);
+    assert.deepEqual(students.json!.students, []);
   });
 
   test("teachers only see their own data and no other trainer's pay", async () => {

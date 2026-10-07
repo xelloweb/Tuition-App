@@ -1,29 +1,22 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import {
-  X,
-  UserPlus,
-  Sparkles,
-  RefreshCw,
-  Plus,
-  Trash2,
-  BookOpen,
-  BookPlus,
-  Link2,
-  Unlink,
-  Users,
-  Save,
-  Search,
-} from "lucide-react";
-import { TIMEZONES } from "@/lib/timezones";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BookPlus, Link2, Plus, Save, Search, Trash2, Unlink, UserPlus, Users, X, RefreshCw } from "lucide-react";
 import { ALL_GRADES } from "@/lib/grades";
 import { BOARD_OPTIONS, COUNTRIES, MEDIUM_OPTIONS, STUDENT_STATUSES, findCountry } from "@/lib/constants";
 import { checkInternationalPhone, isValidEmail } from "@/lib/validation";
 import { ClientApiError, apiRequest, errorMessage, newIdempotencyKey } from "@/lib/client-api";
+import { formatTimeOnly } from "@/lib/timezones";
+import type { AdmissionDraftItem } from "@/lib/services/admission-drafts";
 import { ModalShell } from "@/components/ui/ModalShell";
-import { FieldError, FormErrorSummary, focusField, inputClass } from "@/components/ui/FormFeedback";
+import { FormErrorSummary, focusField } from "@/components/ui/FormFeedback";
+import { Field, controlBorder, controlClass } from "@/components/ui/Field";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
 import { QuickAddSubjectModal } from "@/components/subjects/QuickAddSubjectModal";
+import { Stepper, StepDef } from "./admission/Stepper";
+import { SlotDraft, WeeklyScheduleStep, toMinutes, weekdayLabel } from "./admission/WeeklyScheduleStep";
+import { ReviewData, ReviewStep } from "./admission/ReviewStep";
 
 export interface SubjectOption {
   id: string;
@@ -75,27 +68,62 @@ interface Row {
   credits: string;
 }
 
+type StepId = "details" | "subjects" | "package" | "schedule" | "review";
+type Booking = { weeklySlots: number; bookedClasses: number; notBooked: string[] };
+
+/** What a saved admission draft contains (also reads drafts saved by the old form). */
+interface AdmissionSnapshot {
+  version: 1;
+  step: StepId;
+  name: string;
+  grade: string;
+  board: string;
+  medium: string;
+  guardianName: string;
+  whatsappNumber: string;
+  email: string;
+  country: string;
+  preferredTimings: string;
+  learningGoals: string;
+  coordinatorNotes: string;
+  linkedGuardian: GuardianMatch | null;
+  rows: Row[];
+  includePackage: boolean;
+  packageName: string;
+  totalCredits: string;
+  packagePrice: string;
+  startDate: string;
+  expiryDate: string;
+  slots: SlotDraft[];
+}
+
 interface StudentFormModalProps {
   mode: "create" | "edit";
   student?: StudentFormRecord;
+  /** Resume an admission draft (create mode). */
+  draft?: AdmissionDraftItem | null;
   subjects: SubjectOption[];
   teachers: TeacherOption[];
   onClose: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSuccess: (student: any, message: string) => void;
+  /** Called after a draft is saved, or removed by confirming it. */
+  onDraftsChanged?: () => void;
 }
+
+/** Packages created during admission use 60-minute classes. */
+const CLASS_MINUTES = 60;
 
 const FIELD_LABELS: Record<string, string> = {
   name: "Student name",
   grade: "Class / grade",
   board: "Board",
   medium: "Medium",
-  guardianName: "Guardian name",
+  guardianName: "Parent / guardian name",
   whatsappNumber: "WhatsApp number",
   guardianId: "Guardian",
   email: "Email",
   country: "Country",
-  timeZone: "Time zone",
   status: "Status",
   enrolments: "Subjects",
   "package.name": "Package name",
@@ -103,69 +131,94 @@ const FIELD_LABELS: Record<string, string> = {
   "package.price": "Package price",
   "package.startDate": "Start date",
   "package.expiryDate": "Expiry date",
+  slots: "Weekly slots",
 };
 
-const inputBase = "w-full rounded-xl border bg-slate-950 p-2.5 text-xs text-white placeholder-slate-500 font-medium focus:outline-hidden";
-const today = () => new Date().toISOString().slice(0, 10);
-let rowCounter = 0;
-const newRowKey = () => `row-${Date.now().toString(36)}-${(rowCounter++).toString(36)}`;
+const labelFor = (field: string) => {
+  const slot = /^slots\.(\d+)\./.exec(field);
+  if (slot) return `Weekly slot ${Number(slot[1]) + 1}`;
+  const enr = /^enrolments\.(\d+)\./.exec(field);
+  if (enr) return `Subject ${Number(enr[1]) + 1}`;
+  return FIELD_LABELS[field];
+};
 
-function withCurrent(options: string[], current?: string | null) {
-  return current && !options.includes(current) ? [current, ...options] : options;
+function stepForField(field: string): StepId {
+  if (field.startsWith("slots")) return "schedule";
+  if (field.startsWith("package")) return "package";
+  if (field.startsWith("enrolments")) return "subjects";
+  return "details";
 }
 
-export function StudentFormModal({ mode, student, subjects, teachers, onClose, onSuccess }: StudentFormModalProps) {
+const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+let rowCounter = 0;
+const newRowKey = () => `row-${Date.now().toString(36)}-${(rowCounter++).toString(36)}`;
+const withCurrent = (options: string[], current?: string | null) => (current && !options.includes(current) ? [current, ...options] : options);
+
+function readSnapshot(json: string | null | undefined): Partial<AdmissionSnapshot> {
+  if (!json) return {};
+  try {
+    const parsed = JSON.parse(json);
+    return parsed && typeof parsed === "object" ? (parsed as Partial<AdmissionSnapshot>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function StudentFormModal({ mode, student, draft, subjects, teachers, onClose, onSuccess, onDraftsChanged }: StudentFormModalProps) {
   const isEdit = mode === "edit";
+  const legacyDraft = isEdit && student?.status === "DRAFT";
   const formRef = useRef<HTMLFormElement>(null);
   const submittingRef = useRef(false);
   const [idempotencyKey] = useState(() => newIdempotencyKey());
-  const draftState = useMemo(() => {
-    if (student?.draftData) {
-      try {
-        return JSON.parse(student.draftData);
-      } catch (e) {
-        return null;
-      }
-    }
-    return null;
-  }, [student]);
+  const initial = useMemo(() => (draft ? readSnapshot(draft.data) : readSnapshot(student?.draftData)), [draft, student]);
 
-  const [step, setStep] = useState(1);
-  const [slots, setSlots] = useState<{key: string, subjectId: string, teacherId: string, weekday: string, start: string, end: string}[]>(draftState?.slots ?? []);
+  const steps: (StepDef & { id: StepId })[] = useMemo(
+    () =>
+      isEdit && !legacyDraft
+        ? [
+            { id: "details", label: "Student details" },
+            { id: "subjects", label: "Subjects & trainers" },
+            { id: "package", label: "Add a package" },
+            { id: "review", label: "Review & save" },
+          ]
+        : [
+            { id: "details", label: "Student details" },
+            { id: "subjects", label: "Subjects & trainers" },
+            { id: "package", label: "Package & fees" },
+            { id: "schedule", label: "Weekly schedule" },
+            { id: "review", label: "Review & confirm" },
+          ],
+    [isEdit, legacyDraft]
+  );
+  const [stepIndex, setStepIndex] = useState(() => Math.max(0, steps.findIndex((s) => s.id === initial.step)));
+  const currentStep = steps[stepIndex];
+  const hasSchedule = steps.some((s) => s.id === "schedule");
 
   // 1. Student details
-  const [name, setName] = useState(draftState?.name ?? student?.name ?? "");
-  const [grade, setGrade] = useState(draftState?.grade ?? student?.grade ?? "");
-  const [board, setBoard] = useState(draftState?.board ?? student?.board ?? "CBSE");
-  const [medium, setMedium] = useState(draftState?.medium ?? student?.medium ?? "English");
-  const [status, setStatus] = useState(student?.status ?? "ACTIVE");
-
-  // 2. Guardian & region
-  const [guardianName, setGuardianName] = useState(draftState?.guardianName ?? student?.guardianName ?? "");
-  const [whatsappNumber, setWhatsappNumber] = useState(draftState?.whatsappNumber ?? student?.whatsappNumber ?? "+91 ");
-  const [email, setEmail] = useState(draftState?.email ?? student?.email ?? "");
-  const [country, setCountry] = useState(draftState?.country ?? student?.country ?? "India");
-  const timeZone = "Asia/Kolkata";
-  const [preferredTimings, setPreferredTimings] = useState(draftState?.preferredTimings ?? student?.preferredTimings ?? "");
-  const [learningGoals, setLearningGoals] = useState(draftState?.learningGoals ?? student?.learningGoals ?? "");
-  const [coordinatorNotes, setCoordinatorNotes] = useState(draftState?.coordinatorNotes ?? student?.coordinatorNotes ?? "");
+  const [name, setName] = useState(initial.name ?? student?.name ?? "");
+  const [grade, setGrade] = useState(initial.grade ?? student?.grade ?? "");
+  const [board, setBoard] = useState(initial.board ?? student?.board ?? "CBSE");
+  const [medium, setMedium] = useState(initial.medium ?? student?.medium ?? "English");
+  const [status, setStatus] = useState(legacyDraft ? "ACTIVE" : student?.status ?? "ACTIVE");
+  const [guardianName, setGuardianName] = useState(initial.guardianName ?? student?.guardianName ?? "");
+  const [whatsappNumber, setWhatsappNumber] = useState(initial.whatsappNumber ?? student?.whatsappNumber ?? "+91 ");
+  const [email, setEmail] = useState(initial.email ?? student?.email ?? "");
+  const [country, setCountry] = useState(initial.country ?? student?.country ?? "India");
+  const [preferredTimings, setPreferredTimings] = useState(initial.preferredTimings ?? student?.preferredTimings ?? "");
+  const [learningGoals, setLearningGoals] = useState(initial.learningGoals ?? student?.learningGoals ?? "");
+  const [coordinatorNotes, setCoordinatorNotes] = useState(initial.coordinatorNotes ?? student?.coordinatorNotes ?? "");
 
   const [guardianMatches, setGuardianMatches] = useState<GuardianMatch[]>([]);
   const [lookedUpPhone, setLookedUpPhone] = useState("");
   const [lookupState, setLookupState] = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [linkedGuardian, setLinkedGuardian] = useState<GuardianMatch | null>(null);
+  const [linkedGuardian, setLinkedGuardian] = useState<GuardianMatch | null>(initial.linkedGuardian ?? null);
 
-  // 3. Subjects & trainers
+  // 2. Subjects & trainers
   const [subjectsList, setSubjectsList] = useState<SubjectOption[]>(subjects);
   const [rows, setRows] = useState<Row[]>(() => {
-    if (draftState?.rows) return draftState.rows;
+    if (initial.rows?.length) return initial.rows;
     if (isEdit && student?.enrolments?.length) {
-      return student.enrolments.map((e) => ({
-        key: e.id,
-        subjectId: e.subjectId,
-        teacherId: e.teacherId ?? "",
-        credits: "",
-      }));
+      return student.enrolments.map((e) => ({ key: e.id, subjectId: e.subjectId, teacherId: e.teacherId ?? "", credits: "" }));
     }
     if (isEdit) return [];
     return [{ key: newRowKey(), subjectId: "", teacherId: "", credits: "20" }];
@@ -173,19 +226,63 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
   const [quickSubjectRowKey, setQuickSubjectRowKey] = useState<string | null>(null);
   const [quickSubjectOpen, setQuickSubjectOpen] = useState(false);
 
-  // 4. Package
-  const [includePackage, setIncludePackage] = useState(draftState?.includePackage ?? !isEdit);
-  const [packageName, setPackageName] = useState(draftState?.packageName ?? (isEdit ? "Credit Booster Package" : "Multi-Subject Booster Package"));
-  const [totalCredits, setTotalCredits] = useState(draftState?.totalCredits ?? (isEdit ? "10" : "20"));
-  const [packagePrice, setPackagePrice] = useState(draftState?.packagePrice ?? (isEdit ? "9000" : "18000"));
-  const [startDate, setStartDate] = useState(draftState?.startDate ?? today());
-  const [expiryDate, setExpiryDate] = useState(draftState?.expiryDate ?? "");
+  // 3. Package & fees
+  const [includePackage, setIncludePackage] = useState(initial.includePackage ?? !isEdit);
+  const [packageName, setPackageName] = useState(initial.packageName ?? (isEdit ? "Top-up package" : "Multi-subject package"));
+  const [totalCredits, setTotalCredits] = useState(initial.totalCredits ?? (isEdit ? "10" : "20"));
+  const [packagePrice, setPackagePrice] = useState(initial.packagePrice ?? (isEdit ? "9000" : "18000"));
+  const [startDate, setStartDate] = useState(initial.startDate ?? today());
+  const [expiryDate, setExpiryDate] = useState(initial.expiryDate ?? "");
+
+  // 4. Weekly schedule
+  const [slots, setSlots] = useState<SlotDraft[]>(initial.slots ?? []);
+  const [booking, setBooking] = useState<Booking | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [formError, setFormError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // Trainer choices: active trainers plus any inactive trainer already assigned (edit).
+  // Drafts
+  const [draftId, setDraftId] = useState<string | null>(draft?.id ?? null);
+  const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(draft?.updatedAt ?? null);
+  const [draftNotice, setDraftNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+
+  const snapshot = (): AdmissionSnapshot => ({
+    version: 1,
+    step: currentStep.id,
+    name, grade, board, medium, guardianName, whatsappNumber, email, country, preferredTimings, learningGoals, coordinatorNotes,
+    linkedGuardian, rows, includePackage, packageName, totalCredits, packagePrice, startDate, expiryDate, slots,
+  });
+  // Unsaved-change tracking ignores which step is open.
+  const comparable = JSON.stringify({ ...snapshot(), step: null, status });
+  const [savedSnapshot, setSavedSnapshot] = useState(comparable);
+  const dirty = comparable !== savedSnapshot;
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  // Focus a field after switching to the step that holds it.
+  const pendingFocus = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingFocus.current) return;
+    const field = pendingFocus.current;
+    pendingFocus.current = null;
+    requestAnimationFrame(() => focusField(formRef.current, field));
+  }, [stepIndex, fieldErrors]);
+
+  const goToField = (field: string) => {
+    const target = steps.findIndex((s) => s.id === stepForField(field));
+    pendingFocus.current = field;
+    if (target >= 0 && target !== stepIndex) setStepIndex(target);
+    else requestAnimationFrame(() => focusField(formRef.current, field));
+  };
+
   const teacherChoices = useMemo(() => {
     const list = teachers.filter((t) => t.active);
     for (const enr of student?.enrolments ?? []) {
@@ -196,9 +293,12 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
     return list;
   }, [teachers, student]);
 
+  const subjectName = (id: string) => subjectsList.find((s) => s.id === id)?.name ?? "Subject";
+  const teacherName = (id: string) => teacherChoices.find((t) => t.id === id)?.name.replace(/ \(inactive\)$/, "") ?? null;
   const allocatedTotal = rows.reduce((sum, r) => sum + (Number(r.credits) || 0), 0);
   const phoneCanonical = whatsappNumber.replace(/\D/g, "");
   const matchesForCurrentPhone = lookedUpPhone === phoneCanonical ? guardianMatches : [];
+  const err = (field: string) => fieldErrors[field];
 
   const clearFieldError = (...fields: string[]) =>
     setFieldErrors((prev) => {
@@ -208,14 +308,10 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
       return next;
     });
 
-  const err = (field: string) => fieldErrors[field];
-
   const handleCountryChange = (value: string) => {
     setCountry(value);
     const option = findCountry(value);
-    if (!option) return;
-    
-    if (linkedGuardian) return;
+    if (!option || linkedGuardian) return;
     const digits = whatsappNumber.replace(/\D/g, "");
     const isPrefixOnly = !digits || COUNTRIES.some((c) => c.dialCode.replace("+", "") === digits);
     if (isPrefixOnly) setWhatsappNumber(`${option.dialCode} `);
@@ -227,9 +323,7 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
     if (!check.ok || lookedUpPhone === phoneCanonical) return;
     setLookupState("loading");
     try {
-      const data = await apiRequest<{ guardians: GuardianMatch[] }>(
-        `/api/guardians?phone=${encodeURIComponent(check.canonical)}`
-      );
+      const data = await apiRequest<{ guardians: GuardianMatch[] }>(`/api/guardians?phone=${encodeURIComponent(check.canonical)}`);
       setGuardianMatches(data.guardians ?? []);
       setLookedUpPhone(phoneCanonical);
       setLookupState("done");
@@ -255,29 +349,33 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
   };
 
   const updateRow = (key: string, patch: Partial<Row>) => {
+    const before = rows.find((r) => r.key === key);
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+    // Keep weekly slots attached to the subject they were added for.
+    if (before && patch.subjectId !== undefined && patch.subjectId !== before.subjectId && before.subjectId) {
+      setSlots((prev) => prev.map((s) => (s.subjectId === before.subjectId ? { ...s, subjectId: patch.subjectId! } : s)));
+    }
   };
-
   const addRow = () => {
     setRows((prev) => [...prev, { key: newRowKey(), subjectId: "", teacherId: "", credits: "0" }]);
     clearFieldError("enrolments");
   };
-
-  const removeRow = (key: string) => setRows((prev) => prev.filter((r) => r.key !== key));
+  const removeRow = (key: string) => {
+    const row = rows.find((r) => r.key === key);
+    setRows((prev) => prev.filter((r) => r.key !== key));
+    if (row?.subjectId) setSlots((prev) => prev.filter((s) => s.subjectId !== row.subjectId));
+  };
 
   const handleSubjectCreated = (subject: SubjectOption) => {
     setSubjectsList((prev) => (prev.some((s) => s.id === subject.id) ? prev : [...prev, subject].sort((a, b) => a.name.localeCompare(b.name))));
-    if (quickSubjectRowKey) {
-      updateRow(quickSubjectRowKey, { subjectId: subject.id });
-    } else if (!rows.some((r) => r.subjectId === subject.id)) {
-      setRows((prev) => [...prev, { key: newRowKey(), subjectId: subject.id, teacherId: "", credits: "0" }]);
-    }
+    if (quickSubjectRowKey) updateRow(quickSubjectRowKey, { subjectId: subject.id });
+    else if (!rows.some((r) => r.subjectId === subject.id)) setRows((prev) => [...prev, { key: newRowKey(), subjectId: subject.id, teacherId: "", credits: "0" }]);
     setQuickSubjectRowKey(null);
   };
 
-  const validate = (): Record<string, string> => {
+  const validateStep = (id: StepId): Record<string, string> => {
     const errors: Record<string, string> = {};
-    if (step === 1) {
+    if (id === "details") {
       if (!name.trim()) errors.name = "Student name is required.";
       if (!grade.trim()) errors.grade = "Choose the class / grade.";
       if (!linkedGuardian) {
@@ -287,8 +385,7 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
       }
       if (email.trim() && !isValidEmail(email.trim().toLowerCase())) errors.email = "Enter a valid email address or leave it blank.";
     }
-
-    if (step === 2) {
+    if (id === "subjects") {
       if (!isEdit && rows.length === 0) errors.enrolments = "Add at least one subject.";
       const seen = new Set<string>();
       rows.forEach((r, i) => {
@@ -297,8 +394,7 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
         seen.add(r.subjectId);
       });
     }
-
-    if (step === 3 && includePackage) {
+    if (id === "package" && includePackage) {
       const total = Number(totalCredits);
       if (!Number.isInteger(total) || total < 1 || total > 500) errors["package.totalCredits"] = "Enter a whole number of classes (1–500).";
       const price = Number(packagePrice);
@@ -311,19 +407,25 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
         if (!Number.isInteger(credits) || credits < 0) errors[`package.allocations.${i}.allocatedCredits`] = "Whole number, 0 or more.";
       });
       if (Number.isInteger(total) && allocatedTotal !== total) {
-        errors["package.totalCredits"] = `Subject classes add up to ${allocatedTotal}, but the package total is ${total}. Adjust them or use "Set total".`;
+        errors["package.totalCredits"] = `Subject classes add up to ${allocatedTotal}, but the package total is ${total}. Adjust them or use “Set total”.`;
       }
     }
-    
-    if (step === 4) {
-       slots.forEach((s, i) => {
-         if (!s.start || !s.end) errors[`slots.${i}`] = "Enter valid start and end times.";
-       });
+    if (id === "schedule") {
+      slots.forEach((s, i) => {
+        const start = toMinutes(s.start);
+        const end = toMinutes(s.end);
+        if (start === null) errors[`slots.${i}.start`] = "Enter a start time.";
+        if (end === null) errors[`slots.${i}.end`] = "Enter an end time.";
+        else if (start !== null && end <= start) errors[`slots.${i}.end`] = "End time must be after the start time.";
+      });
     }
     return errors;
   };
 
-  const buildPayload = (isDraft = false) => {
+  const slotPayload = () =>
+    slots.map((s) => ({ subjectId: s.subjectId, teacherId: s.teacherId || null, weekday: Number(s.weekday), start: s.start, end: s.end }));
+
+  const buildPayload = () => {
     const enrolments = rows.map((r) => ({ subjectId: r.subjectId, teacherId: r.teacherId || null }));
     const pkg = includePackage
       ? {
@@ -335,53 +437,83 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
           allocations: rows.map((r) => ({ subjectId: r.subjectId, allocatedCredits: Number(r.credits || 0) })),
         }
       : null;
-    const mappedSlots = slots.map(s => ({
-      subjectId: s.subjectId,
-      teacherId: s.teacherId || null,
-      weekday: Number(s.weekday),
-      start: s.start,
-      end: s.end
-    }));
-    
-    const draftData = isDraft ? JSON.stringify({
-      name, grade, board, medium, guardianName, whatsappNumber, email, country, preferredTimings, learningGoals, coordinatorNotes, rows, includePackage, packageName, totalCredits, packagePrice, startDate, expiryDate, slots
-    }) : null;
-
     const common = {
-      name: name.trim() || (isDraft ? "Draft Student" : ""),
-      grade: grade || (isDraft ? "TBD" : ""),
+      name: name.trim(),
+      grade,
       board,
       medium,
       email: email.trim() || null,
       country,
-      timeZone: "Asia/Kolkata",
       preferredTimings: preferredTimings.trim() || null,
       learningGoals: learningGoals.trim() || null,
       coordinatorNotes: coordinatorNotes.trim() || null,
       enrolments,
-      slots: mappedSlots,
-      status: isDraft ? "DRAFT" : (isEdit ? status : "ACTIVE"),
-      draftData,
     };
     if (isEdit) {
-      return { ...common, guardianName: guardianName.trim() || (isDraft ? "TBD" : ""), whatsappNumber: whatsappNumber.trim() || (isDraft ? "" : ""), newPackage: pkg };
+      return {
+        ...common,
+        status,
+        guardianName: guardianName.trim(),
+        whatsappNumber: whatsappNumber.trim(),
+        newPackage: pkg,
+        ...(legacyDraft ? { slots: slotPayload(), draftData: null } : {}),
+      };
     }
-    return linkedGuardian
-      ? { ...common, guardianId: linkedGuardian.id, initialPackage: pkg }
-      : { ...common, guardianName: guardianName.trim() || (isDraft ? "TBD" : ""), whatsappNumber: whatsappNumber.trim() || (isDraft ? "" : ""), initialPackage: pkg };
+    return {
+      ...common,
+      ...(linkedGuardian ? { guardianId: linkedGuardian.id } : { guardianName: guardianName.trim(), whatsappNumber: whatsappNumber.trim() }),
+      initialPackage: pkg,
+      slots: slotPayload(),
+      ...(draftId ? { draftId } : {}),
+    };
   };
 
-  const handleSubmit = async (e?: React.FormEvent, isDraft = false) => {
-    if (e) e.preventDefault();
-    if (submittingRef.current) return;
+  /** Shows server errors next to their fields, on the step that holds the first one. */
+  const showServerError = (error: unknown, fallback: string) => {
+    const apiErr = error instanceof ClientApiError ? error : null;
+    const fe = apiErr?.fieldErrors ?? {};
+    setFieldErrors(fe);
+    setFormError(errorMessage(error, fallback));
+    const ordered = Object.keys(fe).sort((a, b) => steps.findIndex((s) => s.id === stepForField(a)) - steps.findIndex((s) => s.id === stepForField(b)));
+    if (ordered[0]) goToField(ordered[0]);
+  };
 
-    const errors = isDraft ? {} : validate();
-    if (!isDraft && Object.keys(errors).length) {
-      setFieldErrors(errors);
-      setFormError("Please correct the highlighted fields.");
-      focusField(formRef.current, Object.keys(errors)[0]);
-      return;
+  const showClientErrors = (errors: Record<string, string>) => {
+    setFieldErrors(errors);
+    setFormError("Please correct the highlighted fields.");
+    goToField(Object.keys(errors)[0]);
+  };
+
+  /** Runs every server check without saving, before the review step. */
+  const runCheck = async (): Promise<boolean> => {
+    setChecking(true);
+    setFormError("");
+    try {
+      const data = await apiRequest<{ booking: Booking | null }>("/api/students", { method: "POST", body: { ...buildPayload(), checkOnly: true } });
+      setBooking(data.booking);
+      return true;
+    } catch (error) {
+      showServerError(error, "Could not check the admission. Try again.");
+      return false;
+    } finally {
+      setChecking(false);
     }
+  };
+
+  const goNext = async () => {
+    const errors = validateStep(currentStep.id);
+    if (Object.keys(errors).length) return showClientErrors(errors);
+    setFieldErrors({});
+    setFormError("");
+    const next = steps[stepIndex + 1];
+    if (next?.id === "review" && !isEdit && !(await runCheck())) return;
+    setStepIndex(stepIndex + 1);
+  };
+
+  const confirm = async () => {
+    if (submittingRef.current) return;
+    const all = steps.reduce<Record<string, string>>((acc, s) => ({ ...acc, ...validateStep(s.id) }), {});
+    if (Object.keys(all).length) return showClientErrors(all);
 
     submittingRef.current = true;
     setSubmitting(true);
@@ -389,826 +521,494 @@ export function StudentFormModal({ mode, student, subjects, teachers, onClose, o
     setFieldErrors({});
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data = await apiRequest<{ student: any; replayed?: boolean; message?: string }>(
+      const data = await apiRequest<{ student: any; replayed?: boolean; message?: string; booking?: Booking | null }>(
         isEdit ? `/api/students/${student!.id}` : "/api/students",
-        { method: isEdit ? "PATCH" : "POST", body: buildPayload(isDraft), idempotencyKey: isEdit ? undefined : idempotencyKey }
+        { method: isEdit ? "PATCH" : "POST", body: buildPayload(), idempotencyKey: isEdit ? undefined : idempotencyKey }
       );
+      setSavedSnapshot(comparable);
       const unassigned = rows.filter((r) => !r.teacherId).length;
+      const booked = data.booking?.bookedClasses ?? 0;
+      const issues = data.booking?.notBooked.length ?? 0;
       const message = isEdit
         ? data.message || `Student "${data.student.name}" updated.`
-        : `Student "${data.student.name}" (${data.student.studentCode}) registered${
-            data.replayed ? " — it was already saved, no duplicate created" : ""
-          }.${unassigned ? ` ${unassigned} subject(s) still need a trainer.` : ""}`;
+        : [
+            `Student "${data.student.name}" (${data.student.studentCode}) admitted${data.replayed ? " (it was already saved; no duplicate created)" : ""}.`,
+            booked ? `${booked} class${booked === 1 ? "" : "es"} booked for the next 4 weeks.` : "",
+            issues ? `${issues} slot issue${issues === 1 ? "" : "s"} to review on the student's timetable.` : "",
+            unassigned ? `${unassigned} subject${unassigned === 1 ? "" : "s"} still need a trainer.` : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+      if (draftId) onDraftsChanged?.();
       onSuccess(data.student, message);
     } catch (error) {
-      const apiErr = error instanceof ClientApiError ? error : null;
-      setFieldErrors(apiErr?.fieldErrors ?? {});
-      setFormError(errorMessage(error, "Could not save the student."));
-      const first = Object.keys(apiErr?.fieldErrors ?? {})[0];
-      if (first) focusField(formRef.current, first);
+      showServerError(error, "Could not save the student.");
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
     }
   };
 
+  const saveDraft = async () => {
+    if (savingDraft) return;
+    setSavingDraft(true);
+    setDraftNotice(null);
+    const snap = snapshot();
+    try {
+      const res = draftId
+        ? await apiRequest<{ draft: AdmissionDraftItem }>(`/api/admission-drafts/${draftId}`, { method: "PATCH", body: { data: snap, baseUpdatedAt: draftUpdatedAt } })
+        : await apiRequest<{ draft: AdmissionDraftItem }>("/api/admission-drafts", { method: "POST", body: { data: snap } });
+      setDraftId(res.draft.id);
+      setDraftUpdatedAt(res.draft.updatedAt);
+      setSavedSnapshot(comparable);
+      setDraftNotice({ tone: "success", text: `Draft saved at ${formatTimeOnly(res.draft.updatedAt)} IST. Find it under “Admission drafts” on the Students page.` });
+      onDraftsChanged?.();
+    } catch (error) {
+      setDraftNotice({ tone: "error", text: errorMessage(error, "Could not save the draft.") });
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const requestClose = () => {
+    if (submitting || savingDraft) return;
+    if (dirty && !window.confirm(isEdit ? "Discard your unsaved changes?" : "Discard this admission? Use “Save draft” first to keep it.")) return;
+    onClose();
+  };
+
+  const reviewData: ReviewData = {
+    student: { name, grade, board, medium, status: isEdit && !legacyDraft ? STUDENT_STATUSES.find((s) => s.value === status)?.label ?? status : undefined },
+    guardian: {
+      name: guardianName,
+      whatsapp: whatsappNumber,
+      email,
+      country,
+      siblingOf: linkedGuardian ? linkedGuardian.students.map((s) => s.name).join(", ") || null : null,
+    },
+    subjects: rows.filter((r) => r.subjectId).map((r) => ({ name: subjectName(r.subjectId), trainer: r.teacherId ? teacherName(r.teacherId) : null })),
+    pkg: includePackage
+      ? {
+          name: packageName.trim() || `${totalCredits}-class package`,
+          totalCredits: Number(totalCredits) || 0,
+          price: Number(packagePrice) || 0,
+          startDate,
+          expiryDate,
+          allocations: rows.filter((r) => r.subjectId).map((r) => ({ subject: subjectName(r.subjectId), credits: Number(r.credits || 0) })),
+        }
+      : null,
+    schedule: hasSchedule
+      ? rows
+          .filter((r) => r.subjectId)
+          .map((r) => ({
+            subject: subjectName(r.subjectId),
+            items: slots
+              .filter((s) => s.subjectId === r.subjectId)
+              .map((s) => ({ day: weekdayLabel(s.weekday), start: s.start, end: s.end, trainer: teacherName(s.teacherId || r.teacherId) })),
+          }))
+      : null,
+    booking: hasSchedule ? booking : null,
+    warnings: [
+      ...rows.filter((r) => r.subjectId && !r.teacherId).map((r) => `${subjectName(r.subjectId)} has no trainer yet, so its classes cannot be booked.`),
+      ...(hasSchedule ? rows.filter((r) => r.subjectId && !slots.some((s) => s.subjectId === r.subjectId)).map((r) => `${subjectName(r.subjectId)} has no weekly slots.`) : []),
+      ...(!isEdit && !includePackage ? ["No package: no classes will be booked until one is added."] : []),
+    ],
+  };
+
   const titleId = isEdit ? "edit-student-title" : "add-student-title";
   const guardianLocked = Boolean(linkedGuardian);
+  const isLast = stepIndex === steps.length - 1;
+  const ctl = (invalid: boolean) => `${controlClass} ${controlBorder(invalid)}`;
 
   return (
     <>
-    <ModalShell labelledBy={titleId} onClose={onClose} closeDisabled={submitting || quickSubjectOpen}>
-      <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-800">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="rounded-2xl bg-teal-500/10 border border-teal-500/20 p-2.5 text-teal-300 shrink-0">
-            <UserPlus className="h-5 w-5" />
-          </div>
+      <ModalShell labelledBy={titleId} onClose={requestClose} closeDisabled={submitting || quickSubjectOpen} maxWidth="max-w-3xl">
+        <div className="flex items-start justify-between gap-3 border-b border-line pb-4">
           <div className="min-w-0">
-            <h3 id={titleId} className="text-lg font-bold text-white flex flex-wrap items-center gap-2">
-              {isEdit ? "Edit Student Profile" : "Enroll New Student"}
-              {isEdit && student && (
-                <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-teal-500/15 border border-teal-500/30 text-teal-300">
-                  {student.studentCode}
-                </span>
-              )}
-            </h3>
-            <p className="text-xs text-slate-400">
+            <h2 id={titleId} className="text-xl font-bold text-ink">
+              {isEdit ? (legacyDraft ? "Finish admission" : "Edit student") : draft ? "Continue admission" : "Admit a student"}
+              {isEdit && student && <span className="ml-2 align-middle font-mono text-sm font-normal text-ink-subtle">{student.studentCode}</span>}
+            </h2>
+            <p className="mt-0.5 text-sm text-ink-muted">
               {isEdit
-                ? "Update academic details, guardian contact, subject trainers and packages."
-                : "Student profile, guardian contact, subject enrolments and an optional first package."}
+                ? "Update details, subjects and trainers, or add a package. The weekly timetable is edited on the student's profile."
+                : "Nothing is saved until you confirm on the last step. Use “Save draft” to finish later."}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={requestClose}
+            disabled={submitting}
+            aria-label="Close"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-ink-muted hover:bg-raised hover:text-ink"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={submitting}
-          aria-label="Close"
-          className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors min-touch-target flex items-center justify-center shrink-0"
+
+        <div className="mt-4">
+          <Stepper steps={steps} current={stepIndex} onSelect={(i) => { setFormError(""); setStepIndex(i); }} />
+        </div>
+
+        <form
+          ref={formRef}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (isLast) void confirm();
+            else void goNext();
+          }}
+          noValidate
+          className="mt-5 space-y-5"
         >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
+          <FormErrorSummary message={formError} fieldErrors={fieldErrors} labels={new Proxy(FIELD_LABELS, { get: (_t, k) => labelFor(String(k)) })} onFocusField={goToField} />
+          {draftNotice && <Notice tone={draftNotice.tone} onDismiss={() => setDraftNotice(null)}>{draftNotice.text}</Notice>}
 
-      <form ref={formRef} onSubmit={handleSubmit} noValidate className="mt-5 space-y-5 text-xs">
-        <FormErrorSummary
-          message={formError}
-          fieldErrors={fieldErrors}
-          labels={FIELD_LABELS}
-          onFocusField={(f) => focusField(formRef.current, f)}
-        />
+          <h3 className="text-lg font-semibold text-ink">{currentStep.label}</h3>
 
-        {/* Section 1 */}
-        {step === 1 && (
-          <>
-        <div className="space-y-3">
-          <h4 className="font-bold text-slate-400 uppercase tracking-wider text-[11px]">1. Student Academic Details</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="student-name" className="block font-medium text-slate-300 mb-1">
-                Student Full Name <span className="text-rose-400">*</span>
-              </label>
-              <input
-                id="student-name"
-                data-field="name"
-                type="text"
-                autoComplete="off"
-                value={name}
-                aria-invalid={!!err("name")}
-                onChange={(e) => { setName(e.target.value); clearFieldError("name"); }}
-                placeholder="e.g. Farhan Basheer"
-                className={inputClass(inputBase, !!err("name"))}
-              />
-              <FieldError message={err("name")} />
-            </div>
-
-            <div>
-              <label htmlFor="student-grade" className="block font-medium text-slate-300 mb-1">
-                Class / Grade <span className="text-rose-400">*</span>
-              </label>
-              <select
-                id="student-grade"
-                data-field="grade"
-                value={grade}
-                aria-invalid={!!err("grade")}
-                onChange={(e) => { setGrade(e.target.value); clearFieldError("grade"); }}
-                className={inputClass(inputBase, !!err("grade"))}
-              >
-                <option value="" className="bg-slate-900">Select class / grade…</option>
-                {grade && !ALL_GRADES.some((g) => g.value === grade) && (
-                  <option value={grade} className="bg-slate-900">{grade}</option>
-                )}
-                {(["Kindergarten", "Primary School", "Middle School", "High School", "Higher Secondary (+1 & +2)"] as const).map(
-                  (category) => (
-                    <optgroup key={category} label={category} className="bg-slate-900 text-slate-300">
-                      {ALL_GRADES.filter((g) => g.category === category).map((g) => (
-                        <option key={g.value} value={g.value} className="bg-slate-900 text-white">{g.label}</option>
+          {currentStep.id === "details" && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Student full name" name="name" required error={err("name")}>
+                  {(p) => <input {...p} type="text" autoComplete="off" value={name} onChange={(e) => { setName(e.target.value); clearFieldError("name"); }} className={ctl(!!err("name"))} />}
+                </Field>
+                <Field label="Class / grade" name="grade" required error={err("grade")}>
+                  {(p) => (
+                    <select {...p} value={grade} onChange={(e) => { setGrade(e.target.value); clearFieldError("grade"); }} className={ctl(!!err("grade"))}>
+                      <option value="">Select class / grade…</option>
+                      {grade && !ALL_GRADES.some((g) => g.value === grade) && <option value={grade}>{grade}</option>}
+                      {(["Kindergarten", "Primary School", "Middle School", "High School", "Higher Secondary (+1 & +2)"] as const).map((category) => (
+                        <optgroup key={category} label={category}>
+                          {ALL_GRADES.filter((g) => g.category === category).map((g) => (
+                            <option key={g.value} value={g.value}>{g.label}</option>
+                          ))}
+                        </optgroup>
                       ))}
-                    </optgroup>
-                  )
+                    </select>
+                  )}
+                </Field>
+                <Field label="Board" name="board" error={err("board")}>
+                  {(p) => (
+                    <select {...p} value={board} onChange={(e) => setBoard(e.target.value)} className={ctl(!!err("board"))}>
+                      {withCurrent(BOARD_OPTIONS, board).map((b) => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  )}
+                </Field>
+                <Field label="Medium" name="medium" error={err("medium")}>
+                  {(p) => (
+                    <select {...p} value={medium} onChange={(e) => setMedium(e.target.value)} className={ctl(!!err("medium"))}>
+                      {withCurrent(MEDIUM_OPTIONS, medium).map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  )}
+                </Field>
+                {isEdit && !legacyDraft && (
+                  <Field label="Status" name="status" error={err("status")} className="sm:col-span-2">
+                    {(p) => (
+                      <select {...p} value={status} onChange={(e) => setStatus(e.target.value)} className={ctl(!!err("status"))}>
+                        {STUDENT_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      </select>
+                    )}
+                  </Field>
                 )}
-              </select>
-              <FieldError message={err("grade")} />
-            </div>
-
-            <div>
-              <label htmlFor="student-board" className="block font-medium text-slate-300 mb-1">Curriculum Board</label>
-              <select
-                id="student-board"
-                data-field="board"
-                value={board}
-                onChange={(e) => setBoard(e.target.value)}
-                className={inputClass(inputBase, !!err("board"))}
-              >
-                {withCurrent(BOARD_OPTIONS, board).map((b) => (
-                  <option key={b} value={b} className="bg-slate-900">{b}</option>
-                ))}
-              </select>
-              <FieldError message={err("board")} />
-            </div>
-
-            <div>
-              <label htmlFor="student-medium" className="block font-medium text-slate-300 mb-1">Medium of Instruction</label>
-              <select
-                id="student-medium"
-                data-field="medium"
-                value={medium}
-                onChange={(e) => setMedium(e.target.value)}
-                className={inputClass(inputBase, !!err("medium"))}
-              >
-                {withCurrent(MEDIUM_OPTIONS, medium).map((m) => (
-                  <option key={m} value={m} className="bg-slate-900">{m}</option>
-                ))}
-              </select>
-            </div>
-
-            {isEdit && (
-              <div className="sm:col-span-2">
-                <label htmlFor="student-status" className="block font-medium text-slate-300 mb-1">Enrolment Status</label>
-                <select
-                  id="student-status"
-                  data-field="status"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className={inputClass(inputBase, !!err("status"))}
-                >
-                  {STUDENT_STATUSES.map((s) => (
-                    <option key={s.value} value={s.value} className="bg-slate-900">{s.label}</option>
-                  ))}
-                </select>
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* Section 2 */}
-        <div className="space-y-3 pt-3 border-t border-slate-800">
-          <h4 className="font-bold text-slate-400 uppercase tracking-wider text-[11px]">2. Parent / Guardian & Region (Kerala & GCC)</h4>
-
-          {guardianLocked && linkedGuardian && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-2xl border border-teal-500/30 bg-teal-500/10 p-3">
-              <div className="flex items-start gap-2 text-teal-200">
-                <Link2 className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>
-                  Linked to existing guardian <strong>{linkedGuardian.name}</strong> ({linkedGuardian.whatsappNumber}) — sibling of{" "}
-                  {linkedGuardian.students.map((s) => s.name).join(", ") || "no other students yet"}.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={unlinkGuardian}
-                className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 min-h-[36px] font-semibold text-slate-200 hover:bg-slate-800 shrink-0"
-              >
-                <Unlink className="h-3.5 w-3.5" /> Unlink
-              </button>
+              <fieldset className="space-y-4 border-t border-line pt-4">
+                <legend className="sr-only">Parent or guardian</legend>
+                <p className="font-semibold text-ink">Parent / guardian</p>
+                {guardianLocked && linkedGuardian && (
+                  <Notice tone="info" title={`Linked to ${linkedGuardian.name} (${linkedGuardian.whatsappNumber})`}>
+                    <p>Sibling of {linkedGuardian.students.map((s) => s.name).join(", ") || "no other students yet"}.</p>
+                    <Button type="button" variant="outline" size="sm" icon={Unlink} onClick={unlinkGuardian} className="mt-2">
+                      Unlink
+                    </Button>
+                  </Notice>
+                )}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field
+                    label="WhatsApp number (with country code)"
+                    name="whatsappNumber"
+                    required
+                    error={err("whatsappNumber")}
+                    hint={isEdit ? "Shared with any siblings linked to this guardian." : "We check for an existing parent with this number."}
+                  >
+                    {(p) => (
+                      <div className="flex gap-2">
+                        <input
+                          {...p}
+                          type="tel"
+                          inputMode="tel"
+                          autoComplete="off"
+                          disabled={guardianLocked}
+                          value={whatsappNumber}
+                          onChange={(e) => { setWhatsappNumber(e.target.value); clearFieldError("whatsappNumber"); }}
+                          onBlur={lookupGuardians}
+                          className={`${ctl(!!err("whatsappNumber"))} min-w-0 font-mono`}
+                        />
+                        {!isEdit && !guardianLocked && (
+                          <Button type="button" variant="secondary" onClick={lookupGuardians} aria-label="Check for an existing parent with this number" loading={lookupState === "loading"}>
+                            {lookupState !== "loading" && <Search className="h-4 w-4" aria-hidden="true" />}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </Field>
+                  <Field label="Parent / guardian name" name="guardianName" required error={err("guardianName") || err("guardianId")}>
+                    {(p) => (
+                      <input {...p} type="text" autoComplete="off" disabled={guardianLocked} value={guardianName} onChange={(e) => { setGuardianName(e.target.value); clearFieldError("guardianName"); }} className={ctl(!!err("guardianName"))} />
+                    )}
+                  </Field>
+                  {!guardianLocked && matchesForCurrentPhone.length > 0 && (
+                    <div className="sm:col-span-2">
+                      <Notice tone="warning" title={`This WhatsApp number already belongs to ${matchesForCurrentPhone.length === 1 ? "a parent" : `${matchesForCurrentPhone.length} parents`}`}>
+                        <p>Link to keep siblings together, or continue to create a separate parent record.</p>
+                        <ul className="mt-2 space-y-2">
+                          {matchesForCurrentPhone.map((g) => (
+                            <li key={g.id} className="flex flex-col gap-2 rounded-control border border-line bg-surface p-2.5 sm:flex-row sm:items-center sm:justify-between">
+                              <span className="text-ink">
+                                <Users className="mr-1 inline h-4 w-4" aria-hidden="true" />
+                                <strong>{g.name}</strong> · {g.whatsappNumber}
+                                <span className="block text-sm text-ink-subtle">
+                                  Children: {g.students.length ? g.students.map((s) => `${s.name} (${s.studentCode})`).join(", ") : "none"}
+                                </span>
+                              </span>
+                              <Button type="button" variant="secondary" size="sm" icon={Link2} onClick={() => linkGuardian(g)}>
+                                Link as sibling
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      </Notice>
+                    </div>
+                  )}
+                  {lookupState === "error" && !guardianLocked && (
+                    <p className="text-sm text-ink-subtle sm:col-span-2">Could not check for existing parents. You can continue; a new parent record will be created.</p>
+                  )}
+                  <Field label="Email (optional)" name="email" error={err("email")}>
+                    {(p) => <input {...p} type="email" inputMode="email" autoComplete="off" value={email} onChange={(e) => { setEmail(e.target.value); clearFieldError("email"); }} className={ctl(!!err("email"))} />}
+                  </Field>
+                  <Field label="Country" name="country" required error={err("country")} hint="Class times are always shown in IST.">
+                    {(p) => (
+                      <select {...p} value={country} onChange={(e) => handleCountryChange(e.target.value)} className={ctl(!!err("country"))}>
+                        {withCurrent(COUNTRIES.map((c) => c.value), country).map((value) => {
+                          const c = findCountry(value);
+                          return <option key={value} value={value}>{c ? c.label : value}</option>;
+                        })}
+                      </select>
+                    )}
+                  </Field>
+                  <Field label="Preferred class timings (optional)" name="preferredTimings" error={err("preferredTimings")} className="sm:col-span-2">
+                    {(p) => <input {...p} type="text" value={preferredTimings} onChange={(e) => setPreferredTimings(e.target.value)} placeholder="e.g. Weekdays after 6 PM IST" className={ctl(!!err("preferredTimings"))} />}
+                  </Field>
+                  <Field label="Learning goals (optional)" name="learningGoals" error={err("learningGoals")} className="sm:col-span-2">
+                    {(p) => <textarea {...p} rows={2} value={learningGoals} onChange={(e) => setLearningGoals(e.target.value)} className={ctl(!!err("learningGoals"))} />}
+                  </Field>
+                  <Field label="Coordinator notes (optional, internal)" name="coordinatorNotes" error={err("coordinatorNotes")} className="sm:col-span-2">
+                    {(p) => <textarea {...p} rows={2} value={coordinatorNotes} onChange={(e) => setCoordinatorNotes(e.target.value)} className={ctl(!!err("coordinatorNotes"))} />}
+                  </Field>
+                </div>
+              </fieldset>
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="student-whatsapp" className="block font-medium text-slate-300 mb-1">
-                Guardian WhatsApp (with country code) <span className="text-rose-400">*</span>
-              </label>
-              <div className="flex gap-2">
-                <input
-                  id="student-whatsapp"
-                  data-field="whatsappNumber"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="off"
-                  disabled={guardianLocked}
-                  value={whatsappNumber}
-                  aria-invalid={!!err("whatsappNumber")}
-                  onChange={(e) => { setWhatsappNumber(e.target.value); clearFieldError("whatsappNumber"); }}
-                  onBlur={lookupGuardians}
-                  placeholder="+971 50 123 4567"
-                  className={`${inputClass(inputBase, !!err("whatsappNumber"))} font-mono disabled:opacity-60 min-w-0`}
-                />
-                {!isEdit && !guardianLocked && (
-                  <button
-                    type="button"
-                    onClick={lookupGuardians}
-                    title="Check for an existing guardian with this number"
-                    aria-label="Check for an existing guardian with this number"
-                    className="shrink-0 rounded-xl border border-slate-700 bg-slate-900 px-3 text-slate-300 hover:bg-slate-800 min-w-[44px] flex items-center justify-center"
-                  >
-                    {lookupState === "loading" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                  </button>
-                )}
-              </div>
-              <FieldError message={err("whatsappNumber")} />
-              {isEdit && (
-                <p className="mt-1 text-[10px] text-slate-500">Guardian name and number are shared with any siblings linked to this guardian.</p>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="student-guardian" className="block font-medium text-slate-300 mb-1">
-                Parent / Guardian Name <span className="text-rose-400">*</span>
-              </label>
-              <input
-                id="student-guardian"
-                data-field="guardianName"
-                type="text"
-                autoComplete="off"
-                disabled={guardianLocked}
-                value={guardianName}
-                aria-invalid={!!err("guardianName")}
-                onChange={(e) => { setGuardianName(e.target.value); clearFieldError("guardianName"); }}
-                placeholder="e.g. Basheer Ahmed"
-                className={`${inputClass(inputBase, !!err("guardianName"))} disabled:opacity-60`}
-              />
-              <FieldError message={err("guardianName") || err("guardianId")} />
-            </div>
-
-            {!guardianLocked && matchesForCurrentPhone.length > 0 && (
-              <div className="sm:col-span-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-2" role="status">
-                <div className="flex items-start gap-2 text-amber-200 font-semibold">
-                  <Users className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>
-                    This WhatsApp number is already used by {matchesForCurrentPhone.length === 1 ? "a guardian" : `${matchesForCurrentPhone.length} guardians`}.
-                    Link to keep siblings together, or continue to create a separate guardian record.
-                  </span>
+          {currentStep.id === "subjects" && (
+            <div className="space-y-3" data-field="enrolments" tabIndex={-1}>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-ink-muted">A trainer can be assigned later: choose “Assign later” if none is confirmed yet.</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" icon={BookPlus} onClick={() => { setQuickSubjectRowKey(null); setQuickSubjectOpen(true); }}>
+                    New subject
+                  </Button>
+                  <Button type="button" variant="secondary" size="sm" icon={Plus} onClick={addRow} disabled={rows.length >= subjectsList.length}>
+                    Add subject
+                  </Button>
                 </div>
-                {matchesForCurrentPhone.map((g) => (
-                  <div key={g.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl bg-slate-950/60 border border-slate-800 p-2.5">
-                    <div className="text-slate-200">
-                      <span className="font-bold">{g.name}</span> · {g.whatsappNumber}
-                      <div className="text-[11px] text-slate-400">
-                        Children: {g.students.length ? g.students.map((s) => `${s.name} (${s.studentCode})`).join(", ") : "none"}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => linkGuardian(g)}
-                      className="inline-flex items-center justify-center gap-1 rounded-xl bg-teal-500/15 border border-teal-500/30 px-3 py-1.5 min-h-[36px] font-bold text-teal-200 hover:bg-teal-500/25 shrink-0"
-                    >
-                      <Link2 className="h-3.5 w-3.5" /> Link as sibling
-                    </button>
-                  </div>
-                ))}
               </div>
-            )}
-            {lookupState === "error" && !guardianLocked && (
-              <p className="sm:col-span-2 text-[11px] text-slate-500">Could not check for existing guardians. You can still save — a new guardian record will be created.</p>
-            )}
-
-            <div>
-              <label htmlFor="student-email" className="block font-medium text-slate-300 mb-1">
-                Contact Email <span className="text-slate-500 font-normal">(optional)</span>
-              </label>
-              <input
-                id="student-email"
-                data-field="email"
-                type="email"
-                inputMode="email"
-                autoComplete="off"
-                value={email}
-                aria-invalid={!!err("email")}
-                onChange={(e) => { setEmail(e.target.value); clearFieldError("email"); }}
-                placeholder="parent@example.com"
-                className={inputClass(inputBase, !!err("email"))}
-              />
-              <FieldError message={err("email")} />
-            </div>
-
-            <div>
-              <label htmlFor="student-country" className="block font-medium text-slate-300 mb-1">
-                Country <span className="text-rose-400">*</span>
-              </label>
-              <select
-                id="student-country"
-                data-field="country"
-                value={country}
-                onChange={(e) => handleCountryChange(e.target.value)}
-                className={inputClass(inputBase, !!err("country"))}
-              >
-                {withCurrent(COUNTRIES.map((c) => c.value), country).map((value) => {
-                  const c = findCountry(value);
+              {err("enrolments") && <p className="text-sm font-medium text-danger">{err("enrolments")}</p>}
+              {subjectsList.length === 0 && <Notice tone="warning">No subjects exist yet. Use “New subject” to create one.</Notice>}
+              <ul className="space-y-3">
+                {rows.map((row, idx) => {
+                  const usedElsewhere = new Set(rows.filter((r) => r.key !== row.key).map((r) => r.subjectId));
                   return (
-                    <option key={value} value={value} className="bg-slate-900">
-                      {c ? `${c.flag} ${c.label}` : value}
-                    </option>
+                    <li key={row.key} className="rounded-card border border-line p-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
+                        <Field label={`Subject ${idx + 1}`} name={`enrolments.${idx}.subjectId`} error={err(`enrolments.${idx}.subjectId`)}>
+                          {(p) => (
+                            <select
+                              {...p}
+                              value={row.subjectId}
+                              onChange={(e) => {
+                                if (e.target.value === "__NEW__") {
+                                  setQuickSubjectRowKey(row.key);
+                                  setQuickSubjectOpen(true);
+                                  return;
+                                }
+                                updateRow(row.key, { subjectId: e.target.value });
+                                clearFieldError(`enrolments.${idx}.subjectId`);
+                              }}
+                              className={ctl(!!err(`enrolments.${idx}.subjectId`))}
+                            >
+                              <option value="">Select subject…</option>
+                              {subjectsList.map((s) => (
+                                <option key={s.id} value={s.id} disabled={usedElsewhere.has(s.id)}>
+                                  {s.name} ({s.code}){usedElsewhere.has(s.id) ? " — already added" : ""}
+                                </option>
+                              ))}
+                              <option value="__NEW__">Add a new subject…</option>
+                            </select>
+                          )}
+                        </Field>
+                        <Field label={`Trainer for subject ${idx + 1}`} name={`enrolments.${idx}.teacherId`} error={err(`enrolments.${idx}.teacherId`)}>
+                          {(p) => (
+                            <select {...p} value={row.teacherId} onChange={(e) => { updateRow(row.key, { teacherId: e.target.value }); clearFieldError(`enrolments.${idx}.teacherId`); }} className={ctl(!!err(`enrolments.${idx}.teacherId`))}>
+                              <option value="">Assign later</option>
+                              {teacherChoices.map((t) => (
+                                <option key={t.id} value={t.id}>{t.name}{t.subjects ? ` (${t.subjects})` : ""}</option>
+                              ))}
+                            </select>
+                          )}
+                        </Field>
+                        {(rows.length > 1 || isEdit) && (
+                          <div className="flex justify-end sm:pt-6">
+                            <Button type="button" variant="ghost" size="sm" icon={Trash2} aria-label={`Remove subject ${idx + 1}`} onClick={() => removeRow(row.key)}>
+                              <span className="sm:sr-only">Remove</span>
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </li>
                   );
                 })}
-              </select>
-              <FieldError message={err("country")} />
-            </div>
-
-
-
-            <div>
-              <label htmlFor="student-timings" className="block font-medium text-slate-300 mb-1">
-                Preferred Class Timings <span className="text-slate-500 font-normal">(optional)</span>
-              </label>
-              <input
-                id="student-timings"
-                data-field="preferredTimings"
-                type="text"
-                value={preferredTimings}
-                onChange={(e) => setPreferredTimings(e.target.value)}
-                placeholder="e.g. Weekdays 6:00 PM – 8:00 PM GST"
-                className={inputClass(inputBase, !!err("preferredTimings"))}
-              />
-              <FieldError message={err("preferredTimings")} />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label htmlFor="student-goals" className="block font-medium text-slate-300 mb-1">
-                Learning Goals <span className="text-slate-500 font-normal">(optional)</span>
-              </label>
-              <textarea
-                id="student-goals"
-                data-field="learningGoals"
-                rows={2}
-                value={learningGoals}
-                onChange={(e) => setLearningGoals(e.target.value)}
-                placeholder="e.g. Improve CBSE Class 10 Maths scores before board exams"
-                className={inputClass(inputBase, !!err("learningGoals"))}
-              />
-              <FieldError message={err("learningGoals")} />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label htmlFor="student-notes" className="block font-medium text-slate-300 mb-1">
-                Coordinator Notes <span className="text-slate-500 font-normal">(optional, internal)</span>
-              </label>
-              <textarea
-                id="student-notes"
-                data-field="coordinatorNotes"
-                rows={2}
-                value={coordinatorNotes}
-                onChange={(e) => setCoordinatorNotes(e.target.value)}
-                className={inputClass(inputBase, !!err("coordinatorNotes"))}
-              />
-              <FieldError message={err("coordinatorNotes")} />
-            </div>
-          </div>
-        </div>
-
-          </>
-        )}
-
-        {/* Section 3 */}
-        {step === 2 && (
-        <div className="space-y-3 pt-3 border-t border-slate-800" data-field="enrolments" tabIndex={-1}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div>
-              <h4 className="font-bold text-slate-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                <BookOpen className="h-3.5 w-3.5 text-teal-400" />
-                3. Subjects & Assigned Trainers ({rows.length})
-              </h4>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                A trainer can be assigned later — choose &ldquo;Assign later&rdquo; if none is confirmed yet.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => { setQuickSubjectRowKey(null); setQuickSubjectOpen(true); }}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-purple-500/10 border border-purple-500/30 px-3 py-1.5 min-h-[36px] text-xs font-bold text-purple-300 hover:bg-purple-500/20 transition-all"
-              >
-                <BookPlus className="h-3.5 w-3.5" />
-                New Subject
-              </button>
-              <button
-                type="button"
-                onClick={addRow}
-                disabled={rows.length >= subjectsList.length}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-teal-500/10 border border-teal-500/30 px-3 py-1.5 min-h-[36px] text-xs font-bold text-teal-300 hover:bg-teal-500/20 transition-all disabled:opacity-40"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add Subject
-              </button>
-            </div>
-          </div>
-          <FieldError message={err("enrolments")} />
-
-          {subjectsList.length === 0 && (
-            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-200">
-              No subjects exist yet. Use &ldquo;New Subject&rdquo; to create one.
-            </div>
-          )}
-
-          <div className="space-y-2.5">
-            {rows.map((row, idx) => {
-              const usedElsewhere = new Set(rows.filter((r) => r.key !== row.key).map((r) => r.subjectId));
-              return (
-                <div
-                  key={row.key}
-                  className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-start gap-2.5"
-                >
-                  <div className="flex items-center gap-2 sm:min-w-[90px] sm:pt-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-[10px] font-bold text-slate-300 font-mono">
-                      {idx + 1}
-                    </span>
-                    <span className="text-xs font-bold text-slate-200">Subject #{idx + 1}</span>
-                  </div>
-
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-                    <div>
-                      <label htmlFor={`row-subject-${row.key}`} className="sr-only">Subject {idx + 1}</label>
-                      <select
-                        id={`row-subject-${row.key}`}
-                        data-field={`enrolments.${idx}.subjectId`}
-                        value={row.subjectId}
-                        aria-invalid={!!err(`enrolments.${idx}.subjectId`)}
-                        onChange={(e) => {
-                          if (e.target.value === "__NEW__") {
-                            setQuickSubjectRowKey(row.key);
-                            setQuickSubjectOpen(true);
-                            return;
-                          }
-                          updateRow(row.key, { subjectId: e.target.value });
-                          clearFieldError(`enrolments.${idx}.subjectId`);
-                        }}
-                        className={inputClass(`${inputBase} bg-slate-900`, !!err(`enrolments.${idx}.subjectId`))}
-                      >
-                        <option value="" className="bg-slate-900">Select subject…</option>
-                        {subjectsList.map((s) => (
-                          <option key={s.id} value={s.id} disabled={usedElsewhere.has(s.id)} className="bg-slate-900">
-                            {s.name} ({s.code}){usedElsewhere.has(s.id) ? " — already added" : ""}
-                          </option>
-                        ))}
-                        <option value="__NEW__" className="bg-slate-800 text-teal-300 font-bold">➕ Add a new subject…</option>
-                      </select>
-                      <FieldError message={err(`enrolments.${idx}.subjectId`)} />
-                    </div>
-
-                    <div>
-                      <label htmlFor={`row-teacher-${row.key}`} className="sr-only">Trainer for subject {idx + 1}</label>
-                      <select
-                        id={`row-teacher-${row.key}`}
-                        data-field={`enrolments.${idx}.teacherId`}
-                        value={row.teacherId}
-                        aria-invalid={!!err(`enrolments.${idx}.teacherId`)}
-                        onChange={(e) => {
-                          updateRow(row.key, { teacherId: e.target.value });
-                          clearFieldError(`enrolments.${idx}.teacherId`);
-                        }}
-                        className={inputClass(`${inputBase} bg-slate-900`, !!err(`enrolments.${idx}.teacherId`))}
-                      >
-                        <option value="" className="bg-slate-900">Trainer: Assign later</option>
-                        {teacherChoices.map((t) => (
-                          <option key={t.id} value={t.id} className="bg-slate-900">
-                            Trainer: {t.name}{t.subjects ? ` (${t.subjects})` : ""}
-                          </option>
-                        ))}
-                      </select>
-                      <FieldError message={err(`enrolments.${idx}.teacherId`)} />
-                    </div>
-                  </div>
-
-                  {(rows.length > 1 || isEdit) && (
-                    <button
-                      type="button"
-                      onClick={() => removeRow(row.key)}
-                      aria-label={`Remove subject ${idx + 1}`}
-                      className="self-end sm:self-start rounded-xl p-2 min-touch-target flex items-center justify-center text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          {isEdit && student?.enrolments && rows.length < student.enrolments.length && (
-            <p className="text-[11px] text-amber-300">
-              Removed subjects will be unenrolled when you save. Past sessions and attendance are not affected.
-            </p>
-          )}
-        </div>
-
-        )}
-
-        {/* Section 4 */}
-        {step === 3 && (
-        <div className="space-y-3 pt-3 border-t border-slate-800">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <h4 className="font-bold text-slate-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-teal-400" />
-              4. {isEdit ? "Issue a New Package" : "Initial Package Purchase"}
-            </h4>
-            <label className="flex items-center gap-2 font-semibold text-slate-300 cursor-pointer text-xs min-h-[36px]">
-              <input
-                type="checkbox"
-                checked={includePackage}
-                onChange={(e) => setIncludePackage(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-700 bg-slate-900 accent-teal-500"
-              />
-              {isEdit ? "Create a new package now" : "Create the first package now"}
-            </label>
-          </div>
-          {!includePackage && !isEdit && (
-            <p className="text-[11px] text-slate-500">No package or invoice will be created. You can add a package later from the student profile.</p>
-          )}
-
-          {includePackage && (
-            <div className="rounded-2xl border border-teal-500/20 bg-teal-500/5 p-4 space-y-3.5">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-3">
-                  <label htmlFor="pkg-name" className="block text-[11px] font-medium text-slate-300 mb-1">Package Name</label>
-                  <input
-                    id="pkg-name"
-                    data-field="package.name"
-                    type="text"
-                    value={packageName}
-                    onChange={(e) => setPackageName(e.target.value)}
-                    className={inputClass(inputBase, !!err("package.name"))}
-                  />
-                  <FieldError message={err("package.name")} />
-                </div>
-                <div>
-                  <label htmlFor="pkg-total" className="block text-[11px] font-medium text-slate-300 mb-1">Total Classes *</label>
-                  <input
-                    id="pkg-total"
-                    data-field="package.totalCredits"
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    value={totalCredits}
-                    aria-invalid={!!err("package.totalCredits")}
-                    onChange={(e) => { setTotalCredits(e.target.value); clearFieldError("package.totalCredits"); }}
-                    className={`${inputClass(inputBase, !!err("package.totalCredits"))} font-bold`}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="pkg-price" className="block text-[11px] font-medium text-slate-300 mb-1">Price (₹, whole rupees) *</label>
-                  <input
-                    id="pkg-price"
-                    data-field="package.price"
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    value={packagePrice}
-                    aria-invalid={!!err("package.price")}
-                    onChange={(e) => { setPackagePrice(e.target.value); clearFieldError("package.price"); }}
-                    className={`${inputClass(inputBase, !!err("package.price"))} font-bold`}
-                  />
-                  <FieldError message={err("package.price")} />
-                </div>
-                <div>
-                  <label htmlFor="pkg-start" className="block text-[11px] font-medium text-slate-300 mb-1">Start Date *</label>
-                  <input
-                    id="pkg-start"
-                    data-field="package.startDate"
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => { setStartDate(e.target.value); clearFieldError("package.startDate", "package.expiryDate"); }}
-                    className={inputClass(inputBase, !!err("package.startDate"))}
-                  />
-                  <FieldError message={err("package.startDate")} />
-                </div>
-                <div className="sm:col-span-3">
-                  <label htmlFor="pkg-expiry" className="block text-[11px] font-medium text-slate-300 mb-1">
-                    Expiry Date <span className="text-slate-500 font-normal">(optional)</span>
-                  </label>
-                  <input
-                    id="pkg-expiry"
-                    data-field="package.expiryDate"
-                    type="date"
-                    value={expiryDate}
-                    min={startDate || undefined}
-                    onChange={(e) => { setExpiryDate(e.target.value); clearFieldError("package.expiryDate"); }}
-                    className={`${inputClass(inputBase, !!err("package.expiryDate"))} sm:max-w-[50%]`}
-                  />
-                  <FieldError message={err("package.expiryDate")} />
-                </div>
-              </div>
-              <FieldError message={err("package.totalCredits")} />
-              {Number(packagePrice) > 0 && (
-                <p className="text-[11px] text-slate-400">An unpaid invoice for ₹{Number(packagePrice).toLocaleString("en-IN")} (due in 14 days) will be created.</p>
+              </ul>
+              {isEdit && student?.enrolments && rows.length < student.enrolments.length && (
+                <Notice tone="warning">Removed subjects are unenrolled when you save. Past classes and attendance are kept.</Notice>
               )}
+            </div>
+          )}
 
-              <div className="pt-2.5 border-t border-slate-800 space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[11px] font-bold text-slate-300">Classes per subject:</span>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-lg border ${
-                        allocatedTotal === Number(totalCredits)
-                          ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
-                          : "bg-amber-500/15 border-amber-500/30 text-amber-400"
-                      }`}
-                    >
-                      Allocated: {allocatedTotal} / {totalCredits || 0}
-                    </span>
-                    {allocatedTotal !== Number(totalCredits) && allocatedTotal > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => { setTotalCredits(String(allocatedTotal)); clearFieldError("package.totalCredits"); }}
-                        className="text-[11px] text-teal-300 underline hover:text-teal-200 min-h-[32px]"
-                      >
-                        Set total to {allocatedTotal}
-                      </button>
+          {currentStep.id === "package" && (
+            <div className="space-y-4">
+              <label className="flex min-h-[44px] cursor-pointer items-center gap-3 text-sm font-semibold text-ink">
+                <input type="checkbox" checked={includePackage} onChange={(e) => setIncludePackage(e.target.checked)} className="h-5 w-5 accent-teal-400" />
+                {isEdit ? "Create a new package now" : "Create the first package now"}
+              </label>
+              {!includePackage && (
+                <p className="text-sm text-ink-subtle">
+                  No package or invoice will be created{!isEdit ? ", so no classes can be booked yet" : ""}. You can add a package later from the student profile.
+                </p>
+              )}
+              {includePackage && (
+                <div className="space-y-4 rounded-card border border-line p-3 sm:p-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <Field label="Package name" name="package.name" error={err("package.name")} className="sm:col-span-3">
+                      {(p) => <input {...p} type="text" value={packageName} onChange={(e) => setPackageName(e.target.value)} className={ctl(!!err("package.name"))} />}
+                    </Field>
+                    <Field label="Total classes" name="package.totalCredits" required error={err("package.totalCredits")}>
+                      {(p) => <input {...p} type="number" inputMode="numeric" min={1} value={totalCredits} onChange={(e) => { setTotalCredits(e.target.value); clearFieldError("package.totalCredits"); }} className={`${ctl(!!err("package.totalCredits"))} tabular-nums`} />}
+                    </Field>
+                    <Field label="Price (₹, whole rupees)" name="package.price" required error={err("package.price")}>
+                      {(p) => <input {...p} type="number" inputMode="numeric" min={0} value={packagePrice} onChange={(e) => { setPackagePrice(e.target.value); clearFieldError("package.price"); }} className={`${ctl(!!err("package.price"))} tabular-nums`} />}
+                    </Field>
+                    <Field label="Start date" name="package.startDate" required error={err("package.startDate")}>
+                      {(p) => <input {...p} type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); clearFieldError("package.startDate", "package.expiryDate"); }} className={ctl(!!err("package.startDate"))} />}
+                    </Field>
+                    <Field label="Expiry date (optional)" name="package.expiryDate" error={err("package.expiryDate")}>
+                      {(p) => <input {...p} type="date" value={expiryDate} min={startDate || undefined} onChange={(e) => { setExpiryDate(e.target.value); clearFieldError("package.expiryDate"); }} className={ctl(!!err("package.expiryDate"))} />}
+                    </Field>
+                  </div>
+                  {Number(packagePrice) > 0 && (
+                    <p className="text-sm text-ink-muted">An unpaid invoice for ₹{Number(packagePrice).toLocaleString("en-IN")} (due in 14 days) will be created.</p>
+                  )}
+                  <div className="space-y-2 border-t border-line pt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-ink">Classes per subject</p>
+                      <p className={`text-sm font-semibold tabular-nums ${allocatedTotal === Number(totalCredits) ? "text-success" : "text-warning"}`}>
+                        Allocated {allocatedTotal} of {totalCredits || 0}
+                        {allocatedTotal !== Number(totalCredits) && allocatedTotal > 0 && (
+                          <button type="button" onClick={() => { setTotalCredits(String(allocatedTotal)); clearFieldError("package.totalCredits"); }} className="ml-2 min-h-[44px] underline">
+                            Set total to {allocatedTotal}
+                          </button>
+                        )}
+                      </p>
+                    </div>
+                    {rows.length === 0 ? (
+                      <p className="text-sm text-ink-subtle">Add a subject first to allocate classes.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                        {rows.map((row, idx) => {
+                          const field = `package.allocations.${idx}.allocatedCredits`;
+                          return (
+                            <Field key={row.key} label={`${row.subjectId ? subjectName(row.subjectId) : `Subject ${idx + 1}`} classes`} name={field} error={err(field) || err(`package.allocations.${idx}.subjectId`)}>
+                              {(p) => (
+                                <input {...p} type="number" inputMode="numeric" min={0} value={row.credits} onChange={(e) => { updateRow(row.key, { credits: e.target.value }); clearFieldError(field, "package.totalCredits"); }} className={`${ctl(!!err(field))} tabular-nums`} />
+                              )}
+                            </Field>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
                 </div>
-
-                {rows.length === 0 ? (
-                  <p className="text-[11px] text-slate-500">Add a subject above to allocate classes.</p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                    {rows.map((row, idx) => {
-                      const subject = subjectsList.find((s) => s.id === row.subjectId);
-                      const field = `package.allocations.${idx}.allocatedCredits`;
-                      return (
-                        <div key={row.key} className="rounded-xl border border-slate-800 bg-slate-950/70 p-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <label htmlFor={`alloc-${row.key}`} className="flex items-center gap-1.5 min-w-0">
-                              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: subject?.color || "#06b6d4" }} />
-                              <span className="text-xs font-semibold text-slate-300 truncate">{subject?.name || `Subject #${idx + 1}`}</span>
-                            </label>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <input
-                                id={`alloc-${row.key}`}
-                                data-field={field}
-                                type="number"
-                                inputMode="numeric"
-                                min={0}
-                                value={row.credits}
-                                aria-invalid={!!err(field)}
-                                onChange={(e) => { updateRow(row.key, { credits: e.target.value }); clearFieldError(field, "package.totalCredits"); }}
-                                className={`w-16 min-h-[36px] rounded-lg border bg-slate-900 p-1 text-center font-bold text-white text-xs focus:outline-hidden ${err(field) ? "border-rose-500/70" : "border-slate-700 focus:border-teal-400"}`}
-                              />
-                              <span className="text-[10px] text-slate-400">cls</span>
-                            </div>
-                          </div>
-                          <FieldError message={err(field) || err(`package.allocations.${idx}.subjectId`)} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           )}
-        </div>
-        )}
 
-        {step === 4 && (
-          <div className="space-y-3 pt-3 border-t border-slate-800">
-            <h4 className="font-bold text-slate-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-              <BookOpen className="h-3.5 w-3.5 text-teal-400" />
-              4. Weekly Class Schedule
-            </h4>
-            <p className="text-[11px] text-slate-400">Configure recurring weekly slots for the student. Times are in Indian Standard Time.</p>
-            
-            {rows.map((r) => {
-              const subject = subjectsList.find(s => s.id === r.subjectId);
-              if (!subject) return null;
-              const subjectSlots = slots.filter(s => s.subjectId === r.subjectId);
-              return (
-                <div key={r.key} className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-200">{subject.name}</span>
-                    <button type="button" onClick={() => setSlots(prev => [...prev, { key: Math.random().toString(), subjectId: r.subjectId, teacherId: r.teacherId || "", weekday: "1", start: "18:00", end: "19:00" }])} className="text-[11px] text-teal-300 hover:text-teal-200">
-                      + Add Slot
-                    </button>
-                  </div>
-                  {subjectSlots.length === 0 && <p className="text-[11px] text-slate-500">No slots added.</p>}
-                  {subjectSlots.map((slot) => (
-                    <div key={slot.key} className="flex flex-wrap items-center gap-2">
-                      <select value={slot.weekday} onChange={(e) => setSlots(prev => prev.map(s => s.key === slot.key ? {...s, weekday: e.target.value} : s))} className="rounded border bg-slate-900 p-1 text-xs text-white border-slate-700">
-                        <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
-                      </select>
-                      <input type="time" value={slot.start} onChange={(e) => setSlots(prev => prev.map(s => s.key === slot.key ? {...s, start: e.target.value} : s))} className="rounded border bg-slate-900 p-1 text-xs text-white border-slate-700" />
-                      <span className="text-slate-500">-</span>
-                      <input type="time" value={slot.end} onChange={(e) => setSlots(prev => prev.map(s => s.key === slot.key ? {...s, end: e.target.value} : s))} className="rounded border bg-slate-900 p-1 text-xs text-white border-slate-700" />
-                      <select value={slot.teacherId} onChange={(e) => setSlots(prev => prev.map(s => s.key === slot.key ? {...s, teacherId: e.target.value} : s))} className="rounded border bg-slate-900 p-1 text-xs text-white border-slate-700">
-                        <option value="">Subject Trainer</option>
-                        {teacherChoices.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                      </select>
-                      <button type="button" onClick={() => setSlots(prev => prev.filter(s => s.key !== slot.key))} className="text-rose-400 p-1"><Trash2 className="h-3 w-3" /></button>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        )}
+          {currentStep.id === "schedule" && (
+            <WeeklyScheduleStep
+              rows={rows}
+              subjectName={subjectName}
+              teacherName={teacherName}
+              teachers={teacherChoices.filter((t) => t.active)}
+              slots={slots}
+              setSlots={(update) => setSlots(update)}
+              slotError={(index, field) => fieldErrors[`slots.${index}.${field}`]}
+              clearSlotErrors={(index) => clearFieldError(`slots.${index}.weekday`, `slots.${index}.start`, `slots.${index}.end`, `slots.${index}.teacherId`, `slots.${index}.enrolmentId`)}
+              classMinutes={CLASS_MINUTES}
+            />
+          )}
 
-        {step === 5 && (
-          <div className="space-y-3 pt-3 border-t border-slate-800">
-            <h4 className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">5. Review & Confirm Admission</h4>
-            <div className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2 text-xs text-slate-300">
-              <p><strong>Student:</strong> {name || "TBD"} ({grade || "TBD"})</p>
-              <p><strong>Guardian:</strong> {guardianName || "TBD"} ({whatsappNumber})</p>
-              <p><strong>Subjects:</strong> {rows.length}</p>
-              <p><strong>Package:</strong> {includePackage ? `${totalCredits} classes (₹${packagePrice})` : "None"}</p>
-              <p><strong>Timetable Slots:</strong> {slots.length}</p>
+          {currentStep.id === "review" && <ReviewStep data={reviewData} onEdit={(id) => { const i = steps.findIndex((s) => s.id === id); if (i >= 0) setStepIndex(i); }} />}
+
+          <div className="sticky bottom-0 -mx-5 flex flex-wrap items-center justify-between gap-2 border-t border-line bg-surface px-5 py-3 sm:-mx-7 sm:px-7">
+            <div className="flex flex-wrap items-center gap-2">
+              {stepIndex > 0 && (
+                <Button type="button" variant="ghost" onClick={() => { setFormError(""); setStepIndex(stepIndex - 1); }} disabled={submitting || checking}>
+                  Back
+                </Button>
+              )}
+              {!isEdit && (
+                <Button type="button" variant="outline" icon={Save} onClick={saveDraft} loading={savingDraft} disabled={submitting}>
+                  Save draft
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="ghost" onClick={requestClose} disabled={submitting}>
+                Cancel
+              </Button>
+              {isLast ? (
+                <Button type="submit" loading={submitting} icon={isEdit ? Save : UserPlus}>
+                  {isEdit ? (legacyDraft ? "Confirm admission" : "Save changes") : "Confirm admission"}
+                </Button>
+              ) : (
+                <Button type="submit" loading={checking}>
+                  {checking ? "Checking…" : steps[stepIndex + 1]?.id === "review" ? "Review" : "Next"}
+                </Button>
+              )}
             </div>
           </div>
-        )}
+          {checking && (
+            <p className="sr-only" role="status">
+              Checking the schedule and package…
+            </p>
+          )}
+          {submitting && <RefreshCw className="sr-only" aria-hidden="true" />}
+        </form>
+      </ModalShell>
 
-        <div className="sticky bottom-0 -mx-5 sm:-mx-7 px-5 sm:px-7 py-3 bg-[#0c1220]/95 backdrop-blur border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex gap-2">
-            {step > 1 && (
-              <button
-                type="button"
-                onClick={() => setStep(step - 1)}
-                disabled={submitting}
-                className="rounded-xl px-4 py-2 min-h-[44px] font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              >
-                Back
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={(e) => handleSubmit(e, true)}
-              disabled={submitting}
-              className="rounded-xl px-4 py-2 min-h-[44px] font-semibold text-amber-400 hover:bg-amber-500/10 border border-amber-500/30 transition-colors"
-            >
-              Save Draft
-            </button>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="rounded-xl px-4 py-2 min-h-[44px] font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
-
-            {step < 5 ? (
-              <button
-                type="button"
-                onClick={() => {
-                  const errors = validate();
-                  if (Object.keys(errors).length > 0) {
-                    setFieldErrors(errors);
-                    setFormError("Please correct errors before proceeding.");
-                  } else {
-                    setFieldErrors({});
-                    setFormError("");
-                    setStep(step + 1);
-                  }
-                }}
-                className="inline-flex items-center gap-2 rounded-xl bg-teal-500/20 px-5 py-2.5 min-h-[44px] font-bold text-teal-300 hover:bg-teal-500/30 transition-colors"
-              >
-                Next Step
-              </button>
-            ) : (
-              <button
-                type="submit"
-                onClick={(e) => handleSubmit(e, false)}
-                disabled={submitting}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-5 py-2.5 min-h-[44px] font-bold text-slate-950 hover:brightness-110 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-teal-300 disabled:opacity-50 shadow-lg shadow-teal-500/20 transition-all active:scale-95"
-              >
-                {submitting ? (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    Saving...
-                  </>
-                ) : isEdit ? (
-                  <>
-                    <Save className="h-4 w-4" />
-                    Save Changes
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="h-4 w-4" />
-                    Confirm Admission
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-      </form>
-    </ModalShell>
-
-    {/* Rendered outside the dialog so its overlay is positioned against the viewport. */}
-    {quickSubjectOpen && (
-      <QuickAddSubjectModal
-        onClose={() => { setQuickSubjectOpen(false); setQuickSubjectRowKey(null); }}
-        onSuccess={handleSubjectCreated}
-      />
-    )}
+      {quickSubjectOpen && (
+        <QuickAddSubjectModal
+          onClose={() => { setQuickSubjectOpen(false); setQuickSubjectRowKey(null); }}
+          onSuccess={handleSubjectCreated}
+        />
+      )}
     </>
   );
 }

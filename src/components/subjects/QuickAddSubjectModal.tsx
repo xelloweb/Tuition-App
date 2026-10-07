@@ -102,10 +102,10 @@ export function QuickAddSubjectModal({
 
         <form onSubmit={handleSubmit} noValidate className="mt-4 space-y-4 text-xs">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">
+            <label htmlFor="quickaddsubjectmodal-field-1" className="block font-semibold text-slate-300 mb-1">
               Subject Name *
             </label>
-            <input
+            <input id="quickaddsubjectmodal-field-1"
               type="text"
               required
               autoFocus
@@ -132,10 +132,10 @@ export function QuickAddSubjectModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">
+              <label htmlFor="quickaddsubjectmodal-field-2" className="block font-semibold text-slate-300 mb-1">
                 Short Code (Optional)
               </label>
-              <input
+              <input id="quickaddsubjectmodal-field-2"
                 type="text"
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
@@ -147,10 +147,10 @@ export function QuickAddSubjectModal({
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">
+              <label htmlFor="quickaddsubjectmodal-field-3" className="block font-semibold text-slate-300 mb-1">
                 Category
               </label>
-              <select
+              <select id="quickaddsubjectmodal-field-3"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-white font-medium focus:border-teal-500 focus:outline-hidden"
@@ -199,7 +199,7 @@ export function QuickAddSubjectModal({
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-4 py-2 text-xs font-bold text-slate-950 hover:brightness-110 shadow-lg shadow-teal-500/20 disabled:opacity-50 transition-all active:scale-95"
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-400 px-4 py-2 text-xs font-bold text-slate-950 hover:brightness-110 disabled:opacity-50 transition-all active:scale-95"
             >
               {loading ? (
                 <>

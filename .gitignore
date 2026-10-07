@@ -36,7 +36,6 @@ yarn-error.log*
 
 # database
 *.db
-!prisma/dev.db
 *.db-journal
 
 # vercel
@@ -45,3 +44,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# private data exports (real people's details): never commit
+*.tsv
+*.csv
+*.xlsx
+*.xls
+insert-trainers.txt

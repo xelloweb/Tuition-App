@@ -23,6 +23,10 @@ import { EditTeacherModal } from "@/components/teachers/EditTeacherModal";
 import { TeacherFormRecord } from "@/components/teachers/TeacherFormModal";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { formatDays } from "@/lib/trainer-profile";
+import Link from "next/link";
+import { FileSpreadsheet, MapPin } from "lucide-react";
 
 export interface TeacherListItem extends TeacherFormRecord {
   ratesVisible: boolean;
@@ -144,18 +148,22 @@ export function TeachersClient({
 
   const handleInvite = async (teacher: TeacherListItem) => {
     try {
-      const res = await fetch(`/api/teachers/${teacher.id}/invite`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setBanner({ tone: "success", text: `Invite link generated: ${data.inviteLink}` });
-    } catch (err: any) {
-      setBanner({ tone: "error", text: errorMessage(err, "Failed to generate invite.") });
+      const data = await apiRequest<{ inviteLink: string; expiresAt: string }>(`/api/teachers/${teacher.id}/invite`, { method: "POST" });
+      setBanner({
+        tone: "success",
+        text: `Login link for ${teacher.name} (works once, valid 7 days). Nothing was sent: copy it and send it to them yourself: ${data.inviteLink}`,
+      });
+    } catch (err) {
+      setBanner({ tone: "error", text: errorMessage(err, "Could not create the login link.") });
     }
   };
 
   const filteredTeachers = teachersList.filter((teacher) => {
     const q = searchQuery.toLowerCase().trim();
-    const haystack = [teacher.name, teacher.subjects, teacher.email, teacher.grades].join(" ").toLowerCase();
+    const haystack = [teacher.name, teacher.subjects, teacher.email, teacher.grades, teacher.location, teacher.qualification, teacher.syllabus]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
     if (q && !haystack.includes(q)) return false;
     if (selectedSubject !== "ALL" && !teacher.subjects.toLowerCase().includes(selectedSubject.toLowerCase())) return false;
     if (statusFilter === "ACTIVE" && !teacher.active) return false;
@@ -171,27 +179,29 @@ export function TeachersClient({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-teal-400">
-            <GraduationCap className="h-4 w-4" />
-            <span>Faculty & Trainer Management</span>
-          </div>
-          <h2 className="text-xl sm:text-3xl font-black tracking-tight text-white mt-1">
-            {isTeacherView ? "My Trainer Profile" : "Trainers & Tutors Directory"}
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Trainer profiles, subject specializations, supported grades, and standard-wise pay matrices.
-          </p>
-        </div>
-
-        {canManage && (
-          <Button onClick={() => setAddOpen(true)} icon={Plus} className="w-full sm:w-auto">
-            Add New Trainer
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title={isTeacherView ? "My trainer profile" : "Trainers"}
+        description={
+          isTeacherView
+            ? "Your subjects, classes and availability as the office sees them."
+            : "Trainer profiles, subjects, classes, availability and pay rates."
+        }
+        actions={
+          canManage && (
+            <>
+              <Link
+                href="/teachers/import"
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-control border border-line-strong px-4 text-sm font-semibold text-ink hover:bg-raised"
+              >
+                <FileSpreadsheet className="h-4 w-4" aria-hidden="true" /> Import from Google Sheet
+              </Link>
+              <Button onClick={() => setAddOpen(true)} icon={Plus}>
+                Add trainer
+              </Button>
+            </>
+          )
+        }
+      />
 
       {banner && (
         <div
@@ -220,17 +230,17 @@ export function TeachersClient({
 
       {/* Search and Filters Bar */}
       {!isTeacherView && (
-        <div className="rounded-2xl sm:rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-3 sm:p-4 shadow-xl shadow-black/30 space-y-3">
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-900 p-3 sm:p-4 space-y-3">
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search trainers by name, subject, grade or email..."
+                placeholder="Search by name, subject, class, place or email"
                 aria-label="Search trainers"
-                className="w-full rounded-xl border border-slate-700 bg-slate-900/90 pl-10 pr-3 py-2.5 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:border-teal-500 focus:ring-1 focus:ring-teal-500 min-h-[44px]"
+                className="w-full rounded-xl border border-slate-700 bg-slate-900/90 pl-10 pr-3 py-2.5 text-xs sm:text-sm text-white placeholder:text-slate-400 focus:outline-hidden focus:border-teal-500 focus:ring-1 focus:ring-teal-500 min-h-[44px]"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -257,7 +267,7 @@ export function TeachersClient({
               </select>
             </div>
           </div>
-          <div className="text-[11px] text-slate-400 font-medium">
+          <div className="text-xs text-slate-400 font-medium">
             Showing {filteredTeachers.length} of {teachersList.length} trainer{teachersList.length === 1 ? "" : "s"}
           </div>
         </div>
@@ -265,8 +275,8 @@ export function TeachersClient({
 
       {/* Grid */}
       {filteredTeachers.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 p-12 text-center space-y-3">
-          <GraduationCap className="h-10 w-10 text-slate-500 mx-auto" />
+        <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-12 text-center space-y-3">
+          <GraduationCap className="h-10 w-10 text-slate-400 mx-auto" />
           <h3 className="text-base font-extrabold text-white">No trainers found</h3>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
             {searchQuery || selectedSubject !== "ALL" || statusFilter !== "ALL"
@@ -292,7 +302,7 @@ export function TeachersClient({
             return (
               <div
                 key={teacher.id}
-                className={`rounded-2xl sm:rounded-3xl border bg-slate-900/60 backdrop-blur-xl p-5 sm:p-6 shadow-xl shadow-black/40 space-y-4 transition-all ${
+                className={`rounded-2xl border bg-slate-900 p-5 sm:p-6 space-y-4 transition-all ${
                   teacher.active ? "border-slate-800/80 hover:border-teal-500/40" : "border-slate-800/60 opacity-80"
                 }`}
               >
@@ -303,7 +313,7 @@ export function TeachersClient({
                       {subjectsList.map((sub) => (
                         <span
                           key={sub}
-                          className="rounded-full bg-teal-500/15 border border-teal-500/30 px-2.5 py-0.5 text-[11px] font-bold text-teal-300"
+                          className="rounded-full bg-teal-500/15 border border-teal-500/30 px-2.5 py-0.5 text-xs font-bold text-teal-300"
                         >
                           {sub}
                         </span>
@@ -311,7 +321,7 @@ export function TeachersClient({
                     </div>
                   </div>
                   <span
-                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
+                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold border ${
                       teacher.active
                         ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
                         : "bg-slate-800 text-slate-400 border-slate-700"
@@ -323,63 +333,85 @@ export function TeachersClient({
 
                 <div className="text-xs text-slate-400 space-y-2 pt-2 border-t border-slate-800/80">
                   <div className="flex items-center gap-2 text-slate-300 min-w-0">
-                    <Mail className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                    <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                     <span className="truncate">{teacher.email}</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-300">
-                    <Phone className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                    <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                     <span className="font-mono">{teacher.phone}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <Clock className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                    <span>{teacher.timeZone} ({teacher.country})</span>
-                  </div>
+                  {teacher.location && (
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" aria-hidden="true" />
+                      <span>{teacher.location}</span>
+                    </div>
+                  )}
+                  {(teacher.availableDays || teacher.availableTimes) && (
+                    <div className="flex items-start gap-2 text-slate-300">
+                      <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" aria-hidden="true" />
+                      <span>
+                        Available: {[teacher.availableDays ? formatDays(teacher.availableDays.split(", ")) : null, teacher.availableTimes].filter(Boolean).join(" · ")}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-2 rounded-2xl bg-slate-900/90 p-3 text-center text-xs border border-slate-800">
                   <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Students</span>
+                    <span className="text-xs text-slate-400 uppercase font-semibold">Students</span>
                     <div className="font-extrabold text-white mt-0.5">{teacher.assignedCount}</div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Taught</span>
+                    <span className="text-xs text-slate-400 uppercase font-semibold">Taught</span>
                     <div className="font-extrabold text-teal-400 mt-0.5">{teacher.taughtCount}</div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Rate/Hr</span>
+                    <span className="text-xs text-slate-400 uppercase font-semibold">Rate/Hr</span>
                     <div className="font-extrabold text-white mt-0.5">
                       {teacher.ratesVisible && teacher.defaultRate !== null ? `₹${teacher.defaultRate}` : "Restricted"}
                     </div>
                   </div>
                 </div>
 
-                <div className="text-xs text-slate-400">
-                  <span className="font-bold text-slate-300">Grades:</span> {teacher.grades || "All Grades"}
+                <div className="text-sm text-slate-300">
+                  <span className="font-semibold text-slate-200">Classes:</span> {teacher.grades || "Not set"}
                 </div>
+                {(teacher.qualification || teacher.syllabus || teacher.devices || teacher.whatsapp || teacher.notes) && (
+                  <details className="text-sm text-slate-300">
+                    <summary className="min-h-[44px] cursor-pointer content-center font-semibold text-slate-200">More details</summary>
+                    <dl className="mt-1 space-y-1">
+                      {teacher.qualification && <div><dt className="inline text-slate-400">Qualification: </dt><dd className="inline">{teacher.qualification}</dd></div>}
+                      {teacher.syllabus && <div><dt className="inline text-slate-400">Syllabus: </dt><dd className="inline">{teacher.syllabus}</dd></div>}
+                      {teacher.devices && <div><dt className="inline text-slate-400">Teaches on: </dt><dd className="inline">{teacher.devices}</dd></div>}
+                      {teacher.whatsapp && <div><dt className="inline text-slate-400">WhatsApp: </dt><dd className="inline">{teacher.whatsapp}</dd></div>}
+                      {teacher.notes && <div><dt className="inline text-slate-400">Internal notes: </dt><dd className="inline break-words">{teacher.notes}</dd></div>}
+                    </dl>
+                  </details>
+                )}
 
                 {teacher.ratesVisible && teacher.defaultRate !== null && (
                   <div className="rounded-2xl border border-teal-500/30 bg-teal-950/20 p-3.5 space-y-2">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-teal-300">
+                    <div className="flex items-center justify-between text-xs font-bold text-teal-300">
                       <span>Standard Hourly Pay Rates</span>
-                      <span className="text-[10px] text-teal-400/80 font-normal">Per Hour Taught</span>
+                      <span className="text-xs text-teal-400/80 font-normal">Per Hour Taught</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1.5 text-center text-[10px]">
+                    <div className="grid grid-cols-3 gap-1.5 text-center text-xs">
                       {RATE_TIERS.map((tier) => (
                         <div key={tier.key} className="rounded-xl bg-slate-900/90 p-1.5 border border-slate-800">
                           <span className="text-slate-400 block font-medium leading-tight">{tier.label}</span>
-                          <span className="font-black text-white">₹{getTierRate(teacher, tier.key)}</span>
+                          <span className="font-bold text-white">₹{getTierRate(teacher, tier.key)}</span>
                         </div>
                       ))}
                     </div>
-                    <div className="text-[10px] text-slate-400 text-center pt-0.5">
+                    <div className="text-xs text-slate-400 text-center pt-0.5">
                       Calculation: <span className="font-semibold text-slate-300">Hourly Rate × Class Hours</span>
                     </div>
                   </div>
                 )}
 
                 {canManage && (
-                  <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
                     <button
                       type="button"
                       onClick={() => handleInvite(teacher)}

@@ -3,13 +3,25 @@
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { GraduationCap, ArrowRight, AlertTriangle } from "lucide-react";
+import { GraduationCap, ArrowRight, AlertTriangle, CheckCircle2 } from "lucide-react";
+
+/** Only same-site paths: a crafted ?callbackUrl= must not send staff to another website. */
+function safeCallback(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return "/";
+  return raw;
+}
+
+const NOTICES: Record<string, string> = {
+  password: "Your password was changed and all devices were signed out. Sign in with the new password.",
+  "password-set": "Your password is set. Sign in to continue.",
+};
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/";
-  
+  const callbackUrl = safeCallback(searchParams.get("callbackUrl"));
+  const notice = NOTICES[searchParams.get("changed") ?? ""];
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -17,85 +29,100 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError("");
-
-    const res = await signIn("credentials", {
-      redirect: false,
-      email,
-      password,
-      callbackUrl,
-    });
-
-    if (res?.error) {
-      setError(res.error);
-      setLoading(false);
-    } else {
+    try {
+      const res = await signIn("credentials", { redirect: false, email, password, callbackUrl });
+      if (!res || res.error) {
+        setError(res?.error || "Could not sign in. Please try again.");
+        setLoading(false);
+        return;
+      }
       router.push(callbackUrl);
       router.refresh();
+    } catch {
+      setError("Could not reach the server. Check your internet connection and try again.");
+      setLoading(false);
     }
   };
 
+  const inputClass =
+    "w-full rounded-xl border border-slate-600 bg-slate-950 px-4 py-3 text-base text-white placeholder-slate-500 focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-400/60";
+
   return (
-    <div className="min-h-screen bg-[#070a12] text-slate-100 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* Background glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60vw] h-[60vw] rounded-full bg-teal-500/5 blur-[120px] pointer-events-none" />
-      
-      <div className="w-full max-w-md bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-800 p-8 shadow-2xl relative z-10">
+    <main className="min-h-screen bg-[#070a12] text-slate-100 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:p-8">
         <div className="flex items-center gap-3 mb-8">
-          <div className="rounded-xl bg-teal-500/10 p-2 border border-teal-500/20">
-            <GraduationCap className="h-6 w-6 text-teal-400" />
+          <div className="rounded-xl bg-teal-500/10 p-2 border border-teal-500/30">
+            <GraduationCap className="h-6 w-6 text-teal-300" aria-hidden="true" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-white">Xello Tuition</h1>
-            <p className="text-xs text-slate-400 font-medium">Operations Portal</p>
+            <p className="text-lg font-bold text-white">Xello Tuition</p>
+            <p className="text-sm text-slate-300">Staff and trainer sign-in</p>
           </div>
         </div>
 
-        <h2 className="text-2xl font-bold text-white mb-6">Sign In</h2>
+        <h1 className="text-2xl font-bold text-white mb-6">Sign in</h1>
 
+        {notice && !error && (
+          <div role="status" className="mb-6 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 flex items-start gap-2.5 text-sm text-emerald-200">
+            <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
+            <span>{notice}</span>
+          </div>
+        )}
         {error && (
-          <div className="mb-6 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 flex items-start gap-2.5 text-xs text-rose-300">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+          <div role="alert" className="mb-6 rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 flex items-start gap-2.5 text-sm text-rose-200">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
             <span>{error}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300">Email Address</label>
+            <label htmlFor="login-email" className="block text-sm font-semibold text-slate-200">
+              Email address
+            </label>
             <input
+              id="login-email"
               type="email"
+              autoComplete="username"
+              inputMode="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-hidden transition-all"
+              className={inputClass}
               placeholder="you@xellotuition.com"
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300">Password</label>
+            <label htmlFor="login-password" className="block text-sm font-semibold text-slate-200">
+              Password
+            </label>
             <input
+              id="login-password"
               type="password"
+              autoComplete="current-password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-hidden transition-all"
-              placeholder="••••••••"
+              className={inputClass}
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-teal-500 px-4 py-3 text-sm font-black text-slate-950 hover:bg-teal-400 focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-slate-900 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+            className="w-full min-h-[48px] rounded-xl bg-teal-400 px-4 py-3 text-base font-bold text-slate-950 hover:bg-teal-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed mt-2"
           >
-            {loading ? "Signing in..." : "Continue"}
-            {!loading && <ArrowRight className="h-4 w-4" />}
+            {loading ? "Signing in…" : "Continue"}
+            {!loading && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
           </button>
         </form>
+        <p className="mt-6 text-sm text-slate-300">
+          Forgot your password? Ask the owner for a reset link.
+        </p>
       </div>
-      
-    </div>
+    </main>
   );
 }

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, canScheduleSessions } from "@/lib/auth";
+import { getCurrentUser, canScheduleSessions, isUnlinkedTrainer, UNLINKED_TRAINER_MESSAGE } from "@/lib/auth";
 import { AccessDenied } from "@/components/ui/AccessDenied";
 import { TimetableClient } from "./TimetableClient";
 
@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TimetablePage() {
   const user = await getCurrentUser();
+  if (isUnlinkedTrainer(user)) return <AccessDenied message={UNLINKED_TRAINER_MESSAGE} />;
   if (user.role === "ACCOUNTS") {
     return <AccessDenied message="The timetable is available to the owner, coordinators and trainers." />;
   }

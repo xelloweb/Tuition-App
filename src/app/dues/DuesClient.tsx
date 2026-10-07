@@ -1,5 +1,6 @@
 "use client";
 
+import { ModalShell } from "@/components/ui/ModalShell";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -15,7 +16,7 @@ import {
   Plus,
 } from "lucide-react";
 import { errorMessage, readApiResponse } from "@/lib/client-api";
-import { formatInTimeZone } from "@/lib/timezones";
+import { formatInTimeZone, formatDateOnly } from "@/lib/timezones";
 import { MobileTabs } from "@/components/ui/MobileTabs";
 
 interface DuesClientProps {
@@ -106,9 +107,9 @@ export function DuesClient({
             <AlertCircle className="h-4 w-4" />
             <span>Operational Work Queues</span>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-white mt-1">
             Dues, Renewals & Follow-ups
-          </h2>
+          </h1>
           <p className="text-xs text-slate-400 mt-0.5">
             Structured queues for overdue collections, package exhaustion renewals, and prefilled WhatsApp communication.
           </p>
@@ -160,14 +161,14 @@ export function DuesClient({
           overdueBands.dueToday.length === 0 &&
           overdueBands.band16to30.length === 0 &&
           overdueBands.band30plus.length === 0 ? (
-            <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-12 text-center text-xs text-slate-500 shadow-xl">
+            <div className="rounded-2xl border border-slate-800/80 bg-slate-900 p-12 text-center text-xs text-slate-400 shadow-xl">
               No overdue tuition balances in any aging band. All accounts are up-to-date!
             </div>
           ) : null}
 
           {/* Band: 8 to 15 Days Overdue */}
           {overdueBands.band8to15.length > 0 && (
-            <div className="rounded-3xl border border-red-500/20 bg-slate-900/60 backdrop-blur-xl p-5 sm:p-6 shadow-xl space-y-3">
+            <div className="rounded-2xl border border-red-500/20 bg-slate-900 p-5 sm:p-6 shadow-xl space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-red-400 flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-red-400 animate-pulse" />
@@ -188,8 +189,8 @@ export function DuesClient({
                         <span className="font-mono text-slate-400">
                           {inv.invoiceNumber}
                         </span>
-                        <span className="rounded-lg bg-red-500/10 border border-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-300">
-                          Due on {formatInTimeZone(inv.dueDate, "Asia/Kolkata")}
+                        <span className="rounded-lg bg-red-500/10 border border-red-500/20 px-2 py-0.5 text-xs font-bold text-red-300">
+                          Due on {formatDateOnly(inv.dueDate)}
                         </span>
                       </div>
                       <div className="text-slate-400 mt-1">
@@ -199,8 +200,8 @@ export function DuesClient({
 
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <span className="text-[10px] uppercase text-slate-500">Balance Due</span>
-                        <div className="text-base font-black text-red-400">
+                        <span className="text-xs uppercase text-slate-400">Balance Due</span>
+                        <div className="text-base font-bold text-red-400">
                           ₹{inv.balanceDue.toLocaleString("en-IN")}
                         </div>
                       </div>
@@ -243,7 +244,7 @@ export function DuesClient({
 
           {/* Band: 1 to 7 Days Overdue */}
           {overdueBands.band1to7.length > 0 && (
-            <div className="rounded-3xl border border-amber-500/20 bg-slate-900/60 backdrop-blur-xl p-5 sm:p-6 shadow-xl space-y-3">
+            <div className="rounded-2xl border border-amber-500/20 bg-slate-900 p-5 sm:p-6 shadow-xl space-y-3">
               <span className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-amber-400" />
                 Overdue: 1 to 7 Days ({overdueBands.band1to7.length})
@@ -270,7 +271,7 @@ export function DuesClient({
 
       {/* Queue 2: Exhausting Packages (<3 Credits Remaining) */}
       {activeQueue === "exhausting" && (
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl shadow-xl overflow-hidden">
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-900 shadow-xl overflow-hidden">
           <div className="p-4 sm:p-5 border-b border-slate-800/80">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Active Packages with ≤ 3 Classes Remaining ({exhaustingPackages.length})
@@ -279,7 +280,7 @@ export function DuesClient({
 
           <div className="divide-y divide-slate-800/80">
             {exhaustingPackages.length === 0 ? (
-              <div className="py-14 text-center text-xs text-slate-500">
+              <div className="py-14 text-center text-xs text-slate-400">
                 No packages currently nearing exhaustion.
               </div>
             ) : (
@@ -297,7 +298,7 @@ export function DuesClient({
                         <span className="font-bold text-sm text-white">
                           {pkg.student.name}
                         </span>
-                        <span className="rounded-lg bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-300">
+                        <span className="rounded-lg bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 text-xs font-bold text-rose-300">
                           {remaining} Classes Remaining
                         </span>
                         <span className="text-slate-400">{pkg.name}</span>
@@ -341,12 +342,11 @@ export function DuesClient({
 
       {/* Follow-up Logging Modal */}
       {modalStudent && (
-        <div className="fixed inset-0 z-50 modal-overlay bg-black/80 backdrop-blur-md p-4">
-          <div className="w-full max-w-md rounded-3xl bg-[#0c1220] p-6 shadow-2xl border border-slate-800 text-white">
+        <ModalShell labelledBy="followup-title" onClose={() => setModalStudent(null)} maxWidth="max-w-md">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-base font-bold text-white">
+              <h2 id="followup-title" className="text-base font-bold text-white">
                 Log Follow-up Call / Interaction
-              </h3>
+              </h2>
               <button
                 onClick={() => setModalStudent(null)}
                 className="text-slate-400 hover:text-white"
@@ -360,16 +360,16 @@ export function DuesClient({
                 <span className="font-bold text-white">
                   {modalStudent.name} • Parent: {modalStudent.guardianName}
                 </span>
-                <div className="text-[11px] text-slate-400 mt-1">
+                <div className="text-xs text-slate-400 mt-1">
                   WhatsApp: {modalStudent.whatsappNumber}
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1">
+                <label htmlFor="duesclient-field-1" className="block font-bold text-slate-300 uppercase mb-1">
                   Call / Contact Outcome *
                 </label>
-                <select
+                <select id="duesclient-field-1"
                   value={outcome}
                   onChange={(e) => setOutcome(e.target.value)}
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-white font-medium"
@@ -383,10 +383,10 @@ export function DuesClient({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1">
+                <label htmlFor="duesclient-field-2" className="block font-bold text-slate-300 uppercase mb-1">
                   Parent Response Summary
                 </label>
-                <input
+                <input id="duesclient-field-2"
                   type="text"
                   value={parentResponse}
                   onChange={(e) => setParentResponse(e.target.value)}
@@ -397,10 +397,10 @@ export function DuesClient({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-300 uppercase mb-1">
+                  <label htmlFor="duesclient-field-3" className="block font-bold text-slate-300 uppercase mb-1">
                     Promised Date
                   </label>
-                  <input
+                  <input id="duesclient-field-3"
                     type="date"
                     value={promisedDate}
                     onChange={(e) => setPromisedDate(e.target.value)}
@@ -408,10 +408,10 @@ export function DuesClient({
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-300 uppercase mb-1">
+                  <label htmlFor="duesclient-field-4" className="block font-bold text-slate-300 uppercase mb-1">
                     Next Action Date
                   </label>
-                  <input
+                  <input id="duesclient-field-4"
                     type="date"
                     value={nextActionDate}
                     onChange={(e) => setNextActionDate(e.target.value)}
@@ -421,10 +421,10 @@ export function DuesClient({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1">
+                <label htmlFor="duesclient-field-5" className="block font-bold text-slate-300 uppercase mb-1">
                   Internal Notes
                 </label>
-                <textarea
+                <textarea id="duesclient-field-5"
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -455,8 +455,7 @@ export function DuesClient({
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+          </ModalShell>
       )}
     </div>
   );

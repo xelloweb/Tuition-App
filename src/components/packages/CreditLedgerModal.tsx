@@ -1,5 +1,6 @@
 "use client";
 
+import { ModalShell } from "@/components/ui/ModalShell";
 import { useEffect, useState } from "react";
 import { apiRequest, errorMessage } from "@/lib/client-api";
 import { X, History, ArrowDownRight, ArrowUpRight, ShieldCheck, Clock } from "lucide-react";
@@ -57,17 +58,16 @@ export function CreditLedgerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 modal-overlay bg-black/75 p-4 backdrop-blur-md">
-      <div className="w-full max-w-3xl rounded-3xl bg-[#0c1220] p-6 shadow-2xl border border-slate-800 text-white">
+    <ModalShell labelledBy="ledger-title" onClose={onClose} maxWidth="max-w-3xl">
         <div className="flex items-center justify-between pb-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="rounded-xl bg-teal-500/10 border border-teal-500/20 p-2 text-teal-400">
               <History className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white">
+              <h2 id="ledger-title" className="text-lg font-bold text-white">
                 Auditable Class-Credit Ledger
-              </h3>
+              </h2>
               <p className="text-xs text-slate-400">
                 {packageName} ({packageNumber})
               </p>
@@ -83,13 +83,13 @@ export function CreditLedgerModal({
 
         <div className="mt-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
           {loading ? (
-            <div className="py-12 text-center text-xs text-slate-500">
+            <div className="py-12 text-center text-xs text-slate-400">
               Loading credit audit history...
             </div>
           ) : loadError ? (
             <div role="alert" className="py-10 text-center text-xs text-rose-300">{loadError}</div>
           ) : ledgers.length === 0 ? (
-            <div className="py-12 text-center text-xs text-slate-500">
+            <div className="py-12 text-center text-xs text-slate-400">
               No ledger entries recorded yet.
             </div>
           ) : (
@@ -102,14 +102,14 @@ export function CreditLedgerModal({
                   <div key={entry.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold ${badge.bg}`}>
+                        <span className={`px-2 py-0.5 rounded-md text-xs font-semibold ${badge.bg}`}>
                           {badge.label}
                         </span>
                         <span className="font-bold text-white">
                           {entry.reason}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-400">
+                      <div className="text-xs text-slate-400">
                         Recorded by <strong className="text-slate-200">{entry.actorName}</strong> ({entry.actorRole}) •{" "}
                         {formatInTimeZone(entry.createdAt, "Asia/Kolkata")} IST
                       </div>
@@ -125,7 +125,7 @@ export function CreditLedgerModal({
                           {isPositive ? `+${entry.creditsDelta}` : entry.creditsDelta} Credits
                         </div>
                         {entry.resultingRemaining !== null && (
-                          <div className="text-[10px] text-slate-400">
+                          <div className="text-xs text-slate-400">
                             Resulting Bal: {entry.resultingRemaining}
                           </div>
                         )}
@@ -150,7 +150,6 @@ export function CreditLedgerModal({
             Close
           </button>
         </div>
-      </div>
-    </div>
+      </ModalShell>
   );
 }

@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { cookies } from "next/headers";
 import { getSessionUser } from "@/lib/auth";
 import { AuthSecretMissingError } from "@/lib/auth-options";
-import { isValidTimeZone } from "@/lib/validation";
 import { isEphemeralDatabase } from "@/lib/prisma";
 import { AppShell } from "@/components/layout/AppShell";
 
@@ -54,18 +52,23 @@ export default async function RootLayout({
       </html>
     );
   }
-  const tzCookie = (await cookies()).get("xello_display_tz")?.value;
-  const decodedTz = tzCookie ? decodeURIComponent(tzCookie) : "";
-  const displayTimeZone = decodedTz && isValidTimeZone(decodedTz) ? decodedTz : "Asia/Kolkata";
+  // The whole application uses India Standard Time; today's date is computed here, once, in IST.
+  const istToday = new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date());
 
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans bg-[#070a12]">
+      <body className="min-h-full flex flex-col font-sans bg-canvas">
         {currentUser ? (
-          <AppShell currentUser={currentUser} displayTimeZone={displayTimeZone} ephemeralStorage={isEphemeralDatabase}>
+          <AppShell currentUser={currentUser} istToday={istToday} ephemeralStorage={isEphemeralDatabase}>
             {children}
           </AppShell>
         ) : (

@@ -69,7 +69,7 @@ describe("weekly timetable", () => {
     await saveTimetable(
       student.id,
       {
-        timeZone: "Asia/Dubai",
+        timeZone: "Asia/Kolkata",
         slots: [
           slot(em.id, SUN, "20:00", "21:00"),
           slot(em.id, MON, "19:00", "20:00"),
@@ -81,7 +81,7 @@ describe("weekly timetable", () => {
     );
     const saved = await currentSlots(student.id);
     assert.equal(saved.length, 4);
-    assert.ok(saved.every((s) => s.timeZone === "Asia/Dubai"));
+    assert.ok(saved.every((s) => s.timeZone === "Asia/Kolkata"), "timetables are saved in IST");
     assert.deepEqual(
       saved.map((s) => [s.weekday, s.startMinutes, s.endMinutes]),
       [[SUN, 1200, 1260], [MON, 1140, 1200], [MON, 1200, 1260], [WED, 1080, 1140]]
@@ -90,18 +90,18 @@ describe("weekly timetable", () => {
 
   test("checks 4-5: more slots can be added to the same subject, including two on one day", async () => {
     const { student, em } = await studentWithSubjects();
-    await saveTimetable(student.id, { timeZone: "Asia/Dubai", slots: [slot(em.id, SAT, "10:00", "11:00")] }, coordinator);
+    await saveTimetable(student.id, { timeZone: "Asia/Kolkata", slots: [slot(em.id, SAT, "10:00", "11:00")] }, coordinator);
     let existing = await currentSlots(student.id);
     await saveTimetable(
       student.id,
-      { timeZone: "Asia/Dubai", slots: [...existing.map((s) => ({ id: s.id, enrolmentId: s.enrolmentId, weekday: s.weekday, start: "10:00", end: "11:00" })), slot(em.id, SAT, "15:00", "16:00")] },
+      { timeZone: "Asia/Kolkata", slots: [...existing.map((s) => ({ id: s.id, enrolmentId: s.enrolmentId, weekday: s.weekday, start: "10:00", end: "11:00" })), slot(em.id, SAT, "15:00", "16:00")] },
       coordinator
     );
     existing = await currentSlots(student.id);
     await saveTimetable(
       student.id,
       {
-        timeZone: "Asia/Dubai",
+        timeZone: "Asia/Kolkata",
         slots: [
           { id: existing[0].id, enrolmentId: em.id, weekday: SAT, start: "10:00", end: "11:00" },
           { id: existing[1].id, enrolmentId: em.id, weekday: SAT, start: "15:00", end: "16:00" },
@@ -119,7 +119,7 @@ describe("weekly timetable", () => {
   test("check 6: exact duplicate active entries are rejected", async () => {
     const { student, em } = await studentWithSubjects();
     await expectFieldError(
-      saveTimetable(student.id, { timeZone: "Asia/Dubai", slots: [slot(em.id, SUN, "20:00", "21:00"), slot(em.id, SUN, "20:00", "21:00")] }, coordinator),
+      saveTimetable(student.id, { timeZone: "Asia/Kolkata", slots: [slot(em.id, SUN, "20:00", "21:00"), slot(em.id, SUN, "20:00", "21:00")] }, coordinator),
       (fe) => /Duplicate/.test(fe["slots.1.start"] ?? "")
     );
     assert.equal((await currentSlots(student.id)).length, 0, "nothing saved");
@@ -128,19 +128,21 @@ describe("weekly timetable", () => {
   test("check 7a: overlapping student classes are rejected across subjects", async () => {
     const { student, em, ee } = await studentWithSubjects();
     await expectFieldError(
-      saveTimetable(student.id, { timeZone: "Asia/Dubai", slots: [slot(em.id, MON, "19:00", "20:00"), slot(ee.id, MON, "19:30", "20:30")] }, coordinator),
+      saveTimetable(student.id, { timeZone: "Asia/Kolkata", slots: [slot(em.id, MON, "19:00", "20:00"), slot(ee.id, MON, "19:30", "20:30")] }, coordinator),
       (fe) => /Overlaps/.test(fe["slots.1.start"] ?? "")
     );
   });
 
-  test("check 7b: trainer conflicts are rejected across students and time zones", async () => {
+  test("check 7b: trainer conflicts are rejected across students, including older slots saved in GCC time", async () => {
     const shared = await makeTeacher("Shared Trainer");
     const dubai = await makeStudent({ timeZone: "Asia/Dubai" });
     const india = await makeStudent({ timeZone: "Asia/Kolkata", country: "India" });
     const e1 = await enrol(dubai.id, maths.id, shared.id);
     const e2 = await enrol(india.id, maths.id, shared.id);
-    // Sun 8-9 PM GST == Sun 9:30-10:30 PM IST (16:00-17:00 UTC)
-    await saveTimetable(dubai.id, { timeZone: "Asia/Dubai", slots: [slot(e1.id, SUN, "20:00", "21:00")] }, coordinator);
+    // An older slot stored in Dubai time: Sun 8-9 PM GST == Sun 9:30-10:30 PM IST (16:00-17:00 UTC).
+    await prisma.timetableSlot.create({
+      data: { enrolmentId: e1.id, teacherId: shared.id, weekday: SUN, startMinutes: 20 * 60, endMinutes: 21 * 60, timeZone: "Asia/Dubai", effectiveFrom: new Date(), createdByName: "test", createdByRole: "OWNER" },
+    });
     await expectFieldError(
       saveTimetable(india.id, { timeZone: "Asia/Kolkata", slots: [slot(e2.id, SUN, "21:30", "22:30")] }, coordinator),
       (fe) => /already teaches/.test(fe["slots.0.start"] ?? "")
@@ -149,10 +151,32 @@ describe("weekly timetable", () => {
     await saveTimetable(india.id, { timeZone: "Asia/Kolkata", slots: [slot(e2.id, SUN, "20:30", "21:30")] }, coordinator);
   });
 
+  test("India time only: another zone is refused, and an older GCC-time slot keeps its real time when edited in IST", async () => {
+    const { student, em } = await studentWithSubjects();
+    await expectFieldError(
+      saveTimetable(student.id, { timeZone: "Asia/Dubai", slots: [slot(em.id, SUN, "20:00", "21:00")] }, coordinator),
+      (fe) => /IST/.test(fe.timeZone ?? "")
+    );
+    await saveTimetable(student.id, { slots: [slot(em.id, SAT, "10:00", "11:00")] }, coordinator);
+    assert.ok((await currentSlots(student.id)).every((s) => s.timeZone === "Asia/Kolkata"), "no zone given = IST");
+
+    // An older Dubai-time slot (Sun 8-9 PM GST) shown and saved in IST as Sun 9:30-10:30 PM keeps the same instants.
+    const { student: gcc, em: gccMaths } = await studentWithSubjects();
+    const legacy = await prisma.timetableSlot.create({
+      data: { enrolmentId: gccMaths.id, teacherId: null, weekday: SUN, startMinutes: 20 * 60, endMinutes: 21 * 60, timeZone: "Asia/Dubai", effectiveFrom: new Date(), createdByName: "test", createdByRole: "OWNER" },
+    });
+    await saveTimetable(gcc.id, { timeZone: "Asia/Kolkata", slots: [{ id: legacy.id, enrolmentId: gccMaths.id, weekday: SUN, start: "21:30", end: "22:30" }] }, coordinator);
+    const [converted] = await currentSlots(gcc.id);
+    assert.equal(converted.timeZone, "Asia/Kolkata");
+    const booked = await prisma.session.findMany({ where: { studentId: gcc.id, timetableSlotId: converted.id } });
+    assert.ok(booked.length > 0);
+    assert.ok(booked.every((b) => b.scheduledStartTimeUtc.getUTCHours() === 16 && b.scheduledStartTimeUtc.getUTCMinutes() === 0), "same 16:00 UTC as before");
+  });
+
   test("overnight slots are rejected with an instruction to split them", async () => {
     const { student, em } = await studentWithSubjects();
     await expectFieldError(
-      saveTimetable(student.id, { timeZone: "Asia/Dubai", slots: [slot(em.id, SAT, "23:00", "00:30")] }, coordinator),
+      saveTimetable(student.id, { timeZone: "Asia/Kolkata", slots: [slot(em.id, SAT, "23:00", "00:30")] }, coordinator),
       (fe) => /split them into two entries/.test(fe["slots.0.end"] ?? "")
     );
   });
@@ -162,7 +186,7 @@ describe("weekly timetable", () => {
     const other = await makeStudent();
     const foreign = await enrol(other.id, maths.id, null);
     await expectFieldError(
-      saveTimetable(student.id, { timeZone: "Asia/Dubai", slots: [slot(foreign.id, SUN, "10:00", "11:00")] }, coordinator),
+      saveTimetable(student.id, { timeZone: "Asia/Kolkata", slots: [slot(foreign.id, SUN, "10:00", "11:00")] }, coordinator),
       (fe) => /enrolled subjects/.test(fe["slots.0.enrolmentId"] ?? "")
     );
   });
@@ -170,7 +194,7 @@ describe("weekly timetable", () => {
   test("class length must match the package's class duration", async () => {
     const { student, em } = await studentWithSubjects();
     await expectFieldError(
-      saveTimetable(student.id, { timeZone: "Asia/Dubai", slots: [slot(em.id, SUN, "10:00", "11:30")] }, coordinator),
+      saveTimetable(student.id, { timeZone: "Asia/Kolkata", slots: [slot(em.id, SUN, "10:00", "11:30")] }, coordinator),
       (fe) => /60 minutes/.test(fe["slots.0.end"] ?? "")
     );
   });
@@ -178,7 +202,7 @@ describe("weekly timetable", () => {
   test("check 10: saving the template does not consume credits; only booked classes reserve them", async () => {
     const { student, em, pkg } = await studentWithSubjects();
     const before = await calculatePackageBalances(pkg.id);
-    await saveTimetable(student.id, { timeZone: "Asia/Dubai", slots: [slot(em.id, SUN, "20:00", "21:00")] }, coordinator);
+    await saveTimetable(student.id, { timeZone: "Asia/Kolkata", slots: [slot(em.id, SUN, "20:00", "21:00")] }, coordinator);
     const after = await calculatePackageBalances(pkg.id);
     const booked = await generatedCount(student.id);
     assert.ok(booked >= 3 && booked <= 5, `about 4 weekly classes booked in ${TIMETABLE_WINDOW_DAYS} days, got ${booked}`);
@@ -191,7 +215,7 @@ describe("weekly timetable", () => {
     const { student, em, pkg } = await studentWithSubjects({ maths: 3, arabic: 5, english: 5 });
     const plan = await saveTimetable(
       student.id,
-      { timeZone: "Asia/Dubai", slots: [slot(em.id, SUN, "20:00", "21:00"), slot(em.id, MON, "19:00", "20:00")] },
+      { timeZone: "Asia/Kolkata", slots: [slot(em.id, SUN, "20:00", "21:00"), slot(em.id, MON, "19:00", "20:00")] },
       coordinator
     );
     assert.equal(await generatedCount(student.id), 3, "only 3 Maths credits available");
@@ -219,19 +243,19 @@ describe("weekly timetable", () => {
   test("a student without a package gets no bookings and a renewal flag", async () => {
     const student = await makeStudent();
     const em = await enrol(student.id, maths.id, (await makeTeacher("No Package Trainer")).id);
-    const plan = await saveTimetable(student.id, { timeZone: "Asia/Dubai", slots: [slot(em.id, SUN, "20:00", "21:00")] }, coordinator);
+    const plan = await saveTimetable(student.id, { timeZone: "Asia/Kolkata", slots: [slot(em.id, SUN, "20:00", "21:00")] }, coordinator);
     assert.equal(await generatedCount(student.id), 0);
     assert.ok(plan.issues.some((i) => i.reason === "NO_PACKAGE"));
   });
 
   test("check 12: repeated saves and generation never duplicate bookings", async () => {
     const { student, em, ea } = await studentWithSubjects();
-    const input = { timeZone: "Asia/Dubai", slots: [slot(em.id, SUN, "20:00", "21:00"), slot(ea.id, MON, "20:00", "21:00")] };
+    const input = { timeZone: "Asia/Kolkata", slots: [slot(em.id, SUN, "20:00", "21:00"), slot(ea.id, MON, "20:00", "21:00")] };
     await saveTimetable(student.id, input, coordinator);
     const first = await generatedCount(student.id);
     const saved = await currentSlots(student.id);
     const sameAgain = {
-      timeZone: "Asia/Dubai",
+      timeZone: "Asia/Kolkata",
       slots: saved.map((s) => ({
         id: s.id,
         enrolmentId: s.enrolmentId,
@@ -260,7 +284,7 @@ describe("weekly timetable", () => {
 
   test("check 13: editing or removing a slot keeps completed attendance and changes only future classes", async () => {
     const { student, em, pkg, tm } = await studentWithSubjects();
-    await saveTimetable(student.id, { timeZone: "Asia/Dubai", slots: [slot(em.id, SUN, "20:00", "21:00")] }, coordinator);
+    await saveTimetable(student.id, { timeZone: "Asia/Kolkata", slots: [slot(em.id, SUN, "20:00", "21:00")] }, coordinator);
     const [original] = await currentSlots(student.id);
 
     // A past class from this slot, attended and completed.
@@ -289,7 +313,7 @@ describe("weekly timetable", () => {
     // Move the slot to Monday 6-7 PM.
     const plan = await saveTimetable(
       student.id,
-      { timeZone: "Asia/Dubai", slots: [{ id: original.id, enrolmentId: em.id, weekday: MON, start: "18:00", end: "19:00" }] },
+      { timeZone: "Asia/Kolkata", slots: [{ id: original.id, enrolmentId: em.id, weekday: MON, start: "18:00", end: "19:00" }] },
       coordinator
     );
     assert.equal(plan.versioned.length, 1, "slot with history is versioned, not edited in place");
@@ -309,12 +333,12 @@ describe("weekly timetable", () => {
     });
     assert.ok(future.length > 0 && future.every((s) => s.timetableSlotId === current.id), "future classes follow the new version");
     assert.ok(
-      future.every((s) => describeInZone(s.scheduledStartTimeUtc, "Asia/Dubai").weekday === MON),
+      future.every((s) => describeInZone(s.scheduledStartTimeUtc, "Asia/Kolkata").weekday === MON),
       "future classes are on Monday"
     );
 
     // Remove the slot entirely: deactivated (has history), future classes released.
-    await saveTimetable(student.id, { timeZone: "Asia/Dubai", slots: [] }, coordinator);
+    await saveTimetable(student.id, { timeZone: "Asia/Kolkata", slots: [] }, coordinator);
     assert.equal((await currentSlots(student.id)).length, 0);
     assert.equal(
       await prisma.session.count({ where: { studentId: student.id, status: "SCHEDULED", scheduledStartTimeUtc: { gt: new Date() } } }),
@@ -327,7 +351,7 @@ describe("weekly timetable", () => {
 
   test("cancelled occurrences stay cancelled when the timetable is regenerated", async () => {
     const { student, em } = await studentWithSubjects();
-    await saveTimetable(student.id, { timeZone: "Asia/Dubai", slots: [slot(em.id, SUN, "20:00", "21:00")] }, coordinator);
+    await saveTimetable(student.id, { timeZone: "Asia/Kolkata", slots: [slot(em.id, SUN, "20:00", "21:00")] }, coordinator);
     const first = await prisma.session.findFirstOrThrow({
       where: { studentId: student.id, status: "SCHEDULED" },
       orderBy: { scheduledStartTimeUtc: "asc" },
@@ -343,7 +367,7 @@ describe("weekly timetable", () => {
 
   test("one-off bookings that clash with a generated class are reported, not double-booked", async () => {
     const { student, em, pkg, te } = await studentWithSubjects();
-    const plan = await buildTimetablePlan(prisma, student.id, { timeZone: "Asia/Dubai", slots: [slot(em.id, SUN, "20:00", "21:00")] });
+    const plan = await buildTimetablePlan(prisma, student.id, { timeZone: "Asia/Kolkata", slots: [slot(em.id, SUN, "20:00", "21:00")] });
     const firstDate = plan.occurrences[0];
     await prisma.session.create({
       data: {
@@ -355,7 +379,7 @@ describe("weekly timetable", () => {
         scheduledEndTimeUtc: new Date(firstDate.start.getTime() + 90 * 60000),
       },
     });
-    const saved = await saveTimetable(student.id, { timeZone: "Asia/Dubai", slots: [slot(em.id, SUN, "20:00", "21:00")] }, coordinator);
+    const saved = await saveTimetable(student.id, { timeZone: "Asia/Kolkata", slots: [slot(em.id, SUN, "20:00", "21:00")] }, coordinator);
     const conflict = saved.issues.find((i) => i.reason === "CONFLICT");
     assert.ok(conflict && conflict.message.includes(firstDate.occurrenceDate), "conflict names the date");
     assert.equal(saved.occurrences.length, plan.occurrences.length - 1);

@@ -1,7 +1,9 @@
 "use client";
 
+import { ModalShell } from "@/components/ui/ModalShell";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   CalendarDays,
   Clock,
@@ -61,37 +63,6 @@ export function TimetableClient({
   const [newStartTimeLocal, setNewStartTimeLocal] = useState("");
   const [rescheduleReason, setRescheduleReason] = useState("");
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-
-  const handleMarkAttendance = async (
-    sessionId: string,
-    studentName: string,
-    outcome: "COMPLETED" | "STUDENT_NO_SHOW"
-  ) => {
-    if (outcome === "STUDENT_NO_SHOW") {
-      if (!confirm(`Mark ${studentName} as ABSENT for this class?`)) return;
-    }
-    setActionLoadingId(sessionId);
-    try {
-      const data = await apiRequest<{ alreadyProcessed?: boolean; message?: string }>(`/api/sessions/${sessionId}/attendance`, {
-        method: "POST",
-        body: {
-          sessionOutcome: outcome,
-          studentAttendance: outcome === "COMPLETED" ? "PRESENT" : "ABSENT",
-          actualDurationMinutes: 60,
-          topicCovered:
-            outcome === "COMPLETED"
-              ? "Regular Curriculum Session"
-              : "Student Absent (No Show)",
-        },
-      });
-      setBanner({ tone: "success", text: data.alreadyProcessed ? data.message || "Already recorded." : `Attendance saved for ${studentName}.` });
-      router.refresh();
-    } catch (err: any) {
-      setBanner({ tone: "error", text: errorMessage(err) });
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
 
   const handleCancelClass = async (ses: any) => {
     const reason = prompt(
@@ -224,9 +195,9 @@ export function TimetableClient({
             <CalendarDays className="h-4 w-4" />
             <span>One-to-One Timetable Engine</span>
           </div>
-          <h2 className="text-xl sm:text-3xl font-black tracking-tight text-white mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-white mt-1">
             Class Schedule & Bookings
-          </h2>
+          </h1>
           <p className="text-xs text-slate-400 mt-0.5">
             Manage live schedules with student/teacher conflict checks and package credit reservation tracking.
           </p>
@@ -259,8 +230,8 @@ export function TimetableClient({
       )}
 
       {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl sm:rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-4 shadow-xl shadow-black/30 text-xs">
-        <div className="flex items-center gap-1.5 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-800/80 bg-slate-900 p-4 text-xs">
+        <div className="flex items-center gap-1.5 text-slate-400 font-bold uppercase tracking-wider text-xs">
           <Filter className="h-4 w-4 text-teal-400" />
           Filters:
         </div>
@@ -268,8 +239,9 @@ export function TimetableClient({
         {/* Subject Filter */}
         <select
           value={selectedSubject}
+          aria-label="Filter by subject"
           onChange={(e) => setSelectedSubject(e.target.value)}
-          className="rounded-xl border border-slate-750 bg-slate-800/90 px-3 py-1.5 font-medium text-slate-200 focus:outline-hidden"
+          className="min-h-[44px] rounded-xl border border-slate-700 bg-slate-800/90 px-3 py-1.5 font-medium text-slate-200 focus:outline-hidden"
         >
           <option value="ALL" className="bg-slate-900 text-slate-200">All Subjects</option>
           {subjects.map((s) => (
@@ -280,10 +252,11 @@ export function TimetableClient({
         {/* Teacher Filter */}
         <select
           value={selectedTeacher}
+          aria-label="Filter by trainer"
           onChange={(e) => setSelectedTeacher(e.target.value)}
-          className="rounded-xl border border-slate-750 bg-slate-800/90 px-3 py-1.5 font-medium text-slate-200 focus:outline-hidden"
+          className="min-h-[44px] rounded-xl border border-slate-700 bg-slate-800/90 px-3 py-1.5 font-medium text-slate-200 focus:outline-hidden"
         >
-          <option value="ALL" className="bg-slate-900 text-slate-200">All Teachers</option>
+          <option value="ALL" className="bg-slate-900 text-slate-200">All trainers</option>
           {teachers.map((t) => (
             <option key={t.id} value={t.id} className="bg-slate-900 text-slate-200">{t.name}</option>
           ))}
@@ -292,8 +265,9 @@ export function TimetableClient({
         {/* Status Filter */}
         <select
           value={selectedStatus}
+          aria-label="Filter by status"
           onChange={(e) => setSelectedStatus(e.target.value)}
-          className="rounded-xl border border-slate-750 bg-slate-800/90 px-3 py-1.5 font-medium text-slate-200 focus:outline-hidden"
+          className="min-h-[44px] rounded-xl border border-slate-700 bg-slate-800/90 px-3 py-1.5 font-medium text-slate-200 focus:outline-hidden"
         >
           <option value="ALL" className="bg-slate-900 text-slate-200">All Statuses</option>
           <option value="SCHEDULED" className="bg-slate-900 text-slate-200">Scheduled</option>
@@ -304,12 +278,12 @@ export function TimetableClient({
       </div>
 
       {/* Timetable Sessions List */}
-      <div className="rounded-2xl sm:rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl shadow-2xl shadow-black/40 overflow-hidden">
+      <div className="rounded-2xl border border-slate-800/80 bg-slate-900 overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-slate-800/80 flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-wider text-teal-400">
             Sessions ({filteredSessions.length})
           </span>
-          <span className="text-[11px] text-slate-400">
+          <span className="text-xs text-slate-400">
             Displays both IST (Kerala) & Student Local Time (GCC)
           </span>
         </div>
@@ -317,8 +291,8 @@ export function TimetableClient({
         <div className="divide-y divide-slate-800/60">
           {filteredSessions.length === 0 ? (
             <div className="p-8 sm:p-14 text-center">
-              <div className="flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-3xl border border-dashed border-slate-800 bg-slate-900/40">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-800/90 border border-slate-700/80 text-teal-400 shadow-[0_0_20px_rgba(20,184,166,0.15)]">
+              <div className="flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-2xl border border-dashed border-slate-800 bg-slate-900/40">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-800/90 border border-slate-700/80 text-teal-400">
                   <CalendarDays className="h-7 w-7 text-teal-400" />
                 </div>
                 <h3 className="mt-4 text-base font-extrabold text-white">No classes scheduled</h3>
@@ -342,7 +316,7 @@ export function TimetableClient({
             filteredSessions.map((ses) => (
               <div
                 key={ses.id}
-                className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-800/40 transition-colors"
+                className="p-4 sm:p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"
               >
                 <div className="flex items-start gap-3.5">
                   <div
@@ -354,20 +328,20 @@ export function TimetableClient({
                       <span className="font-extrabold text-sm text-white">
                         {ses.student.name}
                       </span>
-                      <span className="rounded-full bg-slate-800 border border-slate-700 px-2 py-0.5 text-[10px] font-bold text-slate-300">
+                      <span className="rounded-full bg-slate-800 border border-slate-700 px-2 py-0.5 text-xs font-bold text-slate-300">
                         {ses.student.grade}
                       </span>
-                      <span className="rounded-full bg-teal-500/15 border border-teal-500/30 px-2 py-0.5 text-[10px] font-bold text-teal-300">
+                      <span className="rounded-full bg-teal-500/15 border border-teal-500/30 px-2 py-0.5 text-xs font-bold text-teal-300">
                         {ses.subject.name}
                       </span>
                       <StatusBadge status={ses.status} size="sm" />
                       {ses.timetableSlotId && (
-                        <span className="rounded-full bg-teal-500/10 border border-teal-500/30 px-2 py-0.5 text-[10px] font-bold text-teal-300">Weekly</span>
+                        <span className="rounded-full bg-teal-500/10 border border-teal-500/30 px-2 py-0.5 text-xs font-bold text-teal-300">Weekly</span>
                       )}
                     </div>
 
                     <div className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
-                      <span>Tutor: <strong className="text-slate-200">{ses.teacher.name}</strong></span>
+                      <span>Trainer: <strong className="text-slate-200">{ses.teacher.name}</strong></span>
                       <span>•</span>
                       <span>
                         Package: {ses.package.name} ({ses.isCreditReserved ? "Credit Reserved" : "Credit Consumed"})
@@ -377,13 +351,10 @@ export function TimetableClient({
                 </div>
 
                 {/* Right: Date, Timings & Actions */}
-                <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
+                <div className="flex flex-wrap items-center justify-between xl:justify-end gap-3">
                   <div className="text-right">
-                    <div className="text-xs font-black text-white font-mono">
+                    <div className="text-xs font-bold text-white font-mono">
                       {formatInTimeZone(ses.scheduledStartTimeUtc, "Asia/Kolkata")} IST
-                    </div>
-                    <div className="text-[11px] text-slate-400">
-                      {formatInTimeZone(ses.scheduledStartTimeUtc, ses.student.timeZone)} ({ses.student.country} Local)
                     </div>
                   </div>
 
@@ -404,33 +375,15 @@ export function TimetableClient({
                     )}
                     {ses.status === "SCHEDULED" && !ses.isCreditConsumed && (
                       <>
-                        <button
-                          onClick={() =>
-                            handleMarkAttendance(ses.id, ses.student.name, "COMPLETED")
-                          }
-                          disabled={actionLoadingId === ses.id}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-3 py-1.5 text-xs font-black text-slate-950 hover:from-teal-300 hover:to-emerald-400 shadow-md transition-all disabled:opacity-50"
-                          title="Mark class done & student present"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          Mark Present
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            handleMarkAttendance(
-                              ses.id,
-                              ses.student.name,
-                              "STUDENT_NO_SHOW"
-                            )
-                          }
-                          disabled={actionLoadingId === ses.id}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-rose-500/15 border border-rose-500/30 px-3 py-1.5 text-xs font-bold text-rose-300 hover:bg-rose-500/25 transition-all disabled:opacity-50"
-                          title="Mark student absent"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                          Absent
-                        </button>
+                        {new Date(ses.scheduledStartTimeUtc) <= new Date() && (
+                          <Link
+                            href={`/attendance?session=${ses.id}`}
+                            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-teal-400 px-3 text-sm font-bold text-slate-950 hover:bg-teal-300"
+                          >
+                            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                            Mark attendance<span className="sr-only"> for {ses.student.name}</span>
+                          </Link>
+                        )}
 
                         {canSchedule && (
                           <button
@@ -438,7 +391,7 @@ export function TimetableClient({
                               setRescheduleSession(ses);
                               setErrorMsg("");
                             }}
-                            className="rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-1.5 min-h-[36px] text-xs font-bold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors"
+                            className="rounded-xl border border-slate-700 bg-slate-800/80 px-3 min-h-[44px] text-sm font-bold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors"
                           >
                             Reschedule
                           </button>
@@ -447,7 +400,7 @@ export function TimetableClient({
                           <button
                             onClick={() => handleCancelClass(ses)}
                             disabled={actionLoadingId === ses.id}
-                            className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 min-h-[36px] text-xs font-bold text-rose-300 hover:bg-rose-500/20 transition-colors disabled:opacity-50"
+                            className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 min-h-[44px] text-sm font-bold text-rose-300 hover:bg-rose-500/20 transition-colors disabled:opacity-50"
                           >
                             Cancel
                           </button>
@@ -464,12 +417,11 @@ export function TimetableClient({
 
       {/* Schedule Class Modal */}
       {scheduleModalOpen && (
-        <div className="fixed inset-0 z-50 modal-overlay bg-black/75 p-4 backdrop-blur-md">
-          <div className="w-full max-w-lg rounded-3xl bg-[#0c1220] p-6 shadow-2xl border border-slate-800 text-white">
+        <ModalShell labelledBy="schedule-title" onClose={() => setScheduleModalOpen(false)} maxWidth="max-w-lg">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-base font-bold text-white">
+              <h2 id="schedule-title" className="text-base font-bold text-white">
                 Schedule One-to-One Class
-              </h3>
+              </h2>
               <button
                 onClick={() => setScheduleModalOpen(false)}
                 className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
@@ -480,10 +432,10 @@ export function TimetableClient({
 
             <form onSubmit={handleScheduleSubmit} className="mt-4 space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1">
+                <label htmlFor="timetableclient-field-1" className="block font-bold text-slate-300 uppercase mb-1">
                   1. Select Student *
                 </label>
-                <select
+                <select id="timetableclient-field-1"
                   required
                   value={studentId}
                   onChange={(e) => handleStudentSelect(e.target.value)}
@@ -499,10 +451,10 @@ export function TimetableClient({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1">
+                <label htmlFor="timetableclient-field-2" className="block font-bold text-slate-300 uppercase mb-1">
                   2. Select Subject *
                 </label>
-                <select
+                <select id="timetableclient-field-2"
                   required
                   value={subjectId}
                   onChange={(e) => handleSubjectSelect(e.target.value)}
@@ -518,16 +470,16 @@ export function TimetableClient({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1">
+                <label htmlFor="timetableclient-field-3" className="block font-bold text-slate-300 uppercase mb-1">
                   3. Select Tutor *
                 </label>
-                <select
+                <select id="timetableclient-field-3"
                   required
                   value={teacherId}
                   onChange={(e) => setTeacherId(e.target.value)}
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-white font-medium focus:border-teal-500 focus:outline-hidden"
                 >
-                  <option value="">Choose Tutor...</option>
+                  <option value="">Choose a trainer…</option>
                   {teachers.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.name} ({t.subjects})
@@ -537,10 +489,10 @@ export function TimetableClient({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1">
+                <label htmlFor="timetableclient-field-4" className="block font-bold text-slate-300 uppercase mb-1">
                   Package (credits are reserved from it) *
                 </label>
-                <select
+                <select id="timetableclient-field-4"
                   required
                   value={packageId}
                   onChange={(e) => setPackageId(e.target.value)}
@@ -557,10 +509,10 @@ export function TimetableClient({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1">
+                <label htmlFor="timetableclient-field-5" className="block font-bold text-slate-300 uppercase mb-1">
                   4. Class Date & Start Time (your device time zone) *
                 </label>
-                <input
+                <input id="timetableclient-field-5"
                   type="datetime-local"
                   required
                   value={startTimeLocal}
@@ -570,10 +522,10 @@ export function TimetableClient({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1">
+                <label htmlFor="timetableclient-field-6" className="block font-bold text-slate-300 uppercase mb-1">
                   Meeting Link
                 </label>
-                <input
+                <input id="timetableclient-field-6"
                   type="url"
                   value={meetingUrl}
                   placeholder="https://meet.google.com/... (optional)"
@@ -599,24 +551,22 @@ export function TimetableClient({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-5 py-2.5 font-bold text-slate-950 hover:brightness-110 shadow-lg shadow-teal-500/20 disabled:opacity-50 transition-all active:scale-95"
+                  className="rounded-xl bg-teal-400 px-5 py-2.5 font-bold text-slate-950 hover:brightness-110 disabled:opacity-50 transition-all active:scale-95"
                 >
                   {loading ? "Checking Conflicts..." : "Confirm Booking"}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+          </ModalShell>
       )}
 
       {/* Reschedule Modal */}
       {rescheduleSession && (
-        <div className="fixed inset-0 z-50 modal-overlay bg-black/75 p-4 backdrop-blur-md">
-          <div className="w-full max-w-md rounded-3xl bg-[#0c1220] p-6 shadow-2xl border border-slate-800 text-white">
+        <ModalShell labelledBy="reschedule-title" onClose={() => setRescheduleSession(null)} maxWidth="max-w-md">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-base font-bold text-white">
+              <h2 id="reschedule-title" className="text-base font-bold text-white">
                 Reschedule Class Session
-              </h3>
+              </h2>
               <button
                 onClick={() => setRescheduleSession(null)}
                 className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
@@ -630,16 +580,16 @@ export function TimetableClient({
                 <span className="font-bold text-white">
                   {rescheduleSession.student.name} • {rescheduleSession.subject.name}
                 </span>
-                <div className="text-[11px] text-slate-400 mt-1">
+                <div className="text-xs text-slate-400 mt-1">
                   Current: {formatInTimeZone(rescheduleSession.scheduledStartTimeUtc, "Asia/Kolkata")} IST
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1">
+                <label htmlFor="timetableclient-field-7" className="block font-bold text-slate-300 uppercase mb-1">
                   New Date & Start Time *
                 </label>
-                <input
+                <input id="timetableclient-field-7"
                   type="datetime-local"
                   required
                   value={newStartTimeLocal}
@@ -649,10 +599,10 @@ export function TimetableClient({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1">
+                <label htmlFor="timetableclient-field-8" className="block font-bold text-slate-300 uppercase mb-1">
                   Reason for Rescheduling *
                 </label>
-                <input
+                <input id="timetableclient-field-8"
                   type="text"
                   required
                   value={rescheduleReason}
@@ -679,14 +629,13 @@ export function TimetableClient({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-5 py-2.5 font-bold text-slate-950 hover:brightness-110 shadow-lg shadow-teal-500/20 disabled:opacity-50 transition-all active:scale-95"
+                  className="rounded-xl bg-teal-400 px-5 py-2.5 font-bold text-slate-950 hover:brightness-110 disabled:opacity-50 transition-all active:scale-95"
                 >
                   {loading ? "Rescheduling..." : "Save Replacement"}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+          </ModalShell>
       )}
     </div>
   );

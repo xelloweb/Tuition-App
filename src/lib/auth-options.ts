@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
+import { isPublishedPassword } from "@/lib/password-rules";
 
 /**
  * SHA-256 of secrets that have been published in this repository (the old
@@ -63,17 +64,29 @@ export const authOptions: NextAuthOptions = {
         if (!email || !password) {
           throw new Error("Enter your email and password.");
         }
+        // Checked before the account lookup, so the answer reveals nothing about which emails exist.
+        if (process.env.NODE_ENV === "production" && isPublishedPassword(password)) {
+          throw new Error(
+            "This password was published with the old demo setup and no longer works. Ask the owner for a password reset link."
+          );
+        }
 
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user || !user.active) {
           throw new Error("Invalid email or password.");
         }
+        const signedIn = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          teacherId: user.teacherId,
+          sessionVersion: user.sessionVersion,
+        };
 
         if (!user.passwordHash) {
-          if (demoLoginAllowed() && password === "demo123" && user.role !== "TEACHER") {
-            return { id: user.id, name: user.name, email: user.email, role: user.role, teacherId: user.teacherId };
-          }
-          throw new Error("This account has no password yet. Use your invitation link to set one.");
+          if (demoLoginAllowed() && password === "demo123" && user.role !== "TEACHER") return signedIn;
+          throw new Error("This account has no password yet. Use your invitation or reset link to set one.");
         }
 
         const isValid = await bcrypt.compare(password, user.passwordHash);
@@ -81,7 +94,7 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Invalid email or password.");
         }
 
-        return { id: user.id, name: user.name, email: user.email, role: user.role, teacherId: user.teacherId };
+        return signedIn;
       },
     }),
   ],
@@ -92,19 +105,22 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        const u = user as { id: string; role?: string; teacherId?: string | null };
+        const u = user as { id: string; role?: string; teacherId?: string | null; sessionVersion?: number };
         token.id = u.id;
         token.role = u.role;
         token.teacherId = u.teacherId ?? null;
+        token.sv = u.sessionVersion ?? 0;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        const s = session.user as { id?: string; role?: string; teacherId?: string | null };
+        const s = session.user as { id?: string; role?: string; teacherId?: string | null; sv?: number };
         s.id = token.id as string;
         s.role = token.role as string;
         s.teacherId = (token.teacherId as string | null) ?? null;
+        // Tokens issued before session versions existed carry none; they count as version 0.
+        s.sv = typeof token.sv === "number" ? token.sv : 0;
       }
       return session;
     },

@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { X, GraduationCap, Sparkles, RefreshCw, DollarSign, Globe, BookOpen, Lock } from "lucide-react";
-import { TIMEZONES } from "@/lib/timezones";
+import { X, GraduationCap, Sparkles, RefreshCw, DollarSign, BookOpen, Lock, ClipboardList } from "lucide-react";
 import { TEACHER_PRESET_GRADES } from "@/lib/grades";
 import { COUNTRIES, findCountry } from "@/lib/constants";
 import { RATE_LIMITS, RATE_TIERS, RateTierKey, defaultTierRate, parseGradeRates } from "@/lib/rates";
 import { checkInternationalPhone, isValidEmail } from "@/lib/validation";
 import { ClientApiError, apiRequest, errorMessage, newIdempotencyKey } from "@/lib/client-api";
 import { ModalShell } from "@/components/ui/ModalShell";
+import { DAY_KEYS, DEVICE_OPTIONS, SYLLABUS_OPTIONS } from "@/lib/trainer-profile";
 import { FieldError, FormErrorSummary, focusField, inputClass } from "@/components/ui/FormFeedback";
 
 const PRESET_SUBJECTS = [
@@ -29,7 +29,11 @@ const FIELD_LABELS: Record<string, string> = {
   email: "Email",
   phone: "Phone / WhatsApp",
   country: "Country",
-  timeZone: "Time zone",
+  location: "Place",
+  qualification: "Qualification",
+  whatsapp: "WhatsApp",
+  availableTimes: "Available times",
+  notes: "Internal notes",
   subjects: "Subjects",
   grades: "Grades",
   defaultRate: "Base rate",
@@ -48,6 +52,14 @@ export interface TeacherFormRecord {
   active: boolean;
   defaultRate: number | null;
   gradeRates: string | null;
+  location?: string | null;
+  qualification?: string | null;
+  syllabus?: string | null;
+  devices?: string | null;
+  availableDays?: string | null;
+  availableTimes?: string | null;
+  whatsapp?: string | null;
+  notes?: string | null;
 }
 
 interface TeacherFormModalProps {
@@ -82,8 +94,15 @@ export function TeacherFormModal({
   const [email, setEmail] = useState(teacher?.email ?? "");
   const [phone, setPhone] = useState(teacher?.phone ?? "+91 ");
   const [country, setCountry] = useState(teacher?.country ?? "India");
-  const [timeZone, setTimeZone] = useState(teacher?.timeZone ?? "Asia/Kolkata");
   const [active, setActive] = useState(teacher?.active ?? true);
+  const [location, setLocation] = useState(teacher?.location ?? "");
+  const [qualification, setQualification] = useState(teacher?.qualification ?? "");
+  const [syllabus, setSyllabus] = useState<string[]>(splitList(teacher?.syllabus));
+  const [devices, setDevices] = useState<string[]>(splitList(teacher?.devices));
+  const [days, setDays] = useState<string[]>(splitList(teacher?.availableDays));
+  const [availableTimes, setAvailableTimes] = useState(teacher?.availableTimes ?? "");
+  const [whatsapp, setWhatsapp] = useState(teacher?.whatsapp ?? "");
+  const [notes, setNotes] = useState(teacher?.notes ?? "");
 
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>(
     teacher ? splitList(teacher.subjects) : ["Mathematics"]
@@ -140,7 +159,6 @@ export function TeacherFormModal({
     setCountry(value);
     const option = findCountry(value);
     if (!option) return;
-    setTimeZone(option.timeZone);
     // Only swap the dialling prefix if no real number has been typed yet.
     const digits = phone.replace(/\D/g, "");
     const isPrefixOnly = !digits || COUNTRIES.some((c) => c.dialCode.replace("+", "") === digits);
@@ -191,6 +209,10 @@ export function TeacherFormModal({
     if (!phone.replace(/\D/g, "") || !phoneCheck.ok) {
       errors.phone = phoneCheck.error || "Enter the phone / WhatsApp number with country code.";
     }
+    if (whatsapp.replace(/\D/g, "").length > 3) {
+      const wa = checkInternationalPhone(whatsapp);
+      if (!wa.ok) errors.whatsapp = wa.error || "Enter the WhatsApp number with country code.";
+    }
     if (selectedSubjects.length === 0) errors.subjects = "Select or add at least one subject.";
     if (selectedGrades.length === 0) errors.grades = "Select at least one supported grade.";
     if (showRates) {
@@ -227,7 +249,14 @@ export function TeacherFormModal({
       subjects: selectedSubjects,
       grades: selectedGrades,
       country,
-      timeZone,
+      location: location.trim() || null,
+      qualification: qualification.trim() || null,
+      syllabus,
+      devices,
+      availableDays: days,
+      availableTimes: availableTimes.trim() || null,
+      whatsapp: whatsapp.trim() || null,
+      notes: notes.trim() || null,
     };
     if (isEdit) payload.active = active;
     if (showRates) {
@@ -280,7 +309,7 @@ export function TeacherFormModal({
           </div>
           <div>
             <h2 id={titleId} className="text-lg font-bold text-white">
-              {isEdit ? "Edit Trainer Profile" : "Register New Trainer / Tutor"}
+              {isEdit ? "Edit trainer" : "Add a trainer"}
             </h2>
             <p className="text-xs text-slate-400">
               {isEdit
@@ -312,7 +341,7 @@ export function TeacherFormModal({
           <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs">
             <div>
               <span className="font-bold text-white block">Trainer status</span>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-xs text-slate-400">
                 {active ? "Active — can be assigned to students and sessions" : "Inactive — hidden from new assignments; history kept"}
               </span>
             </div>
@@ -339,7 +368,7 @@ export function TeacherFormModal({
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label htmlFor="teacher-name" className="text-[11px] font-semibold text-slate-300 block mb-1">
+              <label htmlFor="teacher-name" className="text-xs font-semibold text-slate-300 block mb-1">
                 Full Name & Title <span className="text-rose-400">*</span>
               </label>
               <input
@@ -358,7 +387,7 @@ export function TeacherFormModal({
             </div>
 
             <div>
-              <label htmlFor="teacher-email" className="text-[11px] font-semibold text-slate-300 block mb-1">
+              <label htmlFor="teacher-email" className="text-xs font-semibold text-slate-300 block mb-1">
                 Email Address <span className="text-rose-400">*</span>
               </label>
               <input
@@ -378,7 +407,7 @@ export function TeacherFormModal({
             </div>
 
             <div>
-              <label htmlFor="teacher-phone" className="text-[11px] font-semibold text-slate-300 block mb-1">
+              <label htmlFor="teacher-phone" className="text-xs font-semibold text-slate-300 block mb-1">
                 Phone / WhatsApp (with country code) <span className="text-rose-400">*</span>
               </label>
               <input
@@ -398,7 +427,7 @@ export function TeacherFormModal({
             </div>
 
             <div>
-              <label htmlFor="teacher-country" className="text-[11px] font-semibold text-slate-300 block mb-1">
+              <label htmlFor="teacher-country" className="text-xs font-semibold text-slate-300 block mb-1">
                 Country of Residence
               </label>
               <select
@@ -417,26 +446,7 @@ export function TeacherFormModal({
               <FieldError message={err("country")} />
             </div>
 
-            <div className="sm:col-span-2">
-              <label htmlFor="teacher-tz" className="text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                <Globe className="h-3 w-3 text-teal-400" />
-                Time Zone for Scheduling
-              </label>
-              <select
-                id="teacher-tz"
-                data-field="timeZone"
-                value={timeZone}
-                onChange={(e) => setTimeZone(e.target.value)}
-                className={inputClass(inputBase, !!err("timeZone"))}
-              >
-                {TIMEZONES.map((tz) => (
-                  <option key={tz.value} value={tz.value} className="bg-slate-900">
-                    {tz.label} ({tz.offset}) - {tz.region}
-                  </option>
-                ))}
-              </select>
-              <FieldError message={err("timeZone")} />
-            </div>
+            <p className="sm:col-span-2 text-sm text-slate-300">All class times are scheduled and shown in IST.</p>
           </div>
         </div>
 
@@ -527,14 +537,14 @@ export function TeacherFormModal({
               <DollarSign className="h-3.5 w-3.5 text-teal-400" />
               4. Hourly Payout Rates (INR / Hour)
             </h3>
-            {showRates && <span className="text-[10px] text-slate-500 text-right">Snapshot taken when attendance is marked</span>}
+            {showRates && <span className="text-xs text-slate-400 text-right">Snapshot taken when attendance is marked</span>}
           </div>
 
           {showRates ? (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="teacher-base-rate" className="text-[11px] font-semibold text-slate-300 block mb-1">
+                  <label htmlFor="teacher-base-rate" className="text-xs font-semibold text-slate-300 block mb-1">
                     Default Base Rate (₹ / hr) <span className="text-rose-400">*</span>
                   </label>
                   <div className="relative">
@@ -557,18 +567,18 @@ export function TeacherFormModal({
               </div>
 
               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
-                <div className="flex justify-between items-center gap-2 text-[11px] font-bold text-white">
+                <div className="flex justify-between items-center gap-2 text-xs font-bold text-white">
                   <span>Standard-Wise Hourly Pay Rates</span>
-                  <span className="text-[10px] text-teal-400 font-normal text-right">Untouched tiers follow the base rate</span>
+                  <span className="text-xs text-teal-400 font-normal text-right">Untouched tiers follow the base rate</span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                   {RATE_TIERS.map((tier) => (
                     <div key={tier.key} className="rounded-xl bg-slate-900 p-2.5 border border-slate-800">
-                      <label htmlFor={`tier-${tier.key}`} className="text-[10px] text-slate-400 block font-medium">
+                      <label htmlFor={`tier-${tier.key}`} className="text-xs text-slate-400 block font-medium">
                         {tier.label}
                       </label>
                       <div className="flex items-center gap-1 mt-1">
-                        <span className="text-xs font-bold text-slate-500">₹</span>
+                        <span className="text-xs font-bold text-slate-400">₹</span>
                         <input
                           id={`tier-${tier.key}`}
                           data-field={`gradeRates.${tier.key}`}
@@ -587,15 +597,75 @@ export function TeacherFormModal({
               </div>
             </>
           ) : (
-            <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-3 text-[11px] text-slate-400">
-              <Lock className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+            <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-400">
+              <Lock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
               {ratesHiddenNote}
             </div>
           )}
         </div>
 
+        {/* Section 5: More details (optional) */}
+        <div className="space-y-3 pt-3 border-t border-slate-800">
+          <h3 className="text-sm font-bold text-teal-300 flex items-center gap-1.5">
+            <ClipboardList className="h-4 w-4" aria-hidden="true" />
+            5. More details (optional)
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="teacher-location" className="text-sm font-semibold text-slate-200 block mb-1">Place</label>
+              <input id="teacher-location" data-field="location" type="text" value={location} onChange={(e) => setLocation(e.target.value)} className={inputClass(inputBase, !!err("location"))} />
+              <FieldError message={err("location")} />
+            </div>
+            <div>
+              <label htmlFor="teacher-qualification" className="text-sm font-semibold text-slate-200 block mb-1">Qualification</label>
+              <input id="teacher-qualification" data-field="qualification" type="text" value={qualification} onChange={(e) => setQualification(e.target.value)} className={inputClass(inputBase, !!err("qualification"))} />
+              <FieldError message={err("qualification")} />
+            </div>
+            <div>
+              <label htmlFor="teacher-whatsapp" className="text-sm font-semibold text-slate-200 block mb-1">WhatsApp (only if different from the phone)</label>
+              <input id="teacher-whatsapp" data-field="whatsapp" type="tel" inputMode="tel" value={whatsapp} onChange={(e) => { setWhatsapp(e.target.value); clearFieldError("whatsapp"); }} placeholder="+91 98470 12345" className={`${inputClass(inputBase, !!err("whatsapp"))} font-mono`} />
+              <FieldError message={err("whatsapp")} />
+            </div>
+            <div>
+              <label htmlFor="teacher-times" className="text-sm font-semibold text-slate-200 block mb-1">Available times (IST)</label>
+              <input id="teacher-times" data-field="availableTimes" type="text" value={availableTimes} onChange={(e) => setAvailableTimes(e.target.value)} placeholder="e.g. 6 PM – 10 PM" className={inputClass(inputBase, !!err("availableTimes"))} />
+              <FieldError message={err("availableTimes")} />
+            </div>
+          </div>
+          {([
+            ["Available days", DAY_KEYS as readonly string[], days, setDays],
+            ["Syllabus / boards", SYLLABUS_OPTIONS, syllabus, setSyllabus],
+            ["Teaches on", DEVICE_OPTIONS, devices, setDevices],
+          ] as const).map(([label, options, selected, setSelected]) => (
+            <fieldset key={label}>
+              <legend className="text-sm font-semibold text-slate-200 mb-1">{label}</legend>
+              <div className="flex flex-wrap gap-2">
+                {Array.from(new Set([...options, ...selected])).map((opt) => {
+                  const on = selected.includes(opt);
+                  return (
+                    <button
+                      type="button"
+                      key={opt}
+                      aria-pressed={on}
+                      onClick={() => setSelected(on ? selected.filter((v) => v !== opt) : [...selected, opt])}
+                      className={`rounded-xl px-3 min-h-[44px] text-sm font-medium border ${on ? "bg-teal-500/20 text-teal-200 border-teal-400/50" : "bg-slate-900 text-slate-300 border-slate-600 hover:bg-slate-800"}`}
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ))}
+          <div>
+            <label htmlFor="teacher-notes" className="text-sm font-semibold text-slate-200 block mb-1">Internal notes (not shown to the trainer)</label>
+            <textarea id="teacher-notes" data-field="notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass(inputBase, !!err("notes"))} />
+            <FieldError message={err("notes")} />
+          </div>
+        </div>
+
         {/* Actions: sticky so they stay reachable on long forms / small screens */}
-        <div className="sticky bottom-0 -mx-5 sm:-mx-7 px-5 sm:px-7 py-3 bg-[#0c1220]/95 backdrop-blur border-t border-slate-800 flex items-center justify-end gap-3">
+        <div className="sticky bottom-0 -mx-5 sm:-mx-7 px-5 sm:px-7 py-3 bg-[#0c1220]/95 border-t border-slate-800 flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
@@ -607,7 +677,7 @@ export function TeacherFormModal({
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-5 py-2.5 min-h-[44px] text-xs font-bold text-slate-950 hover:brightness-110 shadow-lg shadow-teal-500/20 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-teal-300 disabled:opacity-50 transition-all active:scale-95"
+            className="inline-flex items-center gap-2 rounded-xl bg-teal-400 px-5 py-2.5 min-h-[44px] text-xs font-bold text-slate-950 hover:brightness-110 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-teal-300 disabled:opacity-50 transition-all active:scale-95"
           >
             {submitting ? (
               <>

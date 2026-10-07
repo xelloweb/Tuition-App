@@ -2,13 +2,15 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { KeyRound, RefreshCw, CheckCircle2, UserRound } from "lucide-react";
 import { apiRequest, ClientApiError, errorMessage } from "@/lib/client-api";
 import { FieldError, FormErrorSummary, inputClass } from "@/components/ui/FormFeedback";
+import { MIN_PASSWORD_LENGTH, newPasswordProblem } from "@/lib/password-rules";
 
 const inputBase = "w-full rounded-xl border bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-hidden";
 const buttonClass =
-  "w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-4 py-2.5 min-h-[44px] text-sm font-bold text-slate-950 disabled:opacity-50";
+  "w-full inline-flex items-center justify-center gap-2 rounded-xl bg-teal-400 px-4 py-2.5 min-h-[44px] text-sm font-bold text-slate-950 disabled:opacity-50";
 
 function DisplayNameForm({ initialName }: { initialName: string }) {
   const router = useRouter();
@@ -42,7 +44,7 @@ function DisplayNameForm({ initialName }: { initialName: string }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="rounded-3xl border border-slate-800/80 bg-slate-900/60 p-5 sm:p-6 space-y-4 text-xs">
+    <form onSubmit={handleSubmit} noValidate className="rounded-2xl border border-slate-800/80 bg-slate-900 p-5 sm:p-6 space-y-4 text-xs">
       <h3 className="text-sm font-bold text-white flex items-center gap-2">
         <UserRound className="h-4 w-4 text-teal-400" /> Your name
       </h3>
@@ -87,7 +89,8 @@ function ChangePasswordForm() {
     e.preventDefault();
     if (submittingRef.current) return;
     const errors: Record<string, string> = {};
-    if (newPassword.length < 10) errors.newPassword = "At least 10 characters.";
+    const problem = newPasswordProblem(newPassword);
+    if (problem) errors.newPassword = problem;
     if (newPassword !== confirm) errors.confirm = "Passwords do not match.";
     setFieldErrors(errors);
     setDone("");
@@ -107,6 +110,9 @@ function ChangePasswordForm() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirm("");
+      // The server ended every session (this one too); go to the login page with a notice.
+      await signOut({ callbackUrl: "/login?changed=password" });
+      return;
     } catch (err) {
       setFieldErrors(err instanceof ClientApiError ? err.fieldErrors : {});
       setFormError(errorMessage(err, "Could not change the password."));
@@ -117,7 +123,7 @@ function ChangePasswordForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="rounded-3xl border border-slate-800/80 bg-slate-900/60 p-5 sm:p-6 space-y-4 text-xs">
+    <form onSubmit={handleSubmit} noValidate className="rounded-2xl border border-slate-800/80 bg-slate-900 p-5 sm:p-6 space-y-4 text-xs">
       <h3 className="text-sm font-bold text-white flex items-center gap-2">
         <KeyRound className="h-4 w-4 text-teal-400" /> Change password
       </h3>
@@ -134,7 +140,7 @@ function ChangePasswordForm() {
         <FieldError message={fieldErrors.currentPassword} />
       </div>
       <div>
-        <label htmlFor="new-password" className="block font-semibold text-slate-300 mb-1">New password (at least 10 characters)</label>
+        <label htmlFor="new-password" className="block font-semibold text-slate-300 mb-1">New password (at least {MIN_PASSWORD_LENGTH} characters)</label>
         <input id="new-password" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={inputClass(inputBase, !!fieldErrors.newPassword)} />
         <FieldError message={fieldErrors.newPassword} />
       </div>
@@ -159,7 +165,7 @@ export function AccountSettings({ name, email }: { name: string; email: string }
           <UserRound className="h-4 w-4" />
           <span>My Account</span>
         </div>
-        <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white mt-1">My account</h2>
+        <h1 className="text-2xl font-bold tracking-tight text-white mt-1">My account</h1>
         <p className="text-xs text-slate-400 mt-0.5 break-all">Signed in as {email}</p>
       </div>
       <DisplayNameForm initialName={name} />

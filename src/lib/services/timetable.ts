@@ -27,7 +27,6 @@ import {
   weekdayOfLocalDate,
   zonedTimeToUtc,
 } from "../zoned-time";
-import { isValidTimeZone } from "../validation";
 import { BUSINESS_TIME_ZONE } from "../constants";
 
 type Tx = Prisma.TransactionClient;
@@ -124,6 +123,8 @@ export interface TimetablePlan {
   summary: { added: number; edited: number; removed: number; unchanged: number; released: number; toBook: number };
 }
 
+/** IST is the business zone; older slots saved in another zone keep their zone name. */
+const zoneLabel = (zone: string) => (zone === BUSINESS_TIME_ZONE ? "IST" : `(${zone} time)`);
 const dayName = (weekday: number) => WEEKDAYS[weekday]?.long ?? `Day ${weekday}`;
 const slotLabel = (s: { weekday: number; startMinutes: number; endMinutes: number }) =>
   `${dayName(s.weekday)} ${formatMinutes(s.startMinutes)}–${formatMinutes(s.endMinutes)}`;
@@ -202,11 +203,14 @@ export async function buildTimetablePlan(
   const errors: Record<string, string> = {};
 
   // ---- time zone ----
-  let timeZone = currentSlots[0]?.timeZone ?? student.timeZone ?? BUSINESS_TIME_ZONE;
+  // India time only: saved timetables are in IST. Slots stored earlier in another
+  // zone keep their zone (and real times) until someone edits the timetable.
+  let timeZone = currentSlots[0]?.timeZone ?? BUSINESS_TIME_ZONE;
   if (input) {
-    if (typeof input.timeZone === "string" && input.timeZone.trim()) {
-      if (isValidTimeZone(input.timeZone.trim())) timeZone = input.timeZone.trim();
-      else errors.timeZone = "Choose a valid time zone.";
+    timeZone = BUSINESS_TIME_ZONE;
+    const requested = typeof input.timeZone === "string" ? input.timeZone.trim() : "";
+    if (requested && requested !== BUSINESS_TIME_ZONE) {
+      errors.timeZone = "Timetables use IST. Refresh the page and enter the times in IST.";
     }
   }
 
@@ -358,7 +362,7 @@ export async function buildTimetablePlan(
       for (const other of others.filter((o) => o.teacherId === s.teacherId)) {
         const otherOcc = occurrencesBetween(other, today, CONFLICT_HORIZON_DAYS);
         if (horizon[i].some((x) => otherOcc.some((y) => overlaps(x.start, x.end, y.start, y.end)))) {
-          errors[field] = `${s.teacherName} already teaches ${other.enrolment.student.name} (${other.enrolment.subject.name}) on ${slotLabel(other)} ${other.timeZone}.`;
+          errors[field] = `${s.teacherName} already teaches ${other.enrolment.student.name} (${other.enrolment.subject.name}) on ${slotLabel(other)} ${zoneLabel(other.timeZone)}.`;
           break;
         }
       }
@@ -733,6 +737,26 @@ async function runAtomically(studentId: string, input: { timeZone?: unknown; slo
   }
 }
 
+/**
+ * Applies a weekly timetable inside a caller's transaction. Admission uses this so
+ * the student, enrolments, package, weekly slots and the first bookings are saved
+ * together or not at all. Throws the same per-slot validation errors as saveTimetable.
+ */
+export async function applyTimetableInTransaction(
+  tx: Tx,
+  studentId: string,
+  input: { timeZone?: unknown; slots?: unknown },
+  user: CurrentUser,
+  action = "ADMISSION_TIMETABLE",
+  now: Date = new Date()
+): Promise<TimetablePlan> {
+  const packageIds = (await tx.studentPackage.findMany({ where: { studentId, status: "ACTIVE" }, select: { id: true } })).map((p) => p.id);
+  await lockPackages(tx, packageIds);
+  const plan = await buildTimetablePlan(tx, studentId, input, now);
+  await executePlan(tx, studentId, plan, user, now, action);
+  return plan;
+}
+
 export async function previewTimetableChange(studentId: string, input: { timeZone?: unknown; slots?: unknown }) {
   return buildTimetablePlan(prisma, studentId, input);
 }
@@ -794,7 +818,7 @@ export async function getTimetableView(studentId: string) {
     orderBy: { scheduledStartTimeUtc: "asc" },
   });
   return {
-    timeZone: currentSlots[0]?.timeZone ?? student.timeZone,
+    timeZone: currentSlots[0]?.timeZone ?? BUSINESS_TIME_ZONE,
     studentTimeZone: student.timeZone,
     studentStatus: student.status,
     windowDays: TIMETABLE_WINDOW_DAYS,

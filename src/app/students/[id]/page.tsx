@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import {
   getCurrentUser,
@@ -12,7 +11,6 @@ import { calculatePackageBalances } from "@/lib/package-calculations";
 import { calculateStudentFinancialSummary } from "@/lib/billing";
 import { getTimetableView } from "@/lib/services/timetable";
 import { teacherPublicSelect } from "@/lib/services/students";
-import { isValidTimeZone } from "@/lib/validation";
 import { AccessDenied } from "@/components/ui/AccessDenied";
 import { StudentDetailClient } from "./StudentDetailClient";
 
@@ -82,8 +80,6 @@ export default async function StudentDetailPage(props: { params: Promise<{ id: s
     }),
   ]);
 
-  const cookieTz = (await cookies()).get("xello_display_tz")?.value;
-  const viewerTimeZone = cookieTz && isValidTimeZone(decodeURIComponent(cookieTz)) ? decodeURIComponent(cookieTz) : "Asia/Kolkata";
 
   // Teachers see the profile academically: no billing, follow-ups or package prices.
   return (
@@ -96,7 +92,6 @@ export default async function StudentDetailPage(props: { params: Promise<{ id: s
       availableTeachers={teachers}
       activity={activity.map((a) => ({ id: a.id, action: a.action, actorName: a.actorName, createdAt: a.createdAt.toISOString(), details: a.details }))}
       ledger={ledger.map((l) => ({ id: l.id, eventType: l.eventType, creditsDelta: l.creditsDelta, reason: l.reason, actorName: l.actorName, createdAt: l.createdAt.toISOString() }))}
-      viewerTimeZone={viewerTimeZone}
       permissions={{
         canManage,
         canSchedule: canScheduleSessions(user.role),

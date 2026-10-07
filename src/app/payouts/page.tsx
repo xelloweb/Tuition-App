@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, canApprovePayouts } from "@/lib/auth";
+import { getCurrentUser, canApprovePayouts, isUnlinkedTrainer, UNLINKED_TRAINER_MESSAGE } from "@/lib/auth";
 import { AccessDenied } from "@/components/ui/AccessDenied";
 import { PayoutsClient } from "./PayoutsClient";
 
@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PayoutsPage() {
   const user = await getCurrentUser();
+  if (isUnlinkedTrainer(user)) return <AccessDenied message={UNLINKED_TRAINER_MESSAGE} />;
   if (user.role === "COORDINATOR") {
     return <AccessDenied message="Trainer payouts are available to the owner, Accounts staff and each trainer for their own earnings." />;
   }

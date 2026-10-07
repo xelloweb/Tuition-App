@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isUnlinkedTrainer, UNLINKED_TRAINER_MESSAGE } from "@/lib/auth";
 import { AccessDenied } from "@/components/ui/AccessDenied";
 import { ProgressClient } from "./ProgressClient";
 
 export default async function ProgressPage() {
   const user = await getCurrentUser();
+  if (isUnlinkedTrainer(user)) return <AccessDenied message={UNLINKED_TRAINER_MESSAGE} />;
   if (user.role === "ACCOUNTS") {
     return <AccessDenied message="Progress reports are available to the owner, coordinators and trainers." />;
   }

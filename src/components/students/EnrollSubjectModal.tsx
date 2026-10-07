@@ -105,7 +105,7 @@ export function EnrollSubjectModal({
                 <button
                   type="button"
                   onClick={() => setQuickSubjectModalOpen(true)}
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-400 hover:text-teal-300 transition-colors min-h-[32px]"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-teal-400 hover:text-teal-300 transition-colors min-h-[32px]"
                 >
                   <BookPlus className="h-3.5 w-3.5" />
                   Add Custom Subject
@@ -154,7 +154,7 @@ export function EnrollSubjectModal({
             </select>
             <FieldError message={fieldErrors.teacherId} />
             {activeTeachers.length === 0 && (
-              <p className="mt-1 text-[11px] text-amber-300">No active trainers yet — you can enrol now and assign a trainer later.</p>
+              <p className="mt-1 text-xs text-amber-300">No active trainers yet — you can enrol now and assign a trainer later.</p>
             )}
           </div>
 
@@ -184,7 +184,7 @@ export function EnrollSubjectModal({
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-4 py-2 min-h-[44px] text-xs font-bold text-slate-950 hover:brightness-110 shadow-lg shadow-teal-500/20 disabled:opacity-50 transition-all active:scale-95"
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-400 px-4 py-2 min-h-[44px] text-xs font-bold text-slate-950 hover:brightness-110 disabled:opacity-50 transition-all active:scale-95"
             >
               {loading ? (
                 <>

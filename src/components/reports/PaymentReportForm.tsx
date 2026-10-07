@@ -19,14 +19,14 @@ export function PaymentReportForm() {
       <div className="font-bold text-white text-sm">
         Payments Report (Date to Date)
       </div>
-      <p className="text-slate-400 text-[11px] leading-relaxed">
+      <p className="text-slate-400 text-xs leading-relaxed">
         Export all received payments within a specific date range.
       </p>
       
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1 space-y-1">
-          <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Start Date</label>
-          <input
+          <label htmlFor="paymentreportform-field-1" className="text-xs uppercase tracking-wider text-slate-400 font-bold">Start Date</label>
+          <input id="paymentreportform-field-1"
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
@@ -34,8 +34,8 @@ export function PaymentReportForm() {
           />
         </div>
         <div className="flex-1 space-y-1">
-          <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">End Date</label>
-          <input
+          <label htmlFor="paymentreportform-field-2" className="text-xs uppercase tracking-wider text-slate-400 font-bold">End Date</label>
+          <input id="paymentreportform-field-2"
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}

@@ -1,143 +1,94 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
-import { Settings, Shield, Clock, Database, CheckCircle2, History } from "lucide-react";
+import { canManageUsers, getCurrentUser } from "@/lib/auth";
 import { formatInTimeZone } from "@/lib/timezones";
 import { AccessDenied } from "@/components/ui/AccessDenied";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export const dynamic = "force-dynamic";
+
+const AUDIT_LIMIT = 50;
+
+/** Rules the application applies today. New packages get these defaults; they are not editable here. */
+const RULES: { label: string; value: string }[] = [
+  { label: "Time zone", value: "All dates and times are India Standard Time (IST, UTC+05:30) for everyone, including GCC families." },
+  { label: "Class length", value: "Packages created during admission use 60-minute classes; weekly slots must match the package's class length." },
+  { label: "Completed class", value: "Uses 1 class from the student's package for that subject." },
+  { label: "Student no-show", value: "Uses 1 class (default for new packages)." },
+  { label: "Cancellation", value: "Free with at least 4 hours' notice; later cancellations follow the no-show rule (default for new packages)." },
+  { label: "Trainer absence", value: "Never uses the student's classes. Arrange a replacement class." },
+  { label: "Weekly timetable", value: "Books classes up to 28 days ahead, only while the package has unused classes for that subject." },
+  { label: "Overdue", value: "An invoice is overdue only after its due date has passed in IST; payments count only once verified." },
+];
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (user.role !== "OWNER" && user.role !== "COORDINATOR") {
-    return <AccessDenied message="Settings and the audit trail are available to the owner and academic coordinators." />;
+    return <AccessDenied message="Settings and the audit log are available to the owner and academic coordinators." />;
   }
 
-  const auditLogs = await prisma.auditLog.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
+  const auditLogs = await prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: AUDIT_LIMIT });
+  const owner = canManageUsers(user.role);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <div className="flex items-center gap-2 text-xs font-semibold text-teal-400">
-          <Settings className="h-4 w-4" />
-          <span>System Policies & Compliance</span>
-        </div>
-        <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
-          Settings & Operational Audit Trail
-        </h2>
-        <p className="text-xs text-slate-400 mt-0.5">
-          Configure business rules, cancellation policies, and review the system audit log.
-        </p>
-      </div>
+      <PageHeader title="Settings & audit log" description="The rules the app applies, and a record of recent changes." />
 
-      {/* Policies Card */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-6 shadow-xl space-y-4">
-          <h3 className="font-bold text-sm text-white border-b border-slate-800 pb-3 flex items-center gap-2">
-            <Clock className="h-4 w-4 text-teal-400" />
-            Standard Tuition Policies
-          </h3>
-          <div className="space-y-3.5 text-xs">
-            <div className="flex justify-between items-center py-1">
-              <div>
-                <span className="font-bold text-slate-200">Cancellation Notice Period</span>
-                <p className="text-slate-400 text-[11px]">Minimum advance notice to cancel without credit charge</p>
-              </div>
-              <span className="rounded-xl bg-teal-500/10 border border-teal-500/20 px-3 py-1 font-bold text-teal-300">
-                4 Hours
-              </span>
+      <section aria-labelledby="rules-heading" className="rounded-card border border-line bg-surface p-4 sm:p-5">
+        <h2 id="rules-heading" className="text-lg font-semibold text-ink">Class and billing rules</h2>
+        <p className="text-sm text-ink-muted">These are built into the app. Ask your developer to change them.</p>
+        <dl className="mt-3 divide-y divide-line">
+          {RULES.map((r) => (
+            <div key={r.label} className="grid gap-1 py-2.5 sm:grid-cols-[12rem_1fr]">
+              <dt className="text-sm font-semibold text-ink">{r.label}</dt>
+              <dd className="text-sm text-ink-muted">{r.value}</dd>
             </div>
+          ))}
+        </dl>
+      </section>
 
-            <div className="flex justify-between items-center py-1">
-              <div>
-                <span className="font-bold text-slate-200">Teacher Absence Policy</span>
-                <p className="text-slate-400 text-[11px]">Teacher absence never deducts student package balance</p>
-              </div>
-              <span className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 font-bold text-emerald-300">
-                Enforced (Zero Charge)
-              </span>
-            </div>
+      {owner && (
+        <section aria-labelledby="admin-heading" className="rounded-card border border-line bg-surface p-4 sm:p-5">
+          <h2 id="admin-heading" className="text-lg font-semibold text-ink">Logins and backups</h2>
+          <ul className="mt-2 space-y-2 text-sm text-ink-muted">
+            <li>
+              Add staff logins, switch logins off and create password links on{" "}
+              <Link href="/users" className="font-semibold text-brand-text underline">Users &amp; logins</Link>.
+            </li>
+            <li>
+              All records live in one database file on the hosting server (folder <span className="font-mono">xello-data</span>). Download a copy
+              regularly from Hostinger&apos;s File Manager and keep it somewhere private.
+            </li>
+          </ul>
+        </section>
+      )}
 
-            <div className="flex justify-between items-center py-1">
-              <div>
-                <span className="font-bold text-slate-200">Student No-Show Policy</span>
-                <p className="text-slate-400 text-[11px]">Unexcused absence deducts 1 credit per package rule</p>
-              </div>
-              <span className="rounded-xl bg-slate-800 border border-slate-700/60 px-3 py-1 font-bold text-slate-300">
-                Chargeable
-              </span>
-            </div>
-          </div>
+      <section aria-labelledby="audit-heading" className="rounded-card border border-line bg-surface">
+        <div className="border-b border-line p-4">
+          <h2 id="audit-heading" className="text-lg font-semibold text-ink">Audit log</h2>
+          <p className="text-sm text-ink-muted">The latest {AUDIT_LIMIT} recorded changes, newest first (IST).</p>
         </div>
-
-        {/* Database & Backup Instructions */}
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-6 shadow-xl space-y-4">
-          <h3 className="font-bold text-sm text-white border-b border-slate-800 pb-3 flex items-center gap-2">
-            <Database className="h-4 w-4 text-teal-400" />
-            Database & Backup Readiness
-          </h3>
-          <div className="space-y-2 text-xs text-slate-300 leading-relaxed">
-            <p>
-              <strong className="text-white">Local Development:</strong> SQLite schema synced with <code className="text-teal-300">prisma/schema.prisma</code> at <code className="text-teal-300">dev.db</code>.
-            </p>
-            <p>
-              <strong className="text-white">Production / Supabase:</strong> Configure <code className="text-teal-300">DATABASE_URL</code> with PostgreSQL pooling URL and <code className="text-teal-300">DIRECT_URL</code> for migrations.
-            </p>
-            <p>
-              <strong className="text-white">Snapshot Backup Command:</strong>
-              <code className="block bg-slate-950/80 p-3 rounded-xl mt-1.5 font-mono text-[11px] text-teal-300 border border-slate-800">
-                sqlite3 dev.db &quot;.backup &apos;backup-$(date +%Y%m%d).db&apos;&quot;
-              </code>
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* System Audit Log Table */}
-      <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl shadow-xl overflow-hidden">
-        <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-            <History className="h-4 w-4 text-teal-400" />
-            System Audit Log (Last 50 Events)
-          </span>
-          <span className="text-xs text-slate-500">Cryptographically ordered</span>
-        </div>
-
-        <div className="divide-y divide-slate-800/80 text-xs">
-          {auditLogs.length === 0 ? (
-            <div className="py-12 text-center text-xs text-slate-500">
-              No audit records logged yet.
-            </div>
-          ) : (
-            auditLogs.map((log) => (
-              <div key={log.id} className="p-4 sm:p-5 space-y-2 hover:bg-slate-800/30 transition-colors">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-lg bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-[10px] font-bold text-teal-300">
-                      {log.entityType}
-                    </span>
-                    <span className="font-bold text-white">
-                      {log.action}
-                    </span>
-                    <span className="text-slate-400">
-                      by <strong className="text-slate-200">{log.actorName}</strong> ({log.actorRole})
-                    </span>
-                  </div>
-                  <span className="text-slate-500 text-[11px] font-mono">
-                    {formatInTimeZone(log.createdAt, "Asia/Kolkata")} IST
-                  </span>
+        {auditLogs.length === 0 ? (
+          <p className="p-4 text-sm text-ink-muted">Nothing recorded yet.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {auditLogs.map((log) => (
+              <li key={log.id} className="space-y-1.5 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <p className="text-ink">
+                    <span className="font-semibold">{log.action.replace(/_/g, " ").toLowerCase()}</span>
+                    <span className="text-ink-muted"> · {log.entityType.toLowerCase()} · by {log.actorName} ({log.actorRole.toLowerCase()})</span>
+                  </p>
+                  <p className="font-mono text-sm text-ink-subtle">{formatInTimeZone(log.createdAt)} IST</p>
                 </div>
-                <div className="font-mono text-[11px] text-slate-400 bg-slate-950/80 p-3 rounded-xl border border-slate-800 overflow-x-auto">
-                  {log.details}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+                {log.details && (
+                  <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-control border border-line bg-canvas p-2.5 font-mono text-xs text-ink-muted">{log.details}</pre>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

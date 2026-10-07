@@ -1,639 +1,353 @@
 import Link from "next/link";
+import { AlertCircle, ArrowRight, CalendarClock, CheckCircle2, ClipboardList, MessageCircle, Plus, Receipt, UserX } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, canAccessFinancial } from "@/lib/auth";
-import {
-  Users,
-  CalendarCheck2,
-  Clock,
-  AlertTriangle,
-  Receipt,
-  CreditCard,
-  DollarSign,
-  ArrowUpRight,
-  Layers,
-  GraduationCap,
-  Calendar,
-  CheckCircle2,
-  Video,
-  MessageCircle,
-  ShieldAlert,
-  Plus,
-  AlertCircle,
-} from "lucide-react";
-import { formatInTimeZone } from "@/lib/timezones";
-import { daysPastDue, isPastDue } from "@/lib/billing";
+import { canAccessFinancial, canManageStudents, getCurrentUser, isUnlinkedTrainer, UNLINKED_TRAINER_MESSAGE } from "@/lib/auth";
+import { calculateFinancialSummary } from "@/lib/billing";
 import { BUSINESS_TIME_ZONE } from "@/lib/constants";
+import { formatDateOnly, formatTimeOnly } from "@/lib/timezones";
 import { addDaysToLocalDate, localDateInZone, zonedTimeToUtc } from "@/lib/zoned-time";
-import { MetricCard } from "@/components/ui/MetricCard";
-import { StatusBadge } from "@/components/ui/StatusBadge";
-import { EmptyState } from "@/components/ui/EmptyState";
-
 import { TeacherPortal } from "@/components/teachers/TeacherPortal";
+import { AccessDenied } from "@/components/ui/AccessDenied";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+
+export const dynamic = "force-dynamic";
+
+const LOW_BALANCE = 3;
+const LIST_LIMIT = 8;
+const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+const whatsappLink = (number: string, text: string) => `https://wa.me/${number.replace(/\D/g, "")}?text=${encodeURIComponent(text)}`;
+
+function AttentionCard({ href, count, title, detail, tone = "warning" }: { href: string; count: number; title: string; detail: string; tone?: "warning" | "danger" | "info" }) {
+  const toneClass = tone === "danger" ? "border-rose-400/50" : tone === "info" ? "border-sky-300/40" : "border-amber-300/50";
+  return (
+    <li>
+      <Link href={href} className={`flex h-full flex-col justify-between gap-2 rounded-card border bg-surface p-4 hover:bg-raised ${toneClass}`}>
+        <span className="text-sm font-semibold text-ink">{title}</span>
+        <span className="text-2xl font-bold tabular-nums text-ink">{count}</span>
+        <span className="flex items-end justify-between gap-2 text-sm text-ink-muted">
+          {detail}
+          <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+function RecordList<T>({ id, title, description, items, more, moreHref, render }: { id: string; title: string; description: string; items: T[]; more: number; moreHref: string; render: (item: T) => React.ReactNode }) {
+  if (items.length === 0) return null;
+  return (
+    <section id={id} aria-labelledby={`${id}-heading`} className="scroll-mt-20 rounded-card border border-line bg-surface p-4">
+      <h2 id={`${id}-heading`} className="text-lg font-semibold text-ink">{title}</h2>
+      <p className="text-sm text-ink-muted">{description}</p>
+      <ul className="mt-3 divide-y divide-line">{items.map(render)}</ul>
+      {more > 0 && (
+        <Link href={moreHref} className="mt-2 inline-flex min-h-[44px] items-center gap-1 text-sm font-semibold text-brand-text">
+          {more} more <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </Link>
+      )}
+    </section>
+  );
+}
+
+function MoneyCard({ label, value, detail, href }: { label: string; value: string; detail: string; href: string }) {
+  return (
+    <li>
+      <Link href={href} className="flex h-full flex-col gap-1 rounded-card border border-line bg-surface p-4 hover:bg-raised">
+        <span className="text-sm font-semibold text-ink-muted">{label}</span>
+        <span className="text-xl font-bold tabular-nums text-ink">{value}</span>
+        <span className="text-sm text-ink-subtle">{detail}</span>
+      </Link>
+    </li>
+  );
+}
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const user = await getCurrentUser();
-  const showFinancial = canAccessFinancial(user.role);
-  const isTeacher = user.role === "TEACHER" && Boolean(user.teacherId);
+  if (isUnlinkedTrainer(user)) return <AccessDenied message={UNLINKED_TRAINER_MESSAGE} />;
 
   const sp = await searchParams;
   const now = new Date();
   const todayIst = localDateInZone(now, BUSINESS_TIME_ZONE);
-  const queryDateIst = sp.date || todayIst;
-  
-  const startOfDay = zonedTimeToUtc(queryDateIst, 0, BUSINESS_TIME_ZONE);
-  const endOfDay = new Date(zonedTimeToUtc(addDaysToLocalDate(queryDateIst, 1), 0, BUSINESS_TIME_ZONE).getTime() - 1);
 
-  // Filter queries based on role
-  const sessionWhere: any = {
-    scheduledStartTimeUtc: { gte: startOfDay, lte: endOfDay },
-  };
-  const missingWhere: any = {
-    scheduledStartTimeUtc: { lt: now },
-    status: "SCHEDULED",
-  };
-
-  if (isTeacher && user.teacherId) {
-    sessionWhere.teacherId = user.teacherId;
-    missingWhere.teacherId = user.teacherId;
+  // ---- Trainer workspace: their own classes for the chosen IST date ----
+  if (user.role === "TEACHER") {
+    const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayIst;
+    const from = zonedTimeToUtc(date, 0, BUSINESS_TIME_ZONE);
+    const to = zonedTimeToUtc(addDaysToLocalDate(date, 1), 0, BUSINESS_TIME_ZONE);
+    const [sessions, pendingCount] = await Promise.all([
+      prisma.session.findMany({
+        where: { teacherId: user.teacherId!, scheduledStartTimeUtc: { gte: from, lt: to } },
+        include: { student: true, subject: true, attendance: true },
+        orderBy: { scheduledStartTimeUtc: "asc" },
+      }),
+      prisma.session.count({ where: { teacherId: user.teacherId!, status: "SCHEDULED", scheduledStartTimeUtc: { lt: now } } }),
+    ]);
+    return <TeacherPortal teacherName={user.name} sessions={sessions} currentDate={date} todayDate={todayIst} pendingCount={pendingCount} />;
   }
 
-  // Today's sessions
-  const todaysSessions = await prisma.session.findMany({
-    where: sessionWhere,
-    include: {
-      student: true,
-      teacher: true,
-      subject: true,
-      attendance: true,
-      package: true,
-    },
-    orderBy: { scheduledStartTimeUtc: "asc" },
-  });
+  // ---- Staff workspaces ----
+  const academic = canManageStudents(user.role); // owner, coordinator
+  const financial = canAccessFinancial(user.role); // owner, accounts
+  const dayStart = zonedTimeToUtc(todayIst, 0, BUSINESS_TIME_ZONE);
+  const dayEnd = zonedTimeToUtc(addDaysToLocalDate(todayIst, 1), 0, BUSINESS_TIME_ZONE);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+  const none = Promise.resolve(null);
 
-  if (isTeacher) {
-    return (
-      <TeacherPortal 
-        teacherName={user.name} 
-        sessions={todaysSessions as any} 
-        currentDate={queryDateIst} 
-      />
-    );
+  const [todaysSessions, pendingAttendance, activePackages, drafts, noTrainer, noSchedule, absences, overdueCount, unverifiedPayments, finance] = await Promise.all([
+    academic
+      ? prisma.session.findMany({
+          where: { scheduledStartTimeUtc: { gte: dayStart, lt: dayEnd } },
+          include: { student: true, teacher: true, subject: true },
+          orderBy: { scheduledStartTimeUtc: "asc" },
+        })
+      : none,
+    academic ? prisma.session.count({ where: { status: "SCHEDULED", scheduledStartTimeUtc: { lt: now } } }) : none,
+    academic
+      ? prisma.studentPackage.findMany({ where: { status: "ACTIVE" }, select: { id: true, packageNumber: true, totalCredits: true, studentId: true, student: { select: { name: true } } } })
+      : none,
+    academic ? prisma.admissionDraft.count() : none,
+    academic
+      ? prisma.subjectEnrollment.findMany({
+          where: { status: "ACTIVE", teacherId: null, student: { status: "ACTIVE" } },
+          select: { id: true, studentId: true, student: { select: { name: true } }, subject: { select: { name: true } } },
+          orderBy: { createdAt: "asc" },
+        })
+      : none,
+    academic
+      ? prisma.subjectEnrollment.findMany({
+          where: { status: "ACTIVE", teacherId: { not: null }, student: { status: "ACTIVE" }, timetableSlots: { none: { active: true } } },
+          select: { id: true, studentId: true, student: { select: { name: true } }, subject: { select: { name: true } } },
+          orderBy: { createdAt: "asc" },
+        })
+      : none,
+    academic
+      ? prisma.attendanceRecord.findMany({
+          where: { sessionOutcome: "TEACHER_NO_SHOW", session: { scheduledStartTimeUtc: { gte: thirtyDaysAgo } } },
+          select: { id: true, session: { select: { scheduledStartTimeUtc: true, studentId: true, student: { select: { name: true } }, teacher: { select: { name: true } }, subject: { select: { name: true } } } } },
+          orderBy: { markedAt: "desc" },
+        })
+      : none,
+    // Coordinators follow up dues with parents, so they see how many invoices are overdue.
+    academic && !financial ? calculateFinancialSummary(now).then((f) => f.overdueInvoices) : none,
+    financial ? prisma.payment.count({ where: { isVerified: false } }) : none,
+    financial ? calculateFinancialSummary(now) : none,
+  ]);
+
+  // Classes left = total − consumed (same rule as the package ledger); reserved classes are listed too.
+  let lowPackages: { id: string; packageNumber: string; studentId: string; studentName: string; left: number; booked: number }[] = [];
+  if (activePackages && activePackages.length) {
+    const ids = activePackages.map((p) => p.id);
+    const [consumed, reserved] = await Promise.all([
+      prisma.session.groupBy({ by: ["packageId"], where: { packageId: { in: ids }, isCreditConsumed: true }, _count: { _all: true } }),
+      prisma.session.groupBy({ by: ["packageId"], where: { packageId: { in: ids }, isCreditConsumed: false, isCreditReserved: true, status: "SCHEDULED" }, _count: { _all: true } }),
+    ]);
+    const usedBy = new Map(consumed.map((c) => [c.packageId, c._count._all]));
+    const bookedBy = new Map(reserved.map((r) => [r.packageId, r._count._all]));
+    lowPackages = activePackages
+      .map((p) => ({ id: p.id, packageNumber: p.packageNumber, studentId: p.studentId, studentName: p.student.name, left: p.totalCredits - (usedBy.get(p.id) ?? 0), booked: bookedBy.get(p.id) ?? 0 }))
+      .filter((p) => p.left <= LOW_BALANCE)
+      .sort((a, b) => a.left - b.left);
   }
 
-  // Next class and earnings for teacher
-  let nextClass: any = null;
-  let teacherStudentsCount = 0;
-  let teacherTotalEarnings = 0;
-  let teacherPendingEarnings = 0;
+  const dateLabel = formatDateOnly(now);
+  const attention: React.ComponentProps<typeof AttentionCard>[] = [];
+  if (pendingAttendance) attention.push({ href: "/attendance", count: pendingAttendance, title: "Attendance not marked", detail: "Past classes still waiting for attendance", tone: "danger" });
+  if (lowPackages.length) attention.push({ href: "#low-packages", count: lowPackages.length, title: "Packages running low", detail: `${LOW_BALANCE} or fewer classes left, including used up` });
+  if (noTrainer?.length) attention.push({ href: "#no-trainer", count: noTrainer.length, title: "Subjects without a trainer", detail: "Classes cannot be booked yet" });
+  if (noSchedule?.length) attention.push({ href: "#no-schedule", count: noSchedule.length, title: "Subjects without a weekly schedule", detail: "Trainer assigned, no weekly slots" });
+  if (absences?.length) attention.push({ href: "#trainer-absences", count: absences.length, title: "Trainer absences (30 days)", detail: "Check replacement classes", tone: "info" });
+  if (drafts) attention.push({ href: "/students", count: drafts, title: "Admission drafts", detail: "Unfinished admissions to complete", tone: "info" });
+  if (unverifiedPayments) attention.push({ href: "/billing", count: unverifiedPayments, title: "Payments to verify", detail: "Recorded, not yet checked against the bank" });
+  if (finance?.overdueInvoices) attention.push({ href: "/dues", count: finance.overdueInvoices, title: "Overdue invoices", detail: `${inr(finance.overdue)} past the due date`, tone: "danger" });
+  if (overdueCount) attention.push({ href: "/dues", count: overdueCount, title: "Overdue invoices", detail: "Parents to follow up", tone: "danger" });
 
-  if (isTeacher && user.teacherId) {
-    nextClass = await prisma.session.findFirst({
-      where: {
-        teacherId: user.teacherId,
-        scheduledStartTimeUtc: { gte: now },
-        status: "SCHEDULED",
-      },
-      include: {
-        student: true,
-        subject: true,
-      },
-      orderBy: { scheduledStartTimeUtc: "asc" },
-    });
-
-    teacherStudentsCount = await prisma.subjectEnrollment.count({
-      where: { teacherId: user.teacherId },
-    });
-
-    const teacherPayoutItems = await prisma.payoutItem.findMany({
-      where: { teacherId: user.teacherId },
-    });
-    teacherTotalEarnings = teacherPayoutItems.reduce((acc, it) => acc + it.amount, 0);
-    teacherPendingEarnings = teacherPayoutItems
-      .filter((it) => it.status !== "PAID")
-      .reduce((acc, it) => acc + it.amount, 0);
-  }
-
-  // Missing attendance count
-  const missingAttendanceCount = await prisma.session.count({
-    where: missingWhere,
-  });
-
-  // Teacher absences count (Admin & Coordinator)
-  const teacherAbsencesCount = await prisma.attendanceRecord.count({
-    where: { sessionOutcome: "TEACHER_NO_SHOW" },
-  });
-
-  // Active students
-  const activeStudentsCount = await prisma.student.count({
-    where: { status: "ACTIVE" },
-  });
-
-  // Low balance packages
-  const allPackages = await prisma.studentPackage.findMany({
-    where: { status: "ACTIVE" },
-    include: {
-      sessions: { where: { isCreditConsumed: true } },
-      student: true,
-    },
-  });
-
-  const lowBalancePackages = allPackages.filter((pkg) => {
-    const consumed = pkg.sessions.length;
-    const remaining = pkg.totalCredits - consumed;
-    return remaining > 0 && remaining <= 3;
-  });
-
-  // Financial metrics (for accounts and admin)
-  let netBilled = 0;
-  let paymentsReceived = 0;
-  let totalOutstanding = 0;
-  let totalOverdue = 0;
-  let dueTodayCount = 0;
-  let unverifiedPaymentsCount = 0;
-  let promisedFollowUpsCount = 0;
-
-  if (showFinancial) {
-    const invoices = await prisma.invoice.findMany({
-      where: { status: { not: "CANCELLED" } },
-    });
-
-    for (const inv of invoices) {
-      netBilled += inv.totalAmount;
-      totalOutstanding += inv.balanceDue;
-      if (inv.balanceDue > 0 && isPastDue(inv.dueDate, now)) {
-        totalOverdue += inv.balanceDue;
-      }
-      if (inv.balanceDue > 0 && daysPastDue(inv.dueDate, now) === 0) {
-        dueTodayCount++;
-      }
-    }
-
-    const verifiedPayments = await prisma.payment.findMany({
-      where: { isVerified: true },
-    });
-    paymentsReceived = verifiedPayments.reduce((acc, p) => acc + p.amount, 0);
-
-    unverifiedPaymentsCount = await prisma.payment.count({
-      where: { isVerified: false },
-    });
-
-    promisedFollowUpsCount = await prisma.followUp.count({
-      where: { outcome: "PROMISED_PAYMENT" },
-    });
-  }
+  const description =
+    user.role === "ACCOUNTS"
+      ? "Payments to verify and balances to collect."
+      : user.role === "COORDINATOR"
+        ? "Today's classes and the work that needs your attention."
+        : "Today's classes, items needing attention and the money position.";
 
   return (
     <div className="space-y-6">
-      {/* SaaS Context Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-800/80">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-teal-400">
-              Operations Hub
-            </span>
-            <span className="text-slate-600">•</span>
-            <span className="text-xs font-medium text-slate-400">
-              {formatInTimeZone(now, "Asia/Kolkata", "EEEE, dd MMM yyyy")} (IST)
-            </span>
-          </div>
-          <h2 className="text-xl sm:text-3xl font-black tracking-tight text-white mt-1">
-            Welcome back, {user.name}
-          </h2>
-        </div>
-
-        {/* Quick Action Shortcuts */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <Link
-            href="/timetable"
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-850/80 px-3.5 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800 hover:text-white shadow-md min-touch-target transition-all"
-          >
-            <Calendar className="h-4 w-4 text-teal-400" />
-            <span>Schedule Session</span>
-          </Link>
-          <Link
-            href="/attendance"
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-4 py-2 text-xs font-black text-slate-950 hover:from-teal-300 hover:to-emerald-400 shadow-lg shadow-teal-500/20 border border-teal-300/30 min-touch-target transition-all"
-          >
-            <Clock className="h-4 w-4" />
-            <span>Attendance Inbox</span>
-            {missingAttendanceCount > 0 && (
-              <span className="rounded-full bg-slate-950 text-teal-300 px-2 py-0.2 text-[10px] font-bold">
-                {missingAttendanceCount}
-              </span>
-            )}
-          </Link>
-        </div>
-      </div>
-
-      {/* "WHAT NEEDS ATTENTION NOW?" URGENT ACTION RIBBON */}
-      {isTeacher ? (
-        /* Teacher's Focus Banner */
-        <div className="rounded-2xl sm:rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-4 sm:p-5 shadow-xl shadow-black/40 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-teal-400">
-              Teacher Priority
-            </span>
-            <span className="text-xs text-slate-400 flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              Live updates
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {nextClass ? (
-              <div className="flex items-start justify-between gap-3 p-4 rounded-2xl bg-teal-950/40 border border-teal-500/30">
-                <div className="space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-teal-400">
-                    Next Upcoming Session
-                  </span>
-                  <div className="font-bold text-white text-sm">
-                    {nextClass.student.name} • {nextClass.subject.name}
-                  </div>
-                  <div className="text-xs text-slate-300">
-                    {formatInTimeZone(nextClass.scheduledStartTimeUtc, "Asia/Kolkata")} IST
-                  </div>
-                  {nextClass.student.whatsappNumber && (
-                    <div className="text-xs text-slate-300 font-medium pt-1">
-                      <span className="text-slate-400 text-[11px]">WhatsApp:</span>{" "}
-                      <strong className="text-white font-mono">{nextClass.student.whatsappNumber}</strong>
-                    </div>
-                  )}
-                </div>
-                {nextClass.student.whatsappNumber && (
-                  <a
-                    href={`https://wa.me/${nextClass.student.whatsappNumber.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
-                      `Hello, greetings from Xello Tuition regarding ${nextClass.student.name}'s ${nextClass.subject.name} class.`
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/30 shrink-0 shadow-md transition-all"
-                    title={`Chat with ${nextClass.student.name} on WhatsApp`}
-                  >
-                    <MessageCircle className="h-4 w-4" /> WhatsApp
-                  </a>
-                )}
-              </div>
-            ) : (
-              <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400 flex items-center gap-2.5">
-                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                No pending upcoming classes scheduled for today.
-              </div>
-            )}
-
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400">
-                  Attendance Pending
-                </span>
-                <div className="font-bold text-white text-sm mt-0.5">
-                  {missingAttendanceCount} session(s) awaiting sign-off
-                </div>
-              </div>
-              <Link
-                href="/attendance"
-                className="rounded-xl bg-slate-800 border border-slate-700 px-3.5 py-1.5 text-xs font-bold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors"
-              >
-                Open Inbox
+      <PageHeader
+        title="Dashboard"
+        context={`${dateLabel} · IST`}
+        description={description}
+        actions={
+          <>
+            {academic && (
+              <Link href="/students?admit=1" className="inline-flex min-h-[44px] items-center gap-2 rounded-control bg-brand px-4 text-sm font-semibold text-brand-ink hover:bg-brand-hover">
+                <Plus className="h-4 w-4" aria-hidden="true" /> Admit a student
               </Link>
-            </div>
-
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-teal-950/30 border border-teal-500/30">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-teal-400">
-                  My Earnings
-                </span>
-                <div className="font-extrabold text-white text-base mt-0.5">
-                  ₹{teacherTotalEarnings.toLocaleString("en-IN")} Total
-                </div>
-                <div className="text-[11px] text-teal-300/80 font-medium">
-                  ₹{teacherPendingEarnings.toLocaleString("en-IN")} pending payout
-                </div>
-              </div>
-              <Link
-                href="/payouts"
-                className="rounded-xl bg-teal-500 text-slate-950 px-3.5 py-1.5 text-xs font-black hover:bg-teal-400 shadow-md transition-all"
-              >
-                View Payouts
+            )}
+            {financial && (
+              <Link href="/billing" className="inline-flex min-h-[44px] items-center gap-2 rounded-control border border-line-strong px-4 text-sm font-semibold text-ink hover:bg-raised">
+                <Receipt className="h-4 w-4" aria-hidden="true" /> Invoices & payments
               </Link>
+            )}
+          </>
+        }
+      />
+
+      <section aria-labelledby="attention-heading" className="space-y-3">
+        <h2 id="attention-heading" className="text-lg font-semibold text-ink">Needs attention</h2>
+        {attention.length === 0 ? (
+          <p className="flex items-center gap-2 rounded-card border border-line bg-surface p-4 text-sm text-ink-muted">
+            <CheckCircle2 className="h-5 w-5 text-success" aria-hidden="true" /> Nothing needs attention right now.
+          </p>
+        ) : (
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {attention.map((a) => (
+              <AttentionCard key={a.title} {...a} />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {todaysSessions && (
+        <section aria-labelledby="today-heading" className="rounded-card border border-line bg-surface">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line p-4">
+            <div>
+              <h2 id="today-heading" className="text-lg font-semibold text-ink">Today&apos;s classes ({todaysSessions.length})</h2>
+              <p className="text-sm text-ink-muted">{dateLabel}, times in IST</p>
             </div>
+            <Link href="/timetable" className="inline-flex min-h-[44px] items-center gap-1 text-sm font-semibold text-brand-text">
+              Full timetable <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
           </div>
-        </div>
-      ) : (
-        /* Academic & Financial Attention Queue */
-        (missingAttendanceCount > 0 ||
-          teacherAbsencesCount > 0 ||
-          lowBalancePackages.length > 0 ||
-          unverifiedPaymentsCount > 0) && (
-          <div className="rounded-2xl sm:rounded-3xl border border-amber-500/30 bg-amber-950/25 p-4 sm:p-5 shadow-xl shadow-black/40">
-            <div className="flex items-center gap-2 text-xs font-bold text-amber-300 mb-3">
-              <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
-              <span>What Needs Attention Now:</span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-              {missingAttendanceCount > 0 && (
-                <Link
-                  href="/attendance"
-                  className="rounded-xl bg-slate-900/80 p-3 border border-amber-500/30 hover:border-amber-400 transition-all block"
-                >
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block">
-                    Pending Attendance
-                  </span>
-                  <div className="text-base font-black text-amber-400 mt-1">
-                    {missingAttendanceCount} classes
-                  </div>
-                  <span className="text-[10px] text-slate-500">Past classes awaiting sign-off</span>
-                </Link>
-              )}
-
-              {teacherAbsencesCount > 0 && (
-                <Link
-                  href="/attendance"
-                  className="rounded-xl bg-slate-900/80 p-3 border border-rose-500/30 hover:border-rose-400 transition-all block"
-                >
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block">
-                    Teacher Absences
-                  </span>
-                  <div className="text-base font-black text-rose-400 mt-1">
-                    {teacherAbsencesCount} replacement needed
-                  </div>
-                  <span className="text-[10px] text-slate-500">Protected (0 credit deducted)</span>
-                </Link>
-              )}
-
-              {lowBalancePackages.length > 0 && (
-                <Link
-                  href="/dues"
-                  className="rounded-xl bg-slate-900/80 p-3 border border-teal-500/30 hover:border-teal-400 transition-all block"
-                >
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block">
-                    Low Balances
-                  </span>
-                  <div className="text-base font-black text-teal-400 mt-1">
-                    {lowBalancePackages.length} packages
-                  </div>
-                  <span className="text-[10px] text-slate-500">≤3 credits remaining</span>
-                </Link>
-              )}
-
-              {showFinancial && unverifiedPaymentsCount > 0 && (
-                <Link
-                  href="/billing"
-                  className="rounded-xl bg-slate-900/80 p-3 border border-blue-500/30 hover:border-blue-400 transition-all block"
-                >
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block">
-                    Unverified Proofs
-                  </span>
-                  <div className="text-base font-black text-blue-400 mt-1">
-                    {unverifiedPaymentsCount} payments
-                  </div>
-                  <span className="text-[10px] text-slate-500">Awaiting bank verification</span>
-                </Link>
-              )}
-            </div>
-          </div>
-        )
-      )}
-
-      {/* KPI METRICS (COMPACT, ACTIONABLE, CLEAN SAAS) */}
-      <div>
-        <div className="flex items-center justify-between mb-2.5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            {isTeacher ? "My Teaching Operations" : "Operational Metrics"}
-          </h3>
-          <span className="text-[11px] text-slate-400">Real-time sync</span>
-        </div>
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {isTeacher ? (
-            <>
-              <MetricCard
-                label="Today's Classes"
-                value={todaysSessions.length}
-                subtext="Scheduled for today"
-                icon={CalendarCheck2}
-                variant="teal"
-                href="/timetable"
-              />
-              <MetricCard
-                label="Assigned Students"
-                value={teacherStudentsCount}
-                subtext="Enrolled in subjects"
-                icon={Users}
-                variant="default"
-                href="/students"
-              />
-              <MetricCard
-                label="Pending Sign-Off"
-                value={missingAttendanceCount}
-                subtext="Past sessions to mark"
-                icon={Clock}
-                variant={missingAttendanceCount > 0 ? "warning" : "default"}
-                href="/attendance"
-              />
-              <MetricCard
-                label="My Total Earnings"
-                value={`₹${teacherTotalEarnings.toLocaleString("en-IN")}`}
-                subtext={`₹${teacherPendingEarnings.toLocaleString("en-IN")} pending payout`}
-                icon={DollarSign}
-                variant="teal"
-                href="/payouts"
-              />
-            </>
-          ) : (
-            <>
-              <MetricCard
-                label="Active Students"
-                value={activeStudentsCount}
-                subtext="Kerala & GCC family enrollments"
-                icon={Users}
-                variant="teal"
-                href="/students"
-              />
-              <MetricCard
-                label="Today's Classes"
-                value={todaysSessions.length}
-                subtext="Sessions scheduled today"
-                icon={CalendarCheck2}
-                variant="default"
-                href="/timetable"
-              />
-              <MetricCard
-                label="Missing Attendance"
-                value={missingAttendanceCount}
-                subtext="Awaiting teacher completion"
-                icon={Clock}
-                variant={missingAttendanceCount > 0 ? "warning" : "default"}
-                href="/attendance"
-              />
-              <MetricCard
-                label="Low Balances"
-                value={lowBalancePackages.length}
-                subtext="≤3 credits remaining"
-                icon={AlertTriangle}
-                variant={lowBalancePackages.length > 0 ? "danger" : "default"}
-                href="/dues"
-              />
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* FINANCIAL OVERVIEW (IF FINANCIAL ACCESS) */}
-      {showFinancial && (
-        <div>
-          <div className="flex items-center justify-between mb-2.5">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Financial & Collections Overview
-            </h3>
-            <span className="text-[11px] text-slate-400 font-mono">INR (₹) Tabular</span>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <MetricCard
-              label="Net Billed"
-              value={`₹${netBilled.toLocaleString("en-IN")}`}
-              subtext="Active generated invoices"
-              icon={Receipt}
-              variant="default"
-              href="/billing"
-            />
-            <MetricCard
-              label="Verified Collections"
-              value={`₹${paymentsReceived.toLocaleString("en-IN")}`}
-              subtext="Cleared bank payments"
-              icon={CheckCircle2}
-              variant="success"
-              href="/billing"
-            />
-            <MetricCard
-              label="Outstanding Total"
-              value={`₹${totalOutstanding.toLocaleString("en-IN")}`}
-              subtext="Unpaid invoice balance"
-              icon={DollarSign}
-              variant="default"
-              href="/billing"
-            />
-            <MetricCard
-              label="Overdue Balances"
-              value={`₹${totalOverdue.toLocaleString("en-IN")}`}
-              subtext={`${dueTodayCount} due today`}
-              icon={AlertCircle}
-              variant={totalOverdue > 0 ? "danger" : "default"}
-              href="/dues"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* TODAY'S CLASS SCHEDULE FEED */}
-      <div className="rounded-2xl sm:rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl shadow-2xl shadow-black/40 overflow-hidden">
-        <div className="p-4 sm:p-5 border-b border-slate-800/80 flex items-center justify-between">
-          <div>
-            <h3 className="text-sm sm:text-base font-extrabold text-white">
-              Today&apos;s Class Schedule ({todaysSessions.length})
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Live sessions scheduled across India (IST) and GCC time zones
-            </p>
-          </div>
-          <Link
-            href="/timetable"
-            className="text-xs font-bold text-teal-400 hover:text-teal-300 inline-flex items-center gap-1 min-touch-target transition-colors"
-          >
-            <span>Full Agenda</span>
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-
-        <div className="divide-y divide-slate-800/60">
           {todaysSessions.length === 0 ? (
-            <div className="p-8 sm:p-12 text-center">
-              <EmptyState
-                icon={Calendar}
-                title="No classes scheduled for today"
-                description="Your schedule is clear. You can schedule new 1-on-1 or batch classes at any time."
-                actionLabel="Schedule Session"
-              />
-            </div>
+            <p className="flex items-center gap-2 p-4 text-sm text-ink-muted">
+              <CalendarClock className="h-5 w-5" aria-hidden="true" /> No classes today.
+            </p>
           ) : (
-            todaysSessions.map((session) => (
-              <div
-                key={session.id}
-                className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className="w-2.5 h-10 rounded-full mt-0.5 shrink-0 shadow-sm"
-                    style={{ backgroundColor: session.subject.color }}
-                  />
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-bold text-sm text-white">
-                        {session.student.name}
-                      </span>
-                      <span className="rounded-full bg-slate-800 border border-slate-700 px-2 py-0.5 text-[10px] font-bold text-slate-300">
-                        {session.student.grade}
-                      </span>
-                      <span className="rounded-full bg-teal-500/15 border border-teal-500/30 px-2 py-0.5 text-[10px] font-bold text-teal-300">
-                        {session.subject.name}
-                      </span>
-                      <StatusBadge status={session.status} size="sm" />
-                    </div>
-                    <div className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
-                      <span>Tutor: <strong className="text-slate-200">{session.teacher.name}</strong></span>
-                      <span>•</span>
-                      <span>
-                        Student Zone: {session.student.timeZone} ({session.student.country})
-                      </span>
+            <ul className="divide-y divide-line">
+              {todaysSessions.map((s) => (
+                <li key={s.id} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+                  <div className="flex min-w-0 gap-3">
+                    <p className="w-20 shrink-0 font-semibold tabular-nums text-ink">{formatTimeOnly(s.scheduledStartTimeUtc)}</p>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-ink break-words">
+                        <Link href={`/students/${s.studentId}`} className="hover:underline">{s.student.name}</Link>
+                        <span className="font-normal text-ink-muted"> · {s.subject.name} · {s.student.grade}</span>
+                      </p>
+                      <p className="text-sm text-ink-muted">Trainer: {s.teacher.name}</p>
                     </div>
                   </div>
-                </div>
-
-                <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                  <div className="text-right">
-                    <div className="text-xs font-black text-white font-mono">
-                      {formatInTimeZone(session.scheduledStartTimeUtc, "Asia/Kolkata")} IST
-                    </div>
-                    <div className="text-[11px] text-slate-400">
-                      {formatInTimeZone(
-                        session.scheduledStartTimeUtc,
-                        session.student.timeZone
-                      )}{" "}
-                      Local
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {session.student.whatsappNumber && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge status={s.status} size="sm" />
+                    {s.student.whatsappNumber && (
                       <a
-                        href={`https://wa.me/${session.student.whatsappNumber.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
-                          `Hello, this is regarding ${session.student.name}'s ${session.subject.name} class.`
-                        )}`}
+                        href={whatsappLink(s.student.whatsappNumber, `Hello, this is Xello Tuition about ${s.student.name}'s ${s.subject.name} class today.`)}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-xl bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/25 flex items-center gap-1.5 min-touch-target transition-all shadow-sm"
-                        title={`WhatsApp ${session.student.name} (${session.student.whatsappNumber})`}
+                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-control border border-line-strong px-3 text-sm font-semibold text-ink hover:bg-raised"
                       >
-                        <MessageCircle className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">WhatsApp</span>
+                        <MessageCircle className="h-4 w-4" aria-hidden="true" /> WhatsApp<span className="sr-only"> {s.student.name}&apos;s parent</span>
                       </a>
                     )}
-                    {session.status === "SCHEDULED" && (
-                      <Link
-                        href="/attendance"
-                        className="rounded-xl bg-teal-500 text-slate-950 px-3 py-1.5 text-xs font-black hover:bg-teal-400 min-touch-target flex items-center gap-1.5 transition-all shadow-md"
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Mark Attendance
+                    {s.status === "SCHEDULED" && (
+                      <Link href={`/attendance?session=${s.id}`} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-control bg-brand px-3 text-sm font-semibold text-brand-ink hover:bg-brand-hover">
+                        <ClipboardList className="h-4 w-4" aria-hidden="true" /> Attendance<span className="sr-only"> for {s.student.name}</span>
                       </Link>
                     )}
                   </div>
-                </div>
-              </div>
-            ))
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
-      </div>
+        </section>
+      )}
+
+      {finance && (
+        <section aria-labelledby="money-heading" className="space-y-3">
+          <div>
+            <h2 id="money-heading" className="text-lg font-semibold text-ink">Money (INR)</h2>
+            <p className="text-sm text-ink-muted">Balances as of {dateLabel}. Billed and received are all-time totals.</p>
+          </div>
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <MoneyCard label="Billed" value={inr(finance.billed)} detail="All invoices, all time" href="/billing" />
+            <MoneyCard label="Received (verified)" value={inr(finance.received)} detail="Checked payments, all time" href="/billing" />
+            <MoneyCard label="Outstanding" value={inr(finance.outstanding)} detail="Unpaid balance today" href="/dues" />
+            <MoneyCard label="Overdue" value={inr(finance.overdue)} detail={`${finance.overdueInvoices} invoice${finance.overdueInvoices === 1 ? "" : "s"} past due · ${finance.dueToday} due today`} href="/dues" />
+            <MoneyCard label="Advance" value={inr(finance.advance)} detail="Verified, not yet allocated" href="/billing" />
+          </ul>
+        </section>
+      )}
+
+      <RecordList
+        id="low-packages"
+        title="Packages running low"
+        description={`Active packages with ${LOW_BALANCE} or fewer classes left (classes left = purchased − taken).`}
+        items={lowPackages.slice(0, LIST_LIMIT)}
+        more={Math.max(0, lowPackages.length - LIST_LIMIT)}
+        moreHref="/packages"
+        render={(p) => (
+          <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+            <Link href={`/students/${p.studentId}`} className="min-h-[44px] content-center font-semibold text-ink hover:underline">
+              {p.studentName} <span className="font-normal text-ink-subtle">· {p.packageNumber}</span>
+            </Link>
+            <span className={`text-sm tabular-nums ${p.left <= 0 ? "font-semibold text-danger" : "text-warning"}`}>
+              {p.left <= 0 ? "Used up" : `${p.left} left`}
+              {p.booked > 0 ? ` · ${p.booked} booked` : ""}
+            </span>
+          </li>
+        )}
+      />
+      <RecordList
+        id="no-trainer"
+        title="Subjects without a trainer"
+        description="Assign a trainer on the student's profile so classes can be booked."
+        items={(noTrainer ?? []).slice(0, LIST_LIMIT)}
+        more={Math.max(0, (noTrainer?.length ?? 0) - LIST_LIMIT)}
+        moreHref="/students"
+        render={(e) => (
+          <li key={e.id} className="py-2.5">
+            <Link href={`/students/${e.studentId}`} className="inline-flex min-h-[44px] items-center gap-2 text-ink hover:underline">
+              <UserX className="h-4 w-4 text-warning" aria-hidden="true" /> {e.student.name} <span className="text-ink-subtle">· {e.subject.name}</span>
+            </Link>
+          </li>
+        )}
+      />
+      <RecordList
+        id="no-schedule"
+        title="Subjects without a weekly schedule"
+        description="A trainer is assigned but no weekly slots exist, so nothing gets booked."
+        items={(noSchedule ?? []).slice(0, LIST_LIMIT)}
+        more={Math.max(0, (noSchedule?.length ?? 0) - LIST_LIMIT)}
+        moreHref="/students"
+        render={(e) => (
+          <li key={e.id} className="py-2.5">
+            <Link href={`/students/${e.studentId}#timetable`} className="inline-flex min-h-[44px] items-center gap-2 text-ink hover:underline">
+              <CalendarClock className="h-4 w-4 text-warning" aria-hidden="true" /> {e.student.name} <span className="text-ink-subtle">· {e.subject.name}</span>
+            </Link>
+          </li>
+        )}
+      />
+      <RecordList
+        id="trainer-absences"
+        title="Trainer absences in the last 30 days"
+        description="No class credit was used for these. Arrange replacement classes from the student's timetable."
+        items={(absences ?? []).slice(0, LIST_LIMIT)}
+        more={Math.max(0, (absences?.length ?? 0) - LIST_LIMIT)}
+        moreHref="/attendance"
+        render={(a) => (
+          <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
+            <Link href={`/students/${a.session.studentId}`} className="min-h-[44px] content-center text-ink hover:underline">
+              {a.session.student.name} · {a.session.subject.name}
+            </Link>
+            <span className="text-ink-muted">
+              {formatDateOnly(a.session.scheduledStartTimeUtc)} · {a.session.teacher.name}
+            </span>
+          </li>
+        )}
+      />
+      {!academic && !financial && (
+        <p className="flex items-center gap-2 text-sm text-ink-muted">
+          <AlertCircle className="h-4 w-4" aria-hidden="true" /> Your role has no dashboard items yet.
+        </p>
+      )}
     </div>
   );
 }

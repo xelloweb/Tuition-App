@@ -191,6 +191,22 @@ async function main() {
         role: "ACCOUNTS",
         passwordHash,
       },
+      {
+        // A trainer login whose trainer profile link is missing: it must see nothing.
+        id: "usr-unlinked",
+        email: "unlinked.trainer@example.test",
+        name: "Unlinked Trainer Login",
+        role: "TEACHER",
+        passwordHash,
+      },
+      {
+        // A login still on the old published demo password: production must refuse it.
+        id: "usr-legacy",
+        email: "legacy.demo@example.test",
+        name: "Legacy Demo Login",
+        role: "COORDINATOR",
+        passwordHash: await bcrypt.hash("demo123", 10),
+      },
     ],
   });
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { ModalShell } from "@/components/ui/ModalShell";
 import { useState, useEffect } from "react";
 import {
   X,
@@ -170,13 +171,12 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
   };
 
   return (
-    <div className="fixed inset-0 z-50 modal-overlay bg-black/75 p-3 sm:p-4 backdrop-blur-md">
-      <div className="w-full max-w-2xl rounded-3xl bg-[#0c1220] p-5 sm:p-6 shadow-2xl border border-slate-800 text-white my-8 animate-in fade-in zoom-in-95 duration-150">
+    <ModalShell labelledBy="reallocate-title" onClose={onClose} maxWidth="max-w-2xl">
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
           <div>
-            <h3 className="text-base sm:text-lg font-bold text-white">
+            <h2 id="reallocate-title" className="text-base sm:text-lg font-bold text-white">
               Reallocate Remaining Classes
-            </h3>
+            </h2>
             <p className="text-xs text-slate-400">
               Package: <span className="font-semibold text-teal-400">{pkg.packageName}</span> ({pkg.packageNumber})
             </p>
@@ -195,41 +195,41 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
           <div className="rounded-2xl bg-slate-900/80 p-4 border border-slate-800">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
               <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Package</span>
-                <span className="text-lg sm:text-xl font-black text-white font-mono tabular-nums">
+                <span className="text-xs uppercase font-bold text-slate-400 block">Total Package</span>
+                <span className="text-lg sm:text-xl font-bold text-white font-mono tabular-nums">
                   {pkg.totalEntitlement}
                 </span>
-                <span className="text-[10px] text-slate-400 block">Entitlement</span>
+                <span className="text-xs text-slate-400 block">Entitlement</span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Consumed</span>
+                <span className="text-xs uppercase font-bold text-slate-400 block">Consumed</span>
                 <span className="text-lg sm:text-xl font-bold text-slate-300 font-mono tabular-nums">
                   {pkg.totalConsumed}
                 </span>
-                <span className="text-[10px] text-slate-400 block">Taught & Locked</span>
+                <span className="text-xs text-slate-400 block">Taught & Locked</span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Remaining</span>
+                <span className="text-xs uppercase font-bold text-slate-400 block">Remaining</span>
                 <span className="text-lg sm:text-xl font-bold text-teal-400 font-mono tabular-nums">
                   {pkg.totalRemaining}
                 </span>
-                <span className="text-[10px] text-slate-400 block">Unused Credits</span>
+                <span className="text-xs text-slate-400 block">Unused Credits</span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Proposed Sum</span>
+                <span className="text-xs uppercase font-bold text-slate-400 block">Proposed Sum</span>
                 <span
-                  className={`text-lg sm:text-xl font-black font-mono tabular-nums ${
+                  className={`text-lg sm:text-xl font-bold font-mono tabular-nums ${
                     totalAllocated === pkg.totalEntitlement ? "text-emerald-400" : "text-rose-400"
                   }`}
                 >
                   {totalAllocated} / {pkg.totalEntitlement}
                 </span>
-                <span className="text-[10px] text-slate-400 block">
+                <span className="text-xs text-slate-400 block">
                   {totalAllocated === pkg.totalEntitlement ? "Balanced" : `${pkg.totalEntitlement - totalAllocated} unallocated`}
                 </span>
               </div>
             </div>
-            <p className="mt-2 text-[11px] text-slate-400 text-center border-t border-slate-800 pt-2">
+            <p className="mt-2 text-xs text-slate-400 text-center border-t border-slate-800 pt-2">
               Remaining credits are flexible across enrolled subjects. Total package classes remain fixed.
             </p>
           </div>
@@ -244,8 +244,8 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
                 <div className="sm:col-span-1">
-                  <label className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Transfer From</label>
-                  <select
+                  <label htmlFor="reallocatemodal-field-1" className="text-xs uppercase font-bold text-slate-400 block mb-0.5">Transfer From</label>
+                  <select id="reallocatemodal-field-1"
                     value={transferFrom}
                     onChange={(e) => setTransferFrom(e.target.value)}
                     className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2 font-semibold text-white text-xs focus:outline-hidden focus:border-teal-500"
@@ -259,8 +259,8 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
                 </div>
 
                 <div className="sm:col-span-1">
-                  <label className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Transfer To</label>
-                  <select
+                  <label htmlFor="reallocatemodal-field-2" className="text-xs uppercase font-bold text-slate-400 block mb-0.5">Transfer To</label>
+                  <select id="reallocatemodal-field-2"
                     value={transferTo}
                     onChange={(e) => setTransferTo(e.target.value)}
                     className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2 font-semibold text-white text-xs focus:outline-hidden focus:border-teal-500"
@@ -274,8 +274,8 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
                 </div>
 
                 <div className="sm:col-span-1">
-                  <label className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Classes Count</label>
-                  <div className="flex items-center gap-1">
+                  <p id="transfer-count-label" className="text-xs uppercase font-bold text-slate-400 block mb-0.5">Classes count</p>
+                  <div className="flex items-center gap-1" role="group" aria-labelledby="transfer-count-label">
                     {[1, 2, 5].map((cnt) => (
                       <button
                         key={cnt}
@@ -283,7 +283,7 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
                         onClick={() => setTransferCount(cnt)}
                         className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-colors ${
                           transferCount === cnt
-                            ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-500/20"
+                            ? "bg-teal-500 text-slate-950"
                             : "bg-slate-900 border border-slate-700 text-slate-300 hover:text-white"
                         }`}
                       >
@@ -297,7 +297,7 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
                   <button
                     type="button"
                     onClick={handleApplyTransfer}
-                    className="w-full rounded-xl bg-teal-500 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-teal-400 shadow-md shadow-teal-500/20 transition-all active:scale-95"
+                    className="w-full rounded-xl bg-teal-500 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-teal-400 transition-all active:scale-95"
                   >
                     Apply Transfer
                   </button>
@@ -312,7 +312,7 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
               Detailed Subject Credit Allocations
             </h4>
 
-            <div className="divide-y divide-slate-800 rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+            <div className="divide-y divide-slate-800 rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
               {pkg.subjects.map((sub) => {
                 const currentVal = allocations[sub.subjectId] ?? sub.allocatedCredits;
                 const minAllowed = sub.consumedCredits;
@@ -333,12 +333,12 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
                         <span className="font-bold text-white text-sm">
                           {sub.subjectName}
                         </span>
-                        <span className="rounded-md bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300 border border-slate-700">
+                        <span className="rounded-md bg-slate-800 px-1.5 py-0.5 text-xs font-semibold text-slate-300 border border-slate-700">
                           {sub.subjectCode}
                         </span>
                       </div>
 
-                      <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-2">
+                      <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2">
                         <span>Consumed: <strong className="text-slate-200">{sub.consumedCredits}</strong></span>
                         <span>•</span>
                         <span>Reserved: <strong className="text-slate-200">{sub.reservedCredits}</strong></span>
@@ -389,9 +389,9 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
 
                       {/* Before and After badge */}
                       <div className="text-right min-w-[80px]">
-                        <span className="text-[10px] text-slate-500 uppercase block">Before → After</span>
+                        <span className="text-xs text-slate-400 uppercase block">Before → After</span>
                         <div className="font-mono font-bold text-slate-300 text-xs">
-                          {sub.allocatedCredits} → <span className="text-teal-400 font-black">{currentVal}</span>
+                          {sub.allocatedCredits} → <span className="text-teal-400 font-bold">{currentVal}</span>
                         </div>
                       </div>
                     </div>
@@ -402,7 +402,7 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
           </div>
 
           {/* STEP 6: BEFORE AND AFTER REVIEW CARD */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-2">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-2">
             <div className="flex items-center justify-between text-xs font-bold text-slate-200">
               <span>Before & After Reallocation Summary</span>
               <span className="text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
@@ -432,7 +432,7 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
                 <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
                 <span>Reallocation Constraint Blocked</span>
               </div>
-              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-rose-300">
+              <ul className="list-disc list-inside space-y-0.5 text-xs text-rose-300">
                 {validationResult.errors.map((err: string, i: number) => (
                   <li key={i}>{err}</li>
                 ))}
@@ -457,10 +457,10 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
 
           {/* STEP 5: AUDITED OPERATIONAL REASON */}
           <div>
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
+            <label htmlFor="reallocatemodal-field-3" className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
               Operational Reason (Audited in Credit Ledger) *
             </label>
-            <input
+            <input id="reallocatemodal-field-3"
               type="text"
               required
               value={reason}
@@ -468,7 +468,7 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
               placeholder="e.g. Student requested Chemistry boost for upcoming exams"
               className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:border-teal-500 focus:outline-hidden min-touch-target"
             />
-            <p className="mt-1 text-[11px] text-slate-400">
+            <p className="mt-1 text-xs text-slate-400">
               Reason is permanently logged in the auditable credit ledger along with role and timestamp.
             </p>
           </div>
@@ -493,7 +493,6 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </ModalShell>
   );
 }

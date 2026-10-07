@@ -11,20 +11,17 @@ import {
   RefreshCw,
   AlertTriangle,
   CheckCircle2,
-  Globe2,
   ListOrdered,
   CalendarPlus,
   X,
 } from "lucide-react";
-import { TIMEZONES } from "@/lib/timezones";
 import {
   WEEKDAYS,
-  convertSlotForDisplay,
   describeInZone,
   formatMinutes,
   minutesToTimeInput,
   parseTimeOfDay,
-  shortZoneLabel,
+  slotInZone,
 } from "@/lib/zoned-time";
 import { apiRequest, ClientApiError, errorMessage } from "@/lib/client-api";
 import { FieldError } from "@/components/ui/FormFeedback";
@@ -58,33 +55,43 @@ interface WeeklyTimetableProps {
   view: TimetableView;
   teachers: TeacherOption[];
   canEdit: boolean;
-  viewerTimeZone: string;
+  /** Kept for older callers; times are always IST. */
+  viewerTimeZone?: string;
   onSaved: (message: string) => void;
 }
 
 let draftCounter = 0;
 const newKey = () => `draft-${Date.now().toString(36)}-${(draftCounter++).toString(36)}`;
 
+const IST = "Asia/Kolkata";
+
+/** Slots are edited in IST; slots saved earlier in another zone are shown at the same moment in IST. */
 function fromView(view: TimetableView): SlotDraft[] {
-  return view.slots.map((s) => ({
-    key: s.id,
-    id: s.id,
-    enrolmentId: s.enrolmentId,
-    teacherId: s.teacherId ?? "",
-    weekday: String(s.weekday),
-    start: minutesToTimeInput(s.startMinutes),
-    end: minutesToTimeInput(s.endMinutes),
-    removed: false,
-    editing: false,
-  }));
+  return view.slots.map((s) => {
+    const t = view.timeZone === IST ? s : slotInZone({ ...s, timeZone: view.timeZone }, IST);
+    return {
+      key: s.id,
+      id: s.id,
+      enrolmentId: s.enrolmentId,
+      teacherId: s.teacherId ?? "",
+      weekday: String(t.weekday),
+      start: minutesToTimeInput(t.startMinutes),
+      end: minutesToTimeInput(t.endMinutes),
+      removed: false,
+      editing: false,
+    };
+  });
 }
 
 const fieldBase =
   "w-full rounded-xl border bg-slate-950 px-2.5 py-2 min-h-[44px] text-xs text-white focus:outline-hidden";
 
-export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTimeZone, onSaved }: WeeklyTimetableProps) {
+export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }: WeeklyTimetableProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [timeZone, setTimeZone] = useState(view.timeZone);
+  // India time only: the timetable is edited and saved in IST.
+  const timeZone = IST;
+  const legacyZone = view.timeZone !== IST ? view.timeZone : null;
+  const baseline = useMemo(() => new Map(fromView(view).map((d) => [d.id, d])), [view]);
   const [drafts, setDrafts] = useState<SlotDraft[]>(() => fromView(view));
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
@@ -98,19 +105,11 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
 
   const liveDrafts = drafts.filter((d) => !d.removed);
   const isDirty =
-    timeZone !== view.timeZone ||
     drafts.some((d) => {
       if (!d.id) return !d.removed;
       if (d.removed) return true;
-      const o = original.get(d.id);
-      return (
-        !o ||
-        o.enrolmentId !== d.enrolmentId ||
-        (o.teacherId ?? "") !== d.teacherId ||
-        String(o.weekday) !== d.weekday ||
-        minutesToTimeInput(o.startMinutes) !== d.start ||
-        minutesToTimeInput(o.endMinutes) !== d.end
-      );
+      const o = baseline.get(d.id);
+      return !o || o.enrolmentId !== d.enrolmentId || o.teacherId !== d.teacherId || o.weekday !== d.weekday || o.start !== d.start || o.end !== d.end;
     });
 
   // Server field errors are keyed by the index in the submitted list.
@@ -156,7 +155,6 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
 
   const resetAll = () => {
     setDrafts(fromView(view));
-    setTimeZone(view.timeZone);
     setFieldErrors({});
     setFormError("");
     setPreview(null);
@@ -287,51 +285,25 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
     .filter((d) => parseTimeOfDay(d.start) !== null && parseTimeOfDay(d.end) !== null)
     .sort((a, b) => Number(a.weekday) - Number(b.weekday) || a.start.localeCompare(b.start));
 
-  const zoneOptions = TIMEZONES.some((t) => t.value === timeZone)
-    ? TIMEZONES
-    : [{ value: timeZone, label: timeZone, offset: "", region: "" }, ...TIMEZONES];
-
-  const compareZone = viewerTimeZone !== timeZone ? viewerTimeZone : timeZone !== "Asia/Kolkata" ? "Asia/Kolkata" : null;
 
   return (
-    <div ref={containerRef} className="rounded-3xl border border-slate-800/80 bg-[#0c1220]/90 backdrop-blur-md p-4 sm:p-6 shadow-xl space-y-5">
+    <div ref={containerRef} className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-bold text-white flex items-center gap-2">
             <CalendarClock className="h-5 w-5 text-teal-400" />
             Weekly Timetable
           </h3>
-          <p className="mt-1 text-xs text-slate-300 flex items-center gap-1.5">
-            <Globe2 className="h-3.5 w-3.5 text-teal-400 shrink-0" />
-            Timetable times are shown in <strong className="text-white">{timeZone}</strong> ({shortZoneLabel(timeZone)}).
-          </p>
-          {view.studentTimeZone !== timeZone && (
-            <p className="text-[11px] text-amber-300 mt-0.5">The student&apos;s profile time zone is {view.studentTimeZone}.</p>
+          <p className="mt-1 text-sm text-slate-300">All times are in IST (India Standard Time).</p>
+          {legacyZone && (
+            <p className="mt-1 text-sm text-amber-200">
+              This timetable was set up in {legacyZone} time. It is shown here in IST at the same moments; saving any change stores it in IST.
+            </p>
           )}
         </div>
-        {canEdit && (
-          <label className="text-[11px] text-slate-400 sm:text-right">
-            <span className="block mb-1">Timetable time zone</span>
-            <select
-              value={timeZone}
-              onChange={(e) => {
-                setTimeZone(e.target.value);
-                setPreview(null);
-              }}
-              aria-label="Timetable time zone"
-              className={`${fieldBase} border-slate-700 sm:w-64`}
-            >
-              {zoneOptions.map((z) => (
-                <option key={z.value} value={z.value} className="bg-slate-900">
-                  {z.label}{z.offset ? ` (${z.offset})` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
       </div>
 
-      <p className="text-[11px] text-slate-400 leading-relaxed rounded-2xl border border-slate-800 bg-slate-900/50 p-3">
+      <p className="text-xs text-slate-400 leading-relaxed rounded-2xl border border-slate-800 bg-slate-900/50 p-3">
         The weekly timetable is a template: it does not use package credits. Classes are booked from it up to {view.windowDays} days
         ahead, only while an active package has unreserved classes for that subject. Changes apply from now on — past classes,
         attendance and individually cancelled or rescheduled classes are never changed.
@@ -368,14 +340,14 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
           {view.enrolments.map((enr) => {
             const subjectDrafts = drafts.filter((d) => d.enrolmentId === enr.id);
             return (
-              <section key={enr.id} aria-label={`${enr.subjectName} weekly slots`} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3 sm:p-4 space-y-3">
+              <section key={enr.id} aria-label={`${enr.subjectName} weekly slots`} className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: enr.subjectColor || "#14b8a6" }} />
                       <h4 className="font-bold text-sm text-white truncate">{enr.subjectName}</h4>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-400 mt-0.5">
                       Trainer:{" "}
                       {enr.teacherName ? (
                         <span className={enr.teacherActive ? "text-teal-300 font-semibold" : "text-amber-300 font-semibold"}>
@@ -386,18 +358,14 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
                       )}
                     </p>
                   </div>
-                  <span className="text-[10px] text-slate-500 shrink-0">{subjectDrafts.filter((d) => !d.removed).length} slot(s)</span>
+                  <span className="text-xs text-slate-400 shrink-0">{subjectDrafts.filter((d) => !d.removed).length} slot(s)</span>
                 </div>
 
                 <ul className="space-y-2">
-                  {subjectDrafts.length === 0 && <li className="text-[11px] text-slate-500 italic">No weekly slots yet.</li>}
+                  {subjectDrafts.length === 0 && <li className="text-xs text-slate-400 italic">No weekly slots yet.</li>}
                   {subjectDrafts.map((d) => {
                     const start = parseTimeOfDay(d.start);
                     const end = parseTimeOfDay(d.end);
-                    const conv =
-                      compareZone && start !== null && end !== null && end > start
-                        ? convertSlotForDisplay({ weekday: Number(d.weekday), startMinutes: start, endMinutes: end, timeZone }, compareZone)
-                        : null;
                     const slotErrors = ["enrolmentId", "weekday", "start", "end", "teacherId", "id"]
                       .map((f) => errorFor(d, f))
                       .filter(Boolean) as string[];
@@ -405,7 +373,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
 
                     if (d.removed) {
                       return (
-                        <li key={d.key} className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-rose-500/30 bg-rose-500/5 p-2.5 text-[11px] text-rose-200">
+                        <li key={d.key} className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-rose-500/30 bg-rose-500/5 p-2.5 text-xs text-rose-200">
                           <span className="line-through">
                             {WEEKDAYS[Number(d.weekday)]?.long} {start !== null ? formatMinutes(start) : d.start}–{end !== null ? formatMinutes(end) : d.end}
                           </span>
@@ -423,16 +391,10 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
                             <div className="font-bold text-white">
                               {WEEKDAYS[Number(d.weekday)]?.long ?? "Choose a day"} ·{" "}
                               {start !== null ? formatMinutes(start) : "--"}–{end !== null ? formatMinutes(end) : "--"}
-                              {isNew && <span className="ml-1.5 rounded bg-teal-500/20 px-1.5 py-0.5 text-[10px] text-teal-200">new</span>}
+                              {isNew && <span className="ml-1.5 rounded bg-teal-500/20 px-1.5 py-0.5 text-xs text-teal-200">new</span>}
                             </div>
-                            <div className="text-[11px] text-slate-400">
+                            <div className="text-xs text-slate-400">
                               {trainerName(d) ?? <span className="text-amber-300">No trainer — classes can&apos;t be booked</span>}
-                              {conv && (
-                                <span className="block text-slate-500">
-                                  = {conv.weekdayShort} {conv.start}–{conv.end} {shortZoneLabel(compareZone!)}
-                                  {conv.dayShift === 1 ? " (next day)" : conv.dayShift === -1 ? " (previous day)" : ""}
-                                </span>
-                              )}
                             </div>
                           </div>
                           {canEdit && (
@@ -460,7 +422,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
 
                         {canEdit && d.editing && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                            <label className="block text-[11px] text-slate-400 sm:col-span-2">
+                            <label className="block text-xs text-slate-400 sm:col-span-2">
                               Subject
                               <select
                                 value={d.enrolmentId}
@@ -472,7 +434,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
                                 ))}
                               </select>
                             </label>
-                            <label className="block text-[11px] text-slate-400 sm:col-span-2">
+                            <label className="block text-xs text-slate-400 sm:col-span-2">
                               Day of the week
                               <select
                                 value={d.weekday}
@@ -484,7 +446,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
                                 ))}
                               </select>
                             </label>
-                            <label className="block text-[11px] text-slate-400">
+                            <label className="block text-xs text-slate-400">
                               Start time
                               <input
                                 type="time"
@@ -494,7 +456,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
                                 className={`${fieldBase} mt-1 ${errorFor(d, "start") ? "border-rose-500/70" : "border-slate-700"}`}
                               />
                             </label>
-                            <label className="block text-[11px] text-slate-400">
+                            <label className="block text-xs text-slate-400">
                               End time
                               <input
                                 type="time"
@@ -504,7 +466,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
                                 className={`${fieldBase} mt-1 ${errorFor(d, "end") ? "border-rose-500/70" : "border-slate-700"}`}
                               />
                             </label>
-                            <label className="block text-[11px] text-slate-400 sm:col-span-2">
+                            <label className="block text-xs text-slate-400 sm:col-span-2">
                               Trainer for this slot
                               <select
                                 value={d.teacherId}
@@ -545,7 +507,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
       )}
 
       {canEdit && isDirty && !preview && (
-        <div className="sticky bottom-24 lg:bottom-4 z-10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 rounded-2xl border border-teal-500/30 bg-[#0c1220]/95 backdrop-blur p-3 shadow-2xl">
+        <div className="sticky bottom-24 lg:bottom-4 z-10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 rounded-2xl border border-teal-500/30 bg-[#0c1220]/95 p-3 shadow-2xl">
           <span className="text-xs text-teal-200 font-semibold">You have unsaved timetable changes.</span>
           <div className="flex gap-2">
             <button type="button" onClick={resetAll} className="flex-1 sm:flex-none rounded-xl px-4 py-2 min-h-[44px] text-xs font-semibold text-slate-300 border border-slate-700 hover:bg-slate-800">
@@ -555,7 +517,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
               type="button"
               onClick={runPreview}
               disabled={busy !== null}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-4 py-2 min-h-[44px] text-xs font-bold text-slate-950 disabled:opacity-50"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl bg-teal-400 px-4 py-2 min-h-[44px] text-xs font-bold text-slate-950 disabled:opacity-50"
             >
               {busy === "preview" ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-4 w-4" />}
               Review &amp; save changes
@@ -575,8 +537,8 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
               ["Classes to book", preview.summary.toBook],
             ].map(([label, value]) => (
               <li key={label as string} className="rounded-xl bg-slate-900/80 border border-slate-800 p-2">
-                <div className="text-lg font-black text-white">{value}</div>
-                <div className="text-[10px] text-slate-400">{label}</div>
+                <div className="text-lg font-bold text-white">{value}</div>
+                <div className="text-xs text-slate-400">{label}</div>
               </li>
             ))}
           </ul>
@@ -639,7 +601,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
               type="button"
               onClick={confirmSave}
               disabled={busy !== null}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-4 py-2 min-h-[44px] font-bold text-slate-950 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-400 px-4 py-2 min-h-[44px] font-bold text-slate-950 disabled:opacity-50"
             >
               {busy === "save" ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               Confirm &amp; save timetable
@@ -654,16 +616,13 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
           <ListOrdered className="h-3.5 w-3.5 text-teal-400" /> Weekly overview
         </h4>
         {agenda.length === 0 ? (
-          <p className="text-[11px] text-slate-500">No weekly slots yet.</p>
+          <p className="text-xs text-slate-400">No weekly slots yet.</p>
         ) : (
           <ol className="divide-y divide-slate-800/80 rounded-2xl border border-slate-800 bg-slate-950/40">
             {agenda.map((d) => {
               const start = parseTimeOfDay(d.start)!;
               const end = parseTimeOfDay(d.end)!;
               const enr = enrolmentById.get(d.enrolmentId);
-              const conv = compareZone && end > start
-                ? convertSlotForDisplay({ weekday: Number(d.weekday), startMinutes: start, endMinutes: end, timeZone }, compareZone)
-                : null;
               return (
                 <li key={d.key} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 p-2.5 text-xs">
                   <span className="font-bold text-white w-24 shrink-0">{WEEKDAYS[Number(d.weekday)]?.long}</span>
@@ -672,11 +631,6 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
                     <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: enr?.subjectColor || "#14b8a6" }} />
                     <span className="truncate">{enr?.subjectName} · {trainerName(d) ?? "no trainer"}</span>
                   </span>
-                  {conv && (
-                    <span className="text-[11px] text-slate-500 sm:ml-auto">
-                      {conv.weekdayShort} {conv.start} {shortZoneLabel(compareZone!)}{conv.dayShift === 1 ? " (+1 day)" : conv.dayShift === -1 ? " (−1 day)" : ""}
-                    </span>
-                  )}
                 </li>
               );
             })}
@@ -719,22 +673,18 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, viewerTime
           )}
         </div>
         {view.upcoming.length === 0 ? (
-          <p className="text-[11px] text-slate-500">No classes booked from the weekly timetable yet.</p>
+          <p className="text-xs text-slate-400">No classes booked from the weekly timetable yet.</p>
         ) : (
           <ul className="divide-y divide-slate-800/80 rounded-2xl border border-slate-800">
             {view.upcoming.map((u) => {
-              const local = describeInZone(new Date(u.start), timeZone);
-              const ist = describeInZone(new Date(u.start), "Asia/Kolkata");
+              const local = describeInZone(new Date(u.start), IST);
               return (
                 <li key={u.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-2.5 text-xs">
                   <div className="min-w-0">
                     <span className="font-semibold text-white">
-                      {local.localDate} {local.weekdayShort} {local.time} {shortZoneLabel(timeZone)}
+                      {local.localDate} {local.weekdayShort} {local.time} IST
                     </span>
-                    {timeZone !== "Asia/Kolkata" && (
-                      <span className="text-slate-500"> · {ist.weekdayShort} {ist.time} IST</span>
-                    )}
-                    <div className="text-[11px] text-slate-400 truncate">
+                    <div className="text-xs text-slate-400 truncate">
                       {u.subjectName} · {u.teacherName} · {u.packageNumber}
                     </div>
                   </div>

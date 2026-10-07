@@ -1,839 +1,581 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  History,
-  X,
-  RefreshCw,
-  Sparkles,
-  ShieldAlert,
-  Zap,
-  DollarSign,
-  GraduationCap,
-} from "lucide-react";
+import { CheckCircle2, ClipboardList, MessageSquareWarning, X } from "lucide-react";
+import { apiRequest, ClientApiError, errorMessage } from "@/lib/client-api";
 import { formatInTimeZone } from "@/lib/timezones";
-import { MobileTabs } from "@/components/ui/MobileTabs";
-import { StatusBadge } from "@/components/ui/StatusBadge";
-import { apiRequest, errorMessage } from "@/lib/client-api";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Notice } from "@/components/ui/Notice";
+import { Button } from "@/components/ui/Button";
+import { ModalShell } from "@/components/ui/ModalShell";
+import { Field, controlBorder, controlClass } from "@/components/ui/Field";
 
-interface AttendanceClientProps {
-  missingSessions: any[];
-  allRecords: any[];
-  teacherAbsences: any[];
-  currentUserRole: string;
-  canCorrect: boolean;
+type Outcome = "COMPLETED" | "STUDENT_NO_SHOW" | "TEACHER_NO_SHOW" | "CANCELLED";
+type Attendance = "PRESENT" | "LATE" | "ABSENT";
+
+interface PendingClass {
+  id: string;
+  start: string;
+  end: string;
+  durationMinutes: number;
+  student: { name: string; grade: string };
+  subject: string;
+  trainer: string;
+  packageNumber: string;
+  noShowCharges: boolean;
+  cancellationNoticeHours: number;
+  hourlyRate: number | null;
+}
+
+interface SubmittedRecord {
+  id: string;
+  sessionId: string;
+  start: string;
+  student: string;
+  subject: string;
+  trainer: string;
+  outcome: string;
+  attendance: string;
+  topic: string;
+  homework: string | null;
+  minutes: number;
+  markedBy: string;
+  markedAt: string;
+  reversed: boolean;
+  openRequest: boolean;
+}
+
+interface CorrectionRequestItem {
+  id: string;
+  recordId: string;
+  requestedBy: string;
+  reason: string;
+  requestedOutcome: string | null;
+  requestedAttendance: string | null;
+  status: string;
+  resolvedBy: string | null;
+  resolutionNote: string | null;
+  createdAt: string;
+  student: string;
+  subject: string;
+  trainer: string;
+  start: string;
+  currentOutcome: string;
+  currentAttendance: string;
+}
+
+const OUTCOMES: { value: Outcome; label: string }[] = [
+  { value: "COMPLETED", label: "Class completed" },
+  { value: "STUDENT_NO_SHOW", label: "Student did not attend" },
+  { value: "TEACHER_NO_SHOW", label: "Trainer could not take the class" },
+  { value: "CANCELLED", label: "Class cancelled" },
+];
+const OUTCOME_LABEL: Record<string, string> = {
+  COMPLETED: "Completed",
+  STUDENT_NO_SHOW: "Student absent",
+  TEACHER_NO_SHOW: "Trainer absent",
+  CANCELLED: "Cancelled",
+};
+const ATTENDANCE: { value: Attendance; label: string }[] = [
+  { value: "PRESENT", label: "Present" },
+  { value: "LATE", label: "Late" },
+  { value: "ABSENT", label: "Absent" },
+];
+const DEFAULT_ATTENDANCE: Record<Outcome, Attendance> = {
+  COMPLETED: "PRESENT",
+  STUDENT_NO_SHOW: "ABSENT",
+  TEACHER_NO_SHOW: "PRESENT",
+  CANCELLED: "ABSENT",
+};
+
+/** What the server will do with the student's package for this outcome (mirrors attendance-ledger). */
+function creditEffect(outcome: Outcome, c: PendingClass): { uses: boolean; text: string } {
+  const pkg = c.packageNumber;
+  switch (outcome) {
+    case "COMPLETED":
+      return { uses: true, text: `Uses 1 class from package ${pkg}.` };
+    case "STUDENT_NO_SHOW":
+      return c.noShowCharges
+        ? { uses: true, text: `Uses 1 class: package ${pkg} charges for no-shows.` }
+        : { uses: false, text: `No class used: package ${pkg} does not charge for no-shows.` };
+    case "TEACHER_NO_SHOW":
+      return { uses: false, text: "No class used: a trainer absence never uses the student's classes. Arrange a replacement class." };
+    case "CANCELLED": {
+      const hoursNotice = (new Date(c.start).getTime() - Date.now()) / 3600000;
+      if (hoursNotice >= c.cancellationNoticeHours) return { uses: false, text: `No class used: cancelled with at least ${c.cancellationNoticeHours} hours' notice.` };
+      return c.noShowCharges
+        ? { uses: true, text: `Uses 1 class: cancelled with less than ${c.cancellationNoticeHours} hours' notice (package ${pkg} charges late cancellations).` }
+        : { uses: false, text: `No class used: package ${pkg} does not charge late cancellations.` };
+    }
+  }
+}
+
+function RadioGroup<T extends string>({ legend, name, value, options, onChange, describe }: { legend: string; name: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; describe?: (v: T) => string }) {
+  return (
+    <fieldset>
+      <legend className="mb-1 text-sm font-semibold text-ink-muted">{legend}</legend>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {options.map((o) => (
+          <label key={o.value} className={`flex min-h-[44px] cursor-pointer items-start gap-2 rounded-control border p-2.5 text-sm ${value === o.value ? "border-brand bg-brand/10" : "border-line-strong"}`}>
+            <input type="radio" name={name} value={o.value} checked={value === o.value} onChange={() => onChange(o.value)} className="mt-0.5 h-4 w-4 accent-teal-400" />
+            <span>
+              <span className="font-semibold text-ink">{o.label}</span>
+              {describe && <span className="block text-ink-subtle">{describe(o.value)}</span>}
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function MarkAttendanceDialog({ c, onClose, onDone }: { c: PendingClass; onClose: () => void; onDone: (message: string) => void }) {
+  const submitting = useRef(false);
+  const [outcome, setOutcome] = useState<Outcome>("COMPLETED");
+  const [attendance, setAttendance] = useState<Attendance>("PRESENT");
+  const [minutes, setMinutes] = useState(String(c.durationMinutes || 60));
+  const [topic, setTopic] = useState("");
+  const [homework, setHomework] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const effect = creditEffect(outcome, c);
+  const mins = Number(minutes) || 0;
+  const earnings = outcome === "COMPLETED" && c.hourlyRate !== null ? Math.round((c.hourlyRate * mins) / 60) : null;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting.current) return;
+    const errors: Record<string, string> = {};
+    if (outcome === "COMPLETED" && !topic.trim()) errors.topicCovered = "Write what was covered in the class.";
+    if (!Number.isInteger(mins) || mins < 0 || mins > 300) errors.actualDurationMinutes = "Enter whole minutes between 0 and 300.";
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors);
+      return;
+    }
+    submitting.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      const data = await apiRequest<{ alreadyProcessed?: boolean; message?: string; shouldConsumeCredit?: boolean }>(`/api/sessions/${c.id}/attendance`, {
+        method: "POST",
+        body: { sessionOutcome: outcome, studentAttendance: attendance, actualDurationMinutes: mins, topicCovered: topic.trim() || undefined, homework: homework.trim() || undefined, studentProgressNote: note.trim() || undefined },
+      });
+      onDone(
+        data.alreadyProcessed
+          ? data.message ?? "Attendance was already submitted for this class."
+          : `Attendance saved for ${c.student.name} (${c.subject}). ${data.shouldConsumeCredit ? "1 class used from the package." : "No class used."}`
+      );
+    } catch (err) {
+      setFieldErrors(err instanceof ClientApiError ? err.fieldErrors : {});
+      setError(errorMessage(err, "Could not save attendance."));
+    } finally {
+      submitting.current = false;
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell labelledBy="mark-title" onClose={onClose} closeDisabled={saving} maxWidth="max-w-xl">
+      <form onSubmit={submit} noValidate className="space-y-4">
+        <div className="flex items-start justify-between gap-3 border-b border-line pb-3">
+          <div>
+            <h2 id="mark-title" className="text-xl font-bold text-ink">Mark attendance</h2>
+            <p className="text-sm text-ink-muted">
+              {c.student.name} ({c.student.grade}) · {c.subject} · {c.trainer}
+              <br />
+              {formatInTimeZone(c.start)} IST · {c.durationMinutes} min scheduled
+            </p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-ink-muted hover:bg-raised">
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+        {error && <Notice tone="error">{error}</Notice>}
+        <RadioGroup
+          legend="What happened?"
+          name="outcome"
+          value={outcome}
+          options={OUTCOMES}
+          onChange={(v) => { setOutcome(v); setAttendance(DEFAULT_ATTENDANCE[v]); }}
+          describe={(v) => (creditEffect(v, c).uses ? "Uses 1 class" : "No class used")}
+        />
+        <RadioGroup legend="Student attendance" name="attendance" value={attendance} options={ATTENDANCE} onChange={setAttendance} />
+        <div className="grid gap-4 sm:grid-cols-[8rem_1fr]">
+          <Field label="Minutes taught" name="actualDurationMinutes" error={fieldErrors.actualDurationMinutes}>
+            {(p) => <input {...p} type="number" inputMode="numeric" min={0} max={300} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={`${controlClass} ${controlBorder(!!fieldErrors.actualDurationMinutes)} tabular-nums`} />}
+          </Field>
+          <Field label={outcome === "COMPLETED" ? "Topic covered" : "Topic covered (optional)"} name="topicCovered" required={outcome === "COMPLETED"} error={fieldErrors.topicCovered}>
+            {(p) => <input {...p} type="text" value={topic} onChange={(e) => { setTopic(e.target.value); setFieldErrors((f) => ({ ...f, topicCovered: "" })); }} placeholder="e.g. Chemical bonding: ionic bonds" className={`${controlClass} ${controlBorder(!!fieldErrors.topicCovered)}`} />}
+          </Field>
+        </div>
+        <Field label="Homework (optional)" name="homework">
+          {(p) => <input {...p} type="text" value={homework} onChange={(e) => setHomework(e.target.value)} className={`${controlClass} ${controlBorder(false)}`} />}
+        </Field>
+        <Field label="Progress note (optional)" name="studentProgressNote">
+          {(p) => <textarea {...p} rows={2} value={note} onChange={(e) => setNote(e.target.value)} className={`${controlClass} ${controlBorder(false)}`} />}
+        </Field>
+        <Notice tone={effect.uses ? "warning" : "info"} title={effect.uses ? "This uses 1 class" : "No class is used"}>
+          <p>{effect.text}</p>
+          {earnings !== null && <p className="mt-1">Trainer earns ₹{earnings.toLocaleString("en-IN")} (₹{c.hourlyRate}/hour × {mins} min).</p>}
+          <p className="mt-1">Submitted attendance is locked. Mistakes are fixed through a correction request.</p>
+        </Notice>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-3">
+          <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button type="submit" loading={saving} icon={CheckCircle2}>Submit attendance</Button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+function CorrectDialog({ record, prefill, onClose, onDone }: { record: SubmittedRecord; prefill?: { outcome?: string | null; attendance?: string | null; reason?: string }; onClose: () => void; onDone: (message: string) => void }) {
+  const [outcome, setOutcome] = useState<Outcome>((prefill?.outcome as Outcome) || (record.outcome as Outcome));
+  const [attendance, setAttendance] = useState<Attendance>((prefill?.attendance as Attendance) || (record.attendance as Attendance));
+  const [reason, setReason] = useState(prefill?.reason ? `Trainer request: ${prefill.reason}` : "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const data = await apiRequest<{ warnings?: string[] }>(`/api/attendance/${record.id}/correct`, { method: "POST", body: { newOutcome: outcome, newAttendance: attendance, reason } });
+      onDone(["Attendance corrected. The change, credit and payout adjustments are recorded in the history.", ...(data.warnings ?? [])].join(" "));
+    } catch (err) {
+      setError(errorMessage(err, "Could not correct the attendance."));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <ModalShell labelledBy="correct-title" onClose={onClose} closeDisabled={saving} maxWidth="max-w-xl">
+      <form onSubmit={submit} noValidate className="space-y-4">
+        <div className="border-b border-line pb-3">
+          <h2 id="correct-title" className="text-xl font-bold text-ink">Correct attendance</h2>
+          <p className="text-sm text-ink-muted">
+            {record.student} · {record.subject} · {formatInTimeZone(record.start)} IST. Recorded: {OUTCOME_LABEL[record.outcome] ?? record.outcome}, {record.attendance.toLowerCase()}.
+          </p>
+        </div>
+        {error && <Notice tone="error">{error}</Notice>}
+        <RadioGroup legend="Correct outcome" name="correct-outcome" value={outcome} options={OUTCOMES} onChange={setOutcome} />
+        <RadioGroup legend="Correct attendance" name="correct-attendance" value={attendance} options={ATTENDANCE} onChange={setAttendance} />
+        <Field label="Reason (kept in the audit history)" name="reason" required>
+          {(p) => <textarea {...p} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} className={`${controlClass} ${controlBorder(false)}`} />}
+        </Field>
+        <Notice tone="info">Class credits and the trainer payout are adjusted automatically. The original record and this change both stay in the history.</Notice>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-3">
+          <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button type="submit" loading={saving}>Apply correction</Button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+function RequestDialog({ record, onClose, onDone }: { record: SubmittedRecord; onClose: () => void; onDone: (message: string) => void }) {
+  const [outcome, setOutcome] = useState("");
+  const [attendance, setAttendance] = useState("");
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const data = await apiRequest<{ message: string }>(`/api/attendance/${record.id}/correction-request`, {
+        method: "POST",
+        body: { reason, requestedOutcome: outcome || undefined, requestedAttendance: attendance || undefined },
+      });
+      onDone(data.message);
+    } catch (err) {
+      setFieldErrors(err instanceof ClientApiError ? err.fieldErrors : {});
+      setError(errorMessage(err, "Could not send the request."));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <ModalShell labelledBy="request-title" onClose={onClose} closeDisabled={saving} maxWidth="max-w-xl">
+      <form onSubmit={submit} noValidate className="space-y-4">
+        <div className="border-b border-line pb-3">
+          <h2 id="request-title" className="text-xl font-bold text-ink">Request a correction</h2>
+          <p className="text-sm text-ink-muted">
+            {record.student} · {record.subject} · {formatInTimeZone(record.start)} IST. Recorded: {OUTCOME_LABEL[record.outcome] ?? record.outcome}, {record.attendance.toLowerCase()}.
+          </p>
+        </div>
+        {error && <Notice tone="error">{error}</Notice>}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="What should the outcome be?" name="requestedOutcome" error={fieldErrors.requestedOutcome}>
+            {(p) => (
+              <select {...p} value={outcome} onChange={(e) => setOutcome(e.target.value)} className={`${controlClass} ${controlBorder(false)}`}>
+                <option value="">Keep as recorded</option>
+                {OUTCOMES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            )}
+          </Field>
+          <Field label="What should attendance be?" name="requestedAttendance" error={fieldErrors.requestedAttendance}>
+            {(p) => (
+              <select {...p} value={attendance} onChange={(e) => setAttendance(e.target.value)} className={`${controlClass} ${controlBorder(false)}`}>
+                <option value="">Keep as recorded</option>
+                {ATTENDANCE.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            )}
+          </Field>
+        </div>
+        <Field label="What is wrong?" name="reason" required error={fieldErrors.reason}>
+          {(p) => <textarea {...p} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} className={`${controlClass} ${controlBorder(!!fieldErrors.reason)}`} />}
+        </Field>
+        <p className="text-sm text-ink-subtle">The coordinator reviews the request. Nothing changes until they apply it.</p>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-3">
+          <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button type="submit" loading={saving} icon={MessageSquareWarning}>Send request</Button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+function DeclineDialog({ request, onClose, onDone }: { request: CorrectionRequestItem; onClose: () => void; onDone: (message: string) => void }) {
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      await apiRequest(`/api/correction-requests/${request.id}/decline`, { method: "POST", body: { note } });
+      onDone(`Request from ${request.requestedBy} declined. The attendance stays as recorded.`);
+    } catch (err) {
+      setError(errorMessage(err, "Could not decline the request."));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <ModalShell labelledBy="decline-title" onClose={onClose} closeDisabled={saving} maxWidth="max-w-lg">
+      <form onSubmit={submit} noValidate className="space-y-4">
+        <h2 id="decline-title" className="text-xl font-bold text-ink">Decline correction request</h2>
+        {error && <Notice tone="error">{error}</Notice>}
+        <Field label={`Note for ${request.requestedBy}`} name="note" required>
+          {(p) => <textarea {...p} rows={3} value={note} onChange={(e) => setNote(e.target.value)} className={`${controlClass} ${controlBorder(false)}`} />}
+        </Field>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button type="submit" variant="danger" loading={saving}>Decline request</Button>
+        </div>
+      </form>
+    </ModalShell>
+  );
 }
 
 export function AttendanceClient({
-  missingSessions,
-  allRecords,
-  teacherAbsences,
-  currentUserRole,
+  pending,
+  records,
+  historyLimit,
+  requests,
+  isTrainer,
   canCorrect,
-}: AttendanceClientProps) {
+  focusSessionId,
+}: {
+  pending: PendingClass[];
+  records: SubmittedRecord[];
+  historyLimit: number;
+  requests: CorrectionRequestItem[];
+  isTrainer: boolean;
+  canCorrect: boolean;
+  focusSessionId: string | null;
+}) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"inbox" | "history" | "absences">("inbox");
-
-  // Submit attendance modal state
-  const [submitSession, setSubmitSession] = useState<any | null>(null);
-  const [outcome, setOutcome] = useState("COMPLETED");
-  const [attendance, setAttendance] = useState("PRESENT");
-  const [duration, setDuration] = useState("60");
-  const [topic, setTopic] = useState("");
-  const [homework, setHomework] = useState("");
-  const [progressNote, setProgressNote] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-
-  // Correction modal state
-  const [correctingRecord, setCorrectingRecord] = useState<any | null>(null);
-  const [newOutcome, setNewOutcome] = useState("COMPLETED");
-  const [newAttendance, setNewAttendance] = useState("PRESENT");
-  const [correctionReason, setCorrectionReason] = useState("");
-
+  const openRequests = requests.filter((r) => r.status === "OPEN");
+  // Links like /attendance?session=… open that class directly.
+  const [tab, setTab] = useState<"pending" | "submitted" | "requests">(() =>
+    focusSessionId && !pending.some((p) => p.id === focusSessionId) && records.some((r) => r.sessionId === focusSessionId) ? "submitted" : "pending"
+  );
+  const [marking, setMarking] = useState<PendingClass | null>(() => pending.find((p) => p.id === focusSessionId) ?? null);
+  const [correcting, setCorrecting] = useState<{ record: SubmittedRecord; prefill?: { outcome?: string | null; attendance?: string | null; reason?: string } } | null>(null);
+  const [requesting, setRequesting] = useState<SubmittedRecord | null>(null);
+  const [declining, setDeclining] = useState<CorrectionRequestItem | null>(null);
   const [banner, setBanner] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
-  // Rates are computed on the server and are null when this role may not see them.
-  const calculateTrainerEarnings = (ratePerHour: number, durationMins: number) => {
-    return Math.round((ratePerHour * durationMins) / 60);
-  };
-
-  const postAttendance = (sessionId: string, body: Record<string, unknown>) =>
-    apiRequest<{ alreadyProcessed?: boolean; message?: string }>(`/api/sessions/${sessionId}/attendance`, {
-      method: "POST",
-      body,
-    });
-
-  // Quick 1-Click submit for standard completed class
-  const handleQuickMarkDone = async (ses: any) => {
-    if (loading) return;
-    setLoading(true);
-    setBanner(null);
-    try {
-      const data = await postAttendance(ses.id, {
-        sessionOutcome: "COMPLETED",
-        studentAttendance: "PRESENT",
-        actualDurationMinutes: ses.durationMinutes || 60,
-        topicCovered: `Regular Curriculum Session (${ses.subject.name})`,
-        homework: "Revise concepts covered in class",
-      });
-      setBanner({ tone: "success", text: data.alreadyProcessed ? data.message || "Already recorded." : `Marked ${ses.student.name}'s ${ses.subject.name} class as completed.` });
-      router.refresh();
-    } catch (err: any) {
-      setBanner({ tone: "error", text: errorMessage(err) });
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (focusSessionId && tab === "submitted") {
+      document.getElementById(`record-${focusSessionId}`)?.scrollIntoView({ block: "center" });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const done = (text: string) => {
+    setMarking(null);
+    setCorrecting(null);
+    setRequesting(null);
+    setDeclining(null);
+    setBanner({ tone: "success", text });
+    router.refresh();
   };
 
-  // Quick 1-Click submit for absent student
-  const handleQuickMarkAbsent = async (ses: any) => {
-    if (loading) return;
-    if (!confirm(`Mark ${ses.student.name} as ABSENT for this class?`)) return;
-    setLoading(true);
-    setBanner(null);
-    try {
-      const data = await postAttendance(ses.id, {
-        sessionOutcome: "STUDENT_NO_SHOW",
-        studentAttendance: "ABSENT",
-        actualDurationMinutes: ses.durationMinutes || 60,
-        topicCovered: "Student Absent (No Show)",
-      });
-      setBanner({ tone: "success", text: data.alreadyProcessed ? data.message || "Already recorded." : `Marked ${ses.student.name} absent.` });
-      router.refresh();
-    } catch (err: any) {
-      setBanner({ tone: "error", text: errorMessage(err) });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAttendanceSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!submitSession || loading) return;
-    setLoading(true);
-    setErrorMsg("");
-
-    try {
-      const data = await postAttendance(submitSession.id, {
-        sessionOutcome: outcome,
-        studentAttendance: attendance,
-        actualDurationMinutes: Number(duration) || 60,
-        topicCovered: topic.trim() || `Class session for ${submitSession.subject.name}`,
-        homework,
-        studentProgressNote: progressNote,
-      });
-      setSubmitSession(null);
-      setBanner({ tone: "success", text: data.alreadyProcessed ? data.message || "Already recorded." : "Attendance saved." });
-      router.refresh();
-    } catch (err: any) {
-      setErrorMsg(errorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCorrectionSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!correctingRecord || loading) return;
-    setLoading(true);
-    setErrorMsg("");
-
-    try {
-      const data = await apiRequest<{ warnings?: string[] }>(`/api/attendance/${correctingRecord.id}/correct`, {
-        method: "POST",
-        body: { newOutcome, newAttendance, reason: correctionReason },
-      });
-      setCorrectingRecord(null);
-      setBanner({
-        tone: data.warnings?.length ? "error" : "success",
-        text: ["Attendance corrected; the change is recorded in the revision history and credit ledger.", ...(data.warnings ?? [])].join(" "),
-      });
-      router.refresh();
-    } catch (err: any) {
-      setErrorMsg(errorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Active modal trainer rate calculation (null = not visible to this role)
-  const modalHourlyRate: number | null = submitSession?.hourlyRate ?? null;
-  const modalDurationMins = Number(duration) || 60;
-  const modalDurationHours = (modalDurationMins / 60).toFixed(2);
-  const modalTrainerEarnings = outcome === "COMPLETED" && modalHourlyRate !== null
-    ? calculateTrainerEarnings(modalHourlyRate, modalDurationMins)
-    : 0;
+  const tabs: { id: typeof tab; label: string }[] = [
+    { id: "pending", label: `To mark (${pending.length})` },
+    { id: "submitted", label: "Submitted" },
+    { id: "requests", label: isTrainer ? `My correction requests (${requests.length})` : `Correction requests (${openRequests.length})` },
+  ];
 
   return (
-    <div className="space-y-6">
-      {banner && (
-        <div
-          role={banner.tone === "error" ? "alert" : "status"}
-          className={`flex items-start justify-between gap-3 rounded-2xl border p-3.5 text-xs font-semibold ${
-            banner.tone === "success" ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300" : "bg-amber-500/15 border-amber-500/30 text-amber-100"
-          }`}
-        >
-          <span>{banner.text}</span>
-          <button onClick={() => setBanner(null)} aria-label="Dismiss message" className="p-1 shrink-0"><X className="h-4 w-4" /></button>
-        </div>
-      )}
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-teal-400">
-            <CheckCircle2 className="h-4 w-4" />
-            <span>Attendance & Trainer Hourly Earnings</span>
-          </div>
-          <h2 className="text-xl sm:text-3xl font-black tracking-tight text-white mt-1">
-            Teacher Attendance & Class Delivery
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Mark attendance in 1 click. Trainers earn based on student standard and hours taught.
-          </p>
-        </div>
-      </div>
-
-      {/* Trainer Rate by Standard Explainer Card */}
-      <div className="rounded-2xl sm:rounded-3xl border border-teal-500/30 bg-slate-900/60 backdrop-blur-xl p-5 shadow-xl shadow-black/40">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 font-extrabold text-sm text-teal-300">
-              <Zap className="h-4 w-4 text-teal-400" />
-              How Trainer Earnings Work (Hourly Standard Rates)
-            </div>
-            <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-              Each student standard (8th, 9th, 10th, 11th, 12th) has a specific hourly charge. When a class is marked completed, the app automatically calculates earnings:
-              <span className="font-semibold text-white ml-1">
-                Trainer Earnings = (Standard Rate per Hour) × (Class Hours Taught)
-              </span>.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs shrink-0">
-            <div className="rounded-xl bg-slate-800/80 p-2.5 border border-slate-700 shadow-sm">
-              <div className="text-[10px] text-slate-400 font-bold uppercase">8th–9th Std</div>
-              <div className="font-black text-white mt-0.5">₹450 – ₹500<span className="text-[10px] font-normal text-slate-400">/hr</span></div>
-            </div>
-            <div className="rounded-xl bg-slate-800/80 p-2.5 border border-slate-700 shadow-sm">
-              <div className="text-[10px] text-slate-400 font-bold uppercase">10th Std</div>
-              <div className="font-black text-white mt-0.5">₹500 – ₹550<span className="text-[10px] font-normal text-slate-400">/hr</span></div>
-            </div>
-            <div className="rounded-xl bg-slate-800/80 p-2.5 border border-slate-700 shadow-sm">
-              <div className="text-[10px] text-slate-400 font-bold uppercase">11th Std</div>
-              <div className="font-black text-teal-300 mt-0.5">₹600<span className="text-[10px] font-normal text-slate-400">/hr</span></div>
-            </div>
-            <div className="rounded-xl bg-slate-800/80 p-2.5 border border-slate-700 shadow-sm">
-              <div className="text-[10px] text-slate-400 font-bold uppercase">12th / NEET</div>
-              <div className="font-black text-purple-300 mt-0.5">₹700 – ₹750<span className="text-[10px] font-normal text-slate-400">/hr</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Attendance Tabs with MobileTabs */}
-      <MobileTabs
-        tabs={[
-          {
-            id: "inbox",
-            label: "Pending Attendance",
-            icon: Clock,
-            count: missingSessions.length,
-          },
-          {
-            id: "history",
-            label: "Completed Classes & Trainer Earnings",
-            icon: History,
-            count: allRecords.length,
-          },
-          {
-            id: "absences",
-            label: "Teacher Absences",
-            icon: ShieldAlert,
-            count: teacherAbsences.length,
-          },
-        ]}
-        activeTab={activeTab}
-        onChange={(id) => setActiveTab(id as any)}
+    <div className="space-y-5">
+      <PageHeader
+        title="Attendance"
+        context="Times in IST"
+        description={
+          isTrainer
+            ? "Mark attendance for your classes once they have started. Submitted attendance is locked; ask for a correction if something is wrong."
+            : "Classes waiting for attendance, submitted records and trainers' correction requests."
+        }
       />
+      {banner && <Notice tone={banner.tone} onDismiss={() => setBanner(null)}>{banner.text}</Notice>}
 
-      {/* Tab 1: Missing Attendance Inbox with Quick 1-Click Marking */}
-      {activeTab === "inbox" && (
-        <div className="rounded-2xl sm:rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl shadow-2xl shadow-black/40 overflow-hidden">
-          <div className="p-4 sm:p-5 border-b border-slate-800/80 flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-teal-400">
-              Classes Awaiting Attendance ({missingSessions.length})
-            </span>
-            <span className="text-xs text-slate-400">
-              Click &ldquo;⚡ Quick Mark Done&rdquo; or &ldquo;Full Form&rdquo;
-            </span>
-          </div>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Show">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            aria-pressed={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={`min-h-[44px] rounded-control border px-4 text-sm font-semibold ${tab === t.id ? "border-brand bg-brand/15 text-brand-text" : "border-line-strong text-ink-muted hover:bg-raised"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-          <div className="divide-y divide-slate-800/60">
-            {missingSessions.length === 0 ? (
-              <div className="py-16 text-center text-xs text-slate-400">
-                <CheckCircle2 className="h-10 w-10 text-teal-400 mx-auto mb-3" />
-                All classes are up-to-date! No pending attendance.
-              </div>
-            ) : (
-              missingSessions.map((ses) => {
-                const hourlyRate: number | null = ses.hourlyRate ?? null;
-                const standard1HourEarning = hourlyRate;
+      {tab === "pending" && (
+        <section aria-label="Classes to mark" className="rounded-card border border-line bg-surface">
+          {pending.length === 0 ? (
+            <p className="flex items-center gap-2 p-4 text-sm text-ink-muted">
+              <CheckCircle2 className="h-5 w-5 text-success" aria-hidden="true" /> No classes are waiting for attendance.
+            </p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {pending.map((c) => (
+                <li key={c.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-ink break-words">
+                      {c.student.name} <span className="font-normal text-ink-muted">· {c.subject} · {c.student.grade}</span>
+                    </p>
+                    <p className="text-sm text-ink-muted">
+                      {formatInTimeZone(c.start)} IST{isTrainer ? "" : ` · ${c.trainer}`}
+                    </p>
+                  </div>
+                  <Button icon={ClipboardList} onClick={() => setMarking(c)}>
+                    Mark attendance<span className="sr-only"> for {c.student.name}</span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
+      {tab === "submitted" && (
+        <section aria-label="Submitted attendance" className="rounded-card border border-line bg-surface">
+          <p className="border-b border-line p-4 text-sm text-ink-muted">Latest {Math.min(records.length, historyLimit)} submitted classes, newest first.</p>
+          {records.length === 0 ? (
+            <p className="p-4 text-sm text-ink-muted">No attendance submitted yet.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {records.map((r) => (
+                <li key={r.id} id={`record-${r.sessionId}`} className={`flex flex-col gap-3 p-4 md:flex-row md:items-start md:justify-between ${r.sessionId === focusSessionId ? "bg-brand/5" : ""}`}>
+                  <div className="min-w-0 space-y-0.5 text-sm">
+                    <p className="text-base font-semibold text-ink break-words">
+                      {r.student} <span className="font-normal text-ink-muted">· {r.subject}</span>
+                    </p>
+                    <p className="text-ink-muted">{formatInTimeZone(r.start)} IST{isTrainer ? "" : ` · ${r.trainer}`}</p>
+                    <p className="text-ink">
+                      <strong>{OUTCOME_LABEL[r.outcome] ?? r.outcome}</strong> · student {r.attendance.toLowerCase()} · {r.minutes} min
+                      {r.reversed && <span className="ml-2 rounded-full border border-amber-300/50 px-2 text-warning">Corrected</span>}
+                    </p>
+                    <p className="text-ink-muted break-words">Topic: {r.topic}{r.homework ? ` · Homework: ${r.homework}` : ""}</p>
+                    <p className="text-ink-subtle">Submitted by {r.markedBy}, {formatInTimeZone(r.markedAt)} IST</p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {canCorrect && (
+                      <Button variant="secondary" size="sm" onClick={() => setCorrecting({ record: r })}>
+                        Correct<span className="sr-only"> attendance for {r.student}</span>
+                      </Button>
+                    )}
+                    {isTrainer &&
+                      (r.openRequest ? (
+                        <span className="inline-flex min-h-[44px] items-center rounded-control border border-sky-300/40 px-3 text-sm text-info">Correction requested</span>
+                      ) : (
+                        <Button variant="outline" size="sm" icon={MessageSquareWarning} onClick={() => setRequesting(r)}>
+                          Request correction<span className="sr-only"> for {r.student}</span>
+                        </Button>
+                      ))}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {tab === "requests" && (
+        <section aria-label="Correction requests" className="rounded-card border border-line bg-surface">
+          {requests.length === 0 ? (
+            <p className="p-4 text-sm text-ink-muted">{isTrainer ? "You have not asked for any corrections." : "No open correction requests."}</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {requests.map((q) => {
+                const record = records.find((r) => r.id === q.recordId);
                 return (
-                  <div
-                    key={ses.id}
-                    className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-800/40 transition-colors"
-                  >
-                    <div className="flex items-start gap-3.5">
-                      <div
-                        className="w-2.5 h-14 rounded-full mt-0.5 shrink-0 shadow-sm"
-                        style={{ backgroundColor: ses.subject.color }}
-                      />
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-extrabold text-sm text-white">
-                            {ses.student.name}
-                          </span>
-                          <span className="rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 px-2.5 py-0.5 text-xs font-bold">
-                            {ses.student.grade} ({ses.student.board})
-                          </span>
-                          <span className="rounded-full bg-teal-500/15 border border-teal-500/30 px-2.5 py-0.5 text-xs font-bold text-teal-300">
-                            {ses.subject.name}
-                          </span>
-                          <span className="rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-bold text-amber-300">
-                            Attendance Pending
-                          </span>
-                        </div>
-
-                        <div className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
-                          <span>Trainer: <strong className="text-slate-200">{ses.teacher.name}</strong></span>
-                          <span>•</span>
-                          <span>
-                            Class Date: {formatInTimeZone(ses.scheduledStartTimeUtc, "Asia/Kolkata")} IST
-                          </span>
-                        </div>
-
-                        {/* Standard-specific rate tag (only for roles allowed to see pay rates) */}
-                        {hourlyRate !== null && (
-                        <div className="mt-1.5 flex items-center gap-2 text-xs">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 font-bold text-emerald-300 text-[11px]">
-                            <DollarSign className="h-3 w-3 text-emerald-400" />
-                            Standard Rate: ₹{hourlyRate}/hr
-                          </span>
-                          <span className="text-[11px] text-slate-500">
-                            (1 hr class = ₹{standard1HourEarning} trainer earnings)
-                          </span>
-                        </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Simple 1-Click Action Buttons */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => handleQuickMarkDone(ses)}
-                        disabled={loading}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-3.5 py-2 text-xs font-black text-slate-950 hover:from-teal-300 hover:to-emerald-400 shadow-md transition-all disabled:opacity-50"
-                        title="Mark class completed and student present in 1 click"
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                        Mark Present
-                      </button>
-
-                      <button
-                        onClick={() => handleQuickMarkAbsent(ses)}
-                        disabled={loading}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-rose-500/15 border border-rose-500/30 px-3 py-2 text-xs font-bold text-rose-300 hover:bg-rose-500/25 transition-all disabled:opacity-50"
-                        title="Mark student absent"
-                      >
-                        <X className="h-4 w-4" />
-                        Absent
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setSubmitSession(ses);
-                          setDuration("60");
-                          setTopic(`Regular ${ses.subject.name} class session`);
-                          setHomework("");
-                          setProgressNote("");
-                          setErrorMsg("");
-                        }}
-                        className="rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors"
-                        title="Add homework or custom notes"
-                      >
-                        Notes / Custom
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Tab 2: Attendance History & Trainer Earnings */}
-      {activeTab === "history" && (
-        <div className="rounded-2xl sm:rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl shadow-2xl shadow-black/40 overflow-hidden">
-          <div className="p-4 sm:p-5 border-b border-slate-800/80 flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-teal-400">
-              Completed Classes & Earnings ({allRecords.length})
-            </span>
-          </div>
-
-          <div className="divide-y divide-slate-800/60">
-            {allRecords.length === 0 ? (
-              <div className="py-16 text-center text-xs text-slate-400">
-                <History className="h-10 w-10 text-slate-500 mx-auto mb-3" />
-                No attendance records marked yet.
-              </div>
-            ) : (
-              allRecords.map((rec) => {
-                const studentGrade = rec.session.student.grade;
-                const rate: number | null = rec.hourlyRate ?? null;
-                const durationMins = rec.actualDurationMinutes || 60;
-                const earned = rec.sessionOutcome === "COMPLETED" && rate !== null
-                  ? calculateTrainerEarnings(rate, durationMins)
-                  : 0;
-
-                return (
-                  <div
-                    key={rec.id}
-                    className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-800/40 transition-colors text-xs"
-                  >
-                    <div className="space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-extrabold text-white text-sm">
-                          {rec.session.student.name}
-                        </span>
-                        <span className="rounded-full bg-purple-500/15 border border-purple-500/30 px-2.5 py-0.5 text-[10px] font-bold text-purple-300">
-                          {studentGrade}
-                        </span>
-                        <span className="rounded-full bg-teal-500/15 border border-teal-500/30 px-2.5 py-0.5 text-[10px] font-bold text-teal-300">
-                          {rec.session.subject.name}
-                        </span>
-                        <StatusBadge status={rec.sessionOutcome} size="sm" />
-                        {rec.isReversed && (
-                          <StatusBadge status="REVERSED" size="sm" />
-                        )}
-                      </div>
-
-                      <div className="text-slate-300">
-                        <strong className="text-slate-400">Topic:</strong> {rec.topicCovered}
-                      </div>
-
-                      <div className="text-slate-400 text-[11px]">
-                        Trainer: <strong className="text-slate-200">{rec.session.teacher.name}</strong> • Marked: {formatInTimeZone(rec.markedAt, "Asia/Kolkata")}
-                      </div>
-                    </div>
-
-                    {/* Right side: Trainer Earned breakdown */}
-                    <div className="flex items-center justify-between sm:justify-end gap-5 shrink-0">
-                      {rate !== null && (
-                      <div className="text-right">
-                        <span className="text-[10px] text-slate-400 uppercase font-bold">
-                          Trainer Earned
-                        </span>
-                        <div className="font-black text-sm text-emerald-400">
-                          ₹{earned.toLocaleString("en-IN")}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          Rate: ₹{rate}/hr × {(durationMins / 60).toFixed(1)} hrs
-                        </div>
-                      </div>
+                  <li key={q.id} className="flex flex-col gap-3 p-4 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0 space-y-0.5 text-sm">
+                      <p className="text-base font-semibold text-ink break-words">
+                        {q.student} <span className="font-normal text-ink-muted">· {q.subject} · {formatInTimeZone(q.start)} IST</span>
+                      </p>
+                      <p className="text-ink-muted">
+                        Recorded: {OUTCOME_LABEL[q.currentOutcome] ?? q.currentOutcome}, {q.currentAttendance.toLowerCase()}
+                        {q.requestedOutcome || q.requestedAttendance
+                          ? ` → asked for ${[q.requestedOutcome ? OUTCOME_LABEL[q.requestedOutcome] : null, q.requestedAttendance?.toLowerCase()].filter(Boolean).join(", ")}`
+                          : ""}
+                      </p>
+                      <p className="text-ink break-words">“{q.reason}” — {q.requestedBy}, {formatInTimeZone(q.createdAt)} IST</p>
+                      {q.status !== "OPEN" && (
+                        <p className={q.status === "DECLINED" ? "text-warning" : "text-success"}>
+                          {q.status === "DECLINED" ? "Declined" : "Corrected"} by {q.resolvedBy}{q.resolutionNote ? `: ${q.resolutionNote}` : ""}
+                        </p>
                       )}
-
-                      {/* Correction trigger */}
-                      {canCorrect && (
-                        <button
-                          onClick={() => {
-                            setCorrectingRecord(rec);
-                            setNewOutcome(rec.sessionOutcome);
-                            setNewAttendance(rec.studentAttendance);
-                            setCorrectionReason("");
-                            setErrorMsg("");
-                          }}
-                          className="rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-1.5 font-bold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors"
-                        >
-                          Correction
-                        </button>
-                      )}
+                      {q.status === "OPEN" && isTrainer && <p className="text-info">Waiting for staff.</p>}
                     </div>
-                  </div>
+                    {canCorrect && q.status === "OPEN" && (
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        {record && (
+                          <Button size="sm" onClick={() => setCorrecting({ record, prefill: { outcome: q.requestedOutcome, attendance: q.requestedAttendance, reason: q.reason } })}>
+                            Correct now
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" onClick={() => setDeclining(q)}>Decline</Button>
+                      </div>
+                    )}
+                  </li>
                 );
-              })
-            )}
-          </div>
-        </div>
+              })}
+            </ul>
+          )}
+        </section>
       )}
 
-      {/* Tab 3: Teacher Absences */}
-      {activeTab === "absences" && (
-        <div className="rounded-2xl sm:rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-6 shadow-2xl shadow-black/40 space-y-4">
-          <div className="flex items-center gap-2 text-amber-300 font-bold text-xs bg-amber-950/40 p-3.5 rounded-2xl border border-amber-500/30">
-            <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
-            Mandatory Business Policy: Teacher absence NEVER consumes student package credits.
-          </div>
-          <div className="divide-y divide-slate-800/60">
-            {teacherAbsences.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-400">
-                Zero teacher absences recorded.
-              </div>
-            ) : (
-              teacherAbsences.map((rec) => (
-                <div key={rec.id} className="py-3.5 text-xs space-y-1">
-                  <div className="flex items-center justify-between font-bold text-white">
-                    <span>{rec.session.teacher.name} • {rec.session.subject.name} with {rec.session.student.name}</span>
-                    <span className="text-rose-400 font-semibold">Credit Consumed: 0 (Protected)</span>
-                  </div>
-                  <div className="text-slate-400">
-                    Note: {rec.topicCovered}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Attendance Modal with Live Earnings Calculator */}
-      {submitSession && (
-        <div className="fixed inset-0 z-50 modal-overlay bg-black/75 p-4 backdrop-blur-md">
-          <div className="w-full max-w-lg rounded-3xl bg-[#0c1220] p-6 shadow-2xl border border-slate-800 my-8 text-white">
-            <div className="flex items-center justify-between pb-3.5 border-b border-slate-800/80">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-teal-400" />
-                <h3 className="text-base font-extrabold text-white">
-                  Mark Class Attendance & Earnings
-                </h3>
-              </div>
-              <button
-                onClick={() => setSubmitSession(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAttendanceSubmit} className="mt-4 space-y-4 text-xs">
-              {/* Student Standard & Trainer Info */}
-              <div className="rounded-2xl bg-slate-900/80 p-3.5 border border-slate-800 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-white text-sm">
-                    {submitSession.student.name}
-                  </span>
-                  <span className="rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 px-2.5 py-0.5 text-xs font-bold">
-                    {submitSession.student.grade} ({submitSession.student.board})
-                  </span>
-                </div>
-                <div className="text-slate-400">
-                  Subject: <strong className="text-slate-200">{submitSession.subject.name}</strong> • Tutor: <strong className="text-slate-200">{submitSession.teacher.name}</strong>
-                </div>
-              </div>
-
-              {/* LIVE TRAINER EARNINGS CALCULATOR BOX (only for roles allowed to see pay rates) */}
-              {modalHourlyRate !== null && (
-              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/25 p-4 space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-emerald-300">
-                  <span>Trainer Earnings for this Class:</span>
-                  <span className="text-xl font-black text-emerald-400 font-mono">
-                    ₹{modalTrainerEarnings.toLocaleString("en-IN")}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-emerald-300/80 pt-1 border-t border-emerald-500/20">
-                  <span>Standard Rate: <strong>₹{modalHourlyRate}/hr</strong></span>
-                  <span>Hours Taught: <strong>{modalDurationHours} hrs</strong> ({modalDurationMins} mins)</span>
-                </div>
-              </div>
-              )}
-
-              {/* Duration Buttons (30m, 45m, 60m, 90m, 120m) */}
-              <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1.5">
-                  Class Duration in Hours / Minutes *
-                </label>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {[
-                    { label: "45 Mins (0.75h)", mins: "45" },
-                    { label: "60 Mins (1.0h)", mins: "60" },
-                    { label: "90 Mins (1.5h)", mins: "90" },
-                    { label: "120 Mins (2.0h)", mins: "120" },
-                  ].map((dur) => (
-                    <button
-                      key={dur.mins}
-                      type="button"
-                      onClick={() => setDuration(dur.mins)}
-                      className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${
-                        duration === dur.mins
-                          ? "bg-gradient-to-r from-teal-400 to-emerald-500 text-slate-950 font-black shadow-md"
-                          : "bg-slate-850 text-slate-300 border border-slate-750 hover:bg-slate-800"
-                      }`}
-                    >
-                      {dur.label}
-                    </button>
-                  ))}
-                  <input
-                    type="number"
-                    min="15"
-                    max="240"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    placeholder="Custom mins"
-                    className="w-24 rounded-xl border border-slate-700 bg-slate-850 px-2.5 py-1.5 text-white text-center font-bold text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Session Outcome & Student Attendance */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-300 uppercase mb-1">
-                    Outcome *
-                  </label>
-                  <select
-                    value={outcome}
-                    onChange={(e) => setOutcome(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-850 p-2.5 font-medium text-white focus:outline-hidden"
-                  >
-                    <option value="COMPLETED" className="bg-slate-900">Completed (Deducts 1 Credit)</option>
-                    <option value="STUDENT_NO_SHOW" className="bg-slate-900">Student No-Show</option>
-                    <option value="TEACHER_NO_SHOW" className="bg-slate-900">Teacher No-Show (0 Charge)</option>
-                    <option value="CANCELLED" className="bg-slate-900">Cancelled</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-300 uppercase mb-1">
-                    Attendance *
-                  </label>
-                  <select
-                    value={attendance}
-                    onChange={(e) => setAttendance(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-850 p-2.5 font-medium text-white focus:outline-hidden"
-                  >
-                    <option value="PRESENT" className="bg-slate-900">Present</option>
-                    <option value="LATE" className="bg-slate-900">Late</option>
-                    <option value="ABSENT" className="bg-slate-900">Absent</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Topic with Quick Prefill */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="font-bold text-slate-300 uppercase">
-                    Topic Covered *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setTopic("Curriculum Syllabus & Practice Questions")}
-                    className="text-[11px] text-teal-400 font-bold hover:underline"
-                  >
-                    + Auto-fill Standard Topic
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  required
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  placeholder="e.g. Thermodynamics and Enthalpy Calculations"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-850 p-2.5 text-white font-medium focus:outline-hidden"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1">
-                  Homework Assigned (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={homework}
-                  onChange={(e) => setHomework(e.target.value)}
-                  placeholder="e.g. NCERT Page 88 Questions 1-5"
-                  className="w-full rounded-lg border border-slate-300 p-2 text-slate-900"
-                />
-              </div>
-
-              {/* EXPLICIT POLICY CREDIT EFFECT BANNER */}
-              <div
-                className={`rounded-xl p-3.5 border text-xs ${
-                  outcome === "COMPLETED"
-                    ? "bg-teal-50 border-teal-200 text-teal-900"
-                    : outcome === "TEACHER_NO_SHOW"
-                    ? "bg-rose-50 border-rose-200 text-rose-900"
-                    : "bg-amber-50 border-amber-200 text-amber-900"
-                }`}
-              >
-                <div className="font-bold flex items-center gap-1.5">
-                  <ShieldAlert className="h-4 w-4 shrink-0" />
-                  <span>
-                    {outcome === "COMPLETED"
-                      ? "Credit Policy: Consumes 1 class credit from student's active package."
-                      : outcome === "TEACHER_NO_SHOW"
-                      ? "Protected Policy: Teacher absence NEVER deducts student credit."
-                      : outcome === "STUDENT_NO_SHOW"
-                      ? "Notice Policy: Deducts 1 class credit per student no-show rules."
-                      : "Cancellation Policy: Evaluates notice period before deducting."}
-                  </span>
-                </div>
-                <div className="mt-1 text-[11px] opacity-90">
-                  {outcome === "COMPLETED"
-                    ? modalHourlyRate !== null
-                      ? `Trainer earns ₹${modalTrainerEarnings} (Standard Rate: ₹${modalHourlyRate}/hr × ${modalDurationHours}h)`
-                      : "1 class credit is consumed and the trainer payout is recorded."
-                    : outcome === "TEACHER_NO_SHOW"
-                    ? "0 credits deducted from student package balance. Tutor replacement required."
-                    : "Status will be logged in student attendance history."}
-                </div>
-              </div>
-
-              {errorMsg && (
-                <div role="alert" className="rounded-lg bg-rose-950/40 border border-rose-500/30 p-3 text-rose-200 font-medium flex items-center justify-between gap-2">
-                  <span>{errorMsg}</span>
-                  <button
-                    type="submit"
-                    className="underline font-bold text-rose-100 shrink-0"
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-
-              {/* Submit Buttons */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSubmitSession(null)}
-                  className="rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 font-bold text-white hover:bg-teal-700 disabled:opacity-50 shadow-sm"
-                >
-                  {loading ? (
-                    "Processing..."
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      {modalHourlyRate !== null && outcome === "COMPLETED" ? `Confirm Class (Earn ₹${modalTrainerEarnings})` : "Save Attendance"}
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Audited Correction Modal */}
-      {correctingRecord && (
-        <div className="fixed inset-0 z-50 modal-overlay bg-black/75 p-4 backdrop-blur-md">
-          <div className="w-full max-w-md rounded-3xl bg-[#0c1220] p-6 shadow-2xl border border-slate-800 text-white">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-base font-bold text-white">
-                Audited Attendance Correction
-              </h3>
-              <button
-                onClick={() => setCorrectingRecord(null)}
-                className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCorrectionSubmit} className="mt-4 space-y-4 text-xs">
-              <div className="rounded-2xl bg-slate-900/80 p-3.5 border border-slate-800">
-                <span className="font-bold text-white">
-                  {correctingRecord.session.student.name} • {correctingRecord.session.subject.name}
-                </span>
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  Previous: {correctingRecord.sessionOutcome} ({correctingRecord.studentAttendance})
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-300 uppercase mb-1">
-                    New Outcome *
-                  </label>
-                  <select
-                    value={newOutcome}
-                    onChange={(e) => setNewOutcome(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 font-medium text-white focus:border-teal-500 focus:outline-hidden"
-                  >
-                    <option value="COMPLETED">Completed</option>
-                    <option value="STUDENT_NO_SHOW">Student No-Show</option>
-                    <option value="TEACHER_NO_SHOW">Teacher No-Show</option>
-                    <option value="CANCELLED">Cancelled (Refunds Credit)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-300 uppercase mb-1">
-                    New Attendance *
-                  </label>
-                  <select
-                    value={newAttendance}
-                    onChange={(e) => setNewAttendance(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 font-medium text-white focus:border-teal-500 focus:outline-hidden"
-                  >
-                    <option value="PRESENT">Present</option>
-                    <option value="LATE">Late</option>
-                    <option value="ABSENT">Absent</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1">
-                  Correction Reason (Audited) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={correctionReason}
-                  onChange={(e) => setCorrectionReason(e.target.value)}
-                  placeholder="e.g. Medical emergency notice verified with guardian; reversed credit"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-white placeholder-slate-500 focus:border-teal-500 focus:outline-hidden"
-                />
-              </div>
-
-              {errorMsg && (
-                <div className="rounded-xl bg-rose-500/20 border border-rose-500/30 p-3 text-rose-300 font-medium">
-                  {errorMsg}
-                </div>
-              )}
-
-              <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCorrectingRecord(null)}
-                  className="rounded-xl px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="rounded-xl bg-gradient-to-r from-teal-400 to-emerald-500 px-5 py-2.5 font-bold text-slate-950 hover:brightness-110 shadow-lg shadow-teal-500/20 disabled:opacity-50 transition-all active:scale-95"
-                >
-                  {loading ? "Reversing..." : "Apply Audited Reversal"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {marking && <MarkAttendanceDialog c={marking} onClose={() => setMarking(null)} onDone={done} />}
+      {correcting && <CorrectDialog record={correcting.record} prefill={correcting.prefill} onClose={() => setCorrecting(null)} onDone={done} />}
+      {requesting && <RequestDialog record={requesting} onClose={() => setRequesting(null)} onDone={done} />}
+      {declining && <DeclineDialog request={declining} onClose={() => setDeclining(null)} onDone={done} />}
     </div>
   );
 }

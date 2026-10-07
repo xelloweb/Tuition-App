@@ -167,3 +167,27 @@ export function convertSlotForDisplay(
     dayShift: diff === 6 ? -1 : diff,
   };
 }
+
+/**
+ * Instants covering whole calendar days in a zone (IST by default), from
+ * `fromDate` to `toDate` inclusive, as a Prisma range { gte, lt }. Null when the
+ * dates are malformed or reversed. Independent of the server's own clock zone.
+ */
+export function dayRangeInZone(fromDate: string, toDate: string, timeZone = "Asia/Kolkata"): { gte: Date; lt: Date } | null {
+  const ymd = /^\d{4}-\d{2}-\d{2}$/;
+  if (!ymd.test(fromDate) || !ymd.test(toDate) || fromDate > toDate) return null;
+  return { gte: zonedTimeToUtc(fromDate, 0, timeZone), lt: zonedTimeToUtc(addDaysToLocalDate(toDate, 1), 0, timeZone) };
+}
+
+/** A recurring slot saved in another zone, expressed in `targetZone` (weekday and minutes may shift). */
+export function slotInZone(
+  slot: { weekday: number; startMinutes: number; endMinutes: number; timeZone: string },
+  targetZone: string,
+  reference: Date = new Date()
+): { weekday: number; startMinutes: number; endMinutes: number } {
+  const today = localDateInZone(reference, slot.timeZone);
+  const date = addDaysToLocalDate(today, (slot.weekday - weekdayOfLocalDate(today) + 7) % 7);
+  const start = describeInZone(zonedTimeToUtc(date, slot.startMinutes, slot.timeZone), targetZone);
+  const end = describeInZone(zonedTimeToUtc(date, slot.endMinutes, slot.timeZone), targetZone);
+  return { weekday: start.weekday, startMinutes: start.minutes, endMinutes: end.minutes };
+}

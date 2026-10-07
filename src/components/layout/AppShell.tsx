@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { MobileMoreDrawer } from "./MobileMoreDrawer";
 import { CurrentUser } from "@/lib/types";
+import { Notice } from "@/components/ui/Notice";
 
 interface AppShellProps {
   currentUser: CurrentUser;
-  displayTimeZone: string;
+  /** Today's date in IST, formatted on the server. */
+  istToday: string;
   ephemeralStorage?: boolean;
   children: React.ReactNode;
 }
@@ -19,9 +20,8 @@ interface AppShellProps {
 // in the browser and showed them even when the server had no such record.
 const LEGACY_STORAGE_KEYS = ["xello_registered_students_v1", "xello_registered_teachers_v1"];
 
-export function AppShell({ currentUser, displayTimeZone, ephemeralStorage = false, children }: AppShellProps) {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [moreDrawerOpen, setMoreDrawerOpen] = useState(false);
+export function AppShell({ currentUser, istToday, ephemeralStorage = false, children }: AppShellProps) {
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -32,52 +32,33 @@ export function AppShell({ currentUser, displayTimeZone, ephemeralStorage = fals
   }, []);
 
   return (
-    <div className="flex min-h-screen bg-[#070a12] text-slate-100 relative overflow-x-hidden selection:bg-teal-500 selection:text-white">
-      {/* Ambient background glows for rich depth */}
-      <div className="fixed top-[-20%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-teal-500/5 blur-[120px] pointer-events-none" />
-      <div className="fixed top-[20%] right-[-10%] w-[45vw] h-[45vw] rounded-full bg-indigo-500/5 blur-[140px] pointer-events-none" />
+    <div className="flex min-h-screen bg-canvas text-ink">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded-control focus:bg-brand focus:px-4 focus:py-2 focus:text-brand-ink"
+      >
+        Skip to main content
+      </a>
+      <Sidebar currentRole={currentUser.role} />
 
-      {/* Desktop Persistent Sidebar */}
-      <Sidebar
-        currentRole={currentUser.role}
-        mobileOpen={mobileOpen}
-        onCloseMobile={() => setMobileOpen(false)}
-      />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Header currentUser={currentUser} istToday={istToday} />
 
-      {/* Main View Area */}
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0 relative z-10">
-        <Header
-          currentUser={currentUser}
-          displayTimeZone={displayTimeZone}
-          onOpenMobile={() => setMobileOpen(true)}
-        />
-
-        {/* Content area with bottom padding for mobile bottom bar */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 pb-28 lg:pb-10">
+        {/* Bottom padding keeps content clear of the phone navigation bar. */}
+        <main id="main-content" tabIndex={-1} className="flex-1 p-3 pb-28 sm:p-6 sm:pb-28 lg:p-8 lg:pb-10 focus:outline-none">
           {ephemeralStorage && (
-            <div role="alert" className="mx-auto max-w-7xl mb-4 flex items-start gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-100">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300 mt-0.5" />
-              <span>
-                <strong>Temporary storage:</strong> this deployment runs on a bundled SQLite copy. Changes are not shared between
-                server instances and can disappear after a restart. Connect a PostgreSQL database before entering real records.
-              </span>
+            <div className="mx-auto mb-4 max-w-7xl">
+              <Notice tone="warning" title="Temporary storage">
+                This deployment runs on a bundled database copy. Changes can disappear after a restart. Connect a persistent
+                database before entering real records.
+              </Notice>
             </div>
           )}
           <div className="mx-auto max-w-7xl">{children}</div>
         </main>
 
-        {/* Mobile Role-Aware Bottom Navigation (< 1024px) */}
-        <MobileBottomNav
-          currentRole={currentUser.role}
-          onOpenMore={() => setMoreDrawerOpen(true)}
-        />
-
-        {/* Mobile "More" Drawer Modal */}
-        <MobileMoreDrawer
-          currentUser={currentUser}
-          isOpen={moreDrawerOpen}
-          onClose={() => setMoreDrawerOpen(false)}
-        />
+        <MobileBottomNav currentRole={currentUser.role} moreOpen={moreOpen} onOpenMore={() => setMoreOpen(true)} />
+        <MobileMoreDrawer currentUser={currentUser} isOpen={moreOpen} onClose={() => setMoreOpen(false)} />
       </div>
     </div>
   );

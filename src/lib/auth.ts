@@ -45,13 +45,16 @@ export const DEMO_USERS: Record<string, CurrentUser> = {
 /**
  * Signed-in user, re-read from the database on every request so a deactivated
  * account or changed role takes effect immediately (session tokens last 30 days).
+ * A session signed before the last password change, reset or revocation is
+ * refused, so changing a password also signs out every other device.
  */
 export async function getSessionUser(): Promise<CurrentUser | null> {
   const session = await getServerSession(authOptions);
-  const sessionUserId = (session?.user as { id?: string } | undefined)?.id;
-  if (!sessionUserId) return null;
-  const user = await prisma.user.findUnique({ where: { id: sessionUserId } });
+  const sessionUser = session?.user as { id?: string; sv?: number } | undefined;
+  if (!sessionUser?.id) return null;
+  const user = await prisma.user.findUnique({ where: { id: sessionUser.id } });
   if (!user || !user.active) return null;
+  if (user.sessionVersion !== (sessionUser.sv ?? 0)) return null;
   return {
     id: user.id,
     name: user.name,
@@ -94,6 +97,21 @@ export const canCorrectAttendance = canAccessAcademic;
 /** Roles that may see the full student directory (teachers only see their own students). */
 export function canViewAllStudents(role: UserRole): boolean {
   return role === "OWNER" || role === "COORDINATOR" || role === "ACCOUNTS";
+}
+
+/**
+ * A trainer login without a linked trainer profile must see nothing: pages show
+ * this notice instead of falling through to staff-wide queries.
+ */
+export function isUnlinkedTrainer(user: CurrentUser): boolean {
+  return user.role === "TEACHER" && !user.teacherId;
+}
+export const UNLINKED_TRAINER_MESSAGE =
+  "Your login is not linked to a trainer profile yet. Ask the owner or a coordinator to send you a new invitation from the Trainers page.";
+
+/** Logins (staff accounts, deactivation, reset links) are managed by the owner only. */
+export function canManageUsers(role: UserRole): boolean {
+  return role === "OWNER";
 }
 
 /** Pay rates are financial data: only the owner may set them. */

@@ -1,79 +1,101 @@
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, canCorrectAttendance, canViewTeacherRates } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
+import { canCorrectAttendance, canViewTeacherRates, getCurrentUser, isUnlinkedTrainer, UNLINKED_TRAINER_MESSAGE } from "@/lib/auth";
 import { getTeacherRateForGrade } from "@/lib/rates";
+import { listCorrectionRequests } from "@/lib/services/correction-requests";
 import { AccessDenied } from "@/components/ui/AccessDenied";
 import { AttendanceClient } from "./AttendanceClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function AttendancePage() {
+const HISTORY_LIMIT = 100;
+
+export default async function AttendancePage({ searchParams }: { searchParams: Promise<{ session?: string }> }) {
   const user = await getCurrentUser();
+  if (isUnlinkedTrainer(user)) return <AccessDenied message={UNLINKED_TRAINER_MESSAGE} />;
   if (user.role === "ACCOUNTS") {
     return <AccessDenied message="Attendance is managed by trainers and academic coordinators." />;
   }
+  const { session: focusSessionId } = await searchParams;
   const now = new Date();
+  const own = user.role === "TEACHER" ? { teacherId: user.teacherId! } : {};
 
-  // If teacher, filter sessions to own; otherwise show all
-  const sessionWhere: any = {
-    scheduledStartTimeUtc: { lt: now },
-    status: "SCHEDULED",
-  };
-
-  const recordWhere: any = {};
-
-  if (user.role === "TEACHER" && user.teacherId) {
-    sessionWhere.teacherId = user.teacherId;
-    recordWhere.session = { teacherId: user.teacherId };
-  }
-
-  const missingSessions = await prisma.session.findMany({
-    where: sessionWhere,
-    include: {
-      student: true,
-      teacher: true,
-      subject: true,
-      package: true,
-    },
-    orderBy: { scheduledStartTimeUtc: "desc" },
-  });
-
-  const allRecords = await prisma.attendanceRecord.findMany({
-    where: recordWhere,
-    include: {
-      session: {
-        include: {
-          student: true,
-          teacher: true,
-          subject: true,
-        },
+  const [pending, records, requests] = await Promise.all([
+    prisma.session.findMany({
+      where: { ...own, status: "SCHEDULED", scheduledStartTimeUtc: { lt: now } } satisfies Prisma.SessionWhereInput,
+      include: { student: true, teacher: true, subject: true, package: { select: { packageNumber: true, noShowDeductCredit: true, cancellationNoticeHours: true } } },
+      orderBy: { scheduledStartTimeUtc: "desc" },
+    }),
+    prisma.attendanceRecord.findMany({
+      where: user.role === "TEACHER" ? { session: own } : {},
+      include: {
+        session: { include: { student: true, teacher: true, subject: true } },
+        correctionRequests: { where: { status: "OPEN" }, select: { id: true } },
       },
-    },
-    orderBy: { markedAt: "desc" },
-  });
+      orderBy: { markedAt: "desc" },
+      take: HISTORY_LIMIT,
+    }),
+    listCorrectionRequests(user),
+  ]);
 
   // Pay rates leave the server only for roles allowed to see that trainer's rate.
   const rateFor = (teacher: { id: string; defaultRate: number; gradeRates: string | null }, grade: string) =>
     canViewTeacherRates(user.role, user.teacherId, teacher.id) ? getTeacherRateForGrade(teacher, grade) : null;
-  const publicTeacher = (t: { id: string; name: string }) => ({ id: t.id, name: t.name });
-
-  const sessionsForClient = missingSessions.map((s) => ({
-    ...s,
-    teacher: publicTeacher(s.teacher),
-    hourlyRate: rateFor(s.teacher, s.student.grade),
-  }));
-  const recordsForClient = allRecords.map((r) => ({
-    ...r,
-    session: { ...r.session, teacher: publicTeacher(r.session.teacher) },
-    hourlyRate: rateFor(r.session.teacher, r.session.student.grade),
-  }));
 
   return (
     <AttendanceClient
-      missingSessions={sessionsForClient}
-      allRecords={recordsForClient}
-      teacherAbsences={recordsForClient.filter((r) => r.sessionOutcome === "TEACHER_NO_SHOW")}
-      currentUserRole={user.role}
+      pending={pending.map((s) => ({
+        id: s.id,
+        start: s.scheduledStartTimeUtc.toISOString(),
+        end: s.scheduledEndTimeUtc.toISOString(),
+        durationMinutes: s.durationMinutes,
+        student: { name: s.student.name, grade: s.student.grade },
+        subject: s.subject.name,
+        trainer: s.teacher.name,
+        packageNumber: s.package.packageNumber,
+        noShowCharges: s.package.noShowDeductCredit,
+        cancellationNoticeHours: s.package.cancellationNoticeHours,
+        hourlyRate: rateFor(s.teacher, s.student.grade),
+      }))}
+      records={records.map((r) => ({
+        id: r.id,
+        sessionId: r.sessionId,
+        start: r.session.scheduledStartTimeUtc.toISOString(),
+        student: r.session.student.name,
+        subject: r.session.subject.name,
+        trainer: r.session.teacher.name,
+        outcome: r.sessionOutcome,
+        attendance: r.studentAttendance,
+        topic: r.topicCovered,
+        homework: r.homework,
+        minutes: r.actualDurationMinutes,
+        markedBy: r.markedByName,
+        markedAt: r.markedAt.toISOString(),
+        reversed: r.isReversed,
+        openRequest: r.correctionRequests.length > 0,
+      }))}
+      historyLimit={HISTORY_LIMIT}
+      requests={requests.map((q) => ({
+        id: q.id,
+        recordId: q.attendanceRecordId,
+        requestedBy: q.requestedByName,
+        reason: q.reason,
+        requestedOutcome: q.requestedOutcome,
+        requestedAttendance: q.requestedAttendance,
+        status: q.status,
+        resolvedBy: q.resolvedByName,
+        resolutionNote: q.resolutionNote,
+        createdAt: q.createdAt.toISOString(),
+        student: q.attendanceRecord.session.student.name,
+        subject: q.attendanceRecord.session.subject.name,
+        trainer: q.attendanceRecord.session.teacher.name,
+        start: q.attendanceRecord.session.scheduledStartTimeUtc.toISOString(),
+        currentOutcome: q.attendanceRecord.sessionOutcome,
+        currentAttendance: q.attendanceRecord.studentAttendance,
+      }))}
+      isTrainer={user.role === "TEACHER"}
       canCorrect={canCorrectAttendance(user.role)}
+      focusSessionId={focusSessionId ?? null}
     />
   );
 }

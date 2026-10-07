@@ -111,35 +111,19 @@ async function main() {
   });
   console.log("✅ Seeded Base Package Templates.");
 
-  // 4. Admin Users
+  // 4. Staff logins. Production creates only the owner: other staff get their own
+  // logins (and their own passwords) from the owner's Users page, so no account
+  // shares the owner's password. Local development keeps demo staff for testing.
   const passwordHash = await bcrypt.hash(password, 12);
-
+  const owner = { id: "usr-admin", name: "Shamrood", email: "admin@xellotuition.com", role: "OWNER", passwordHash };
+  const demoStaff = [
+    { id: "usr-coord", name: "Aisha Nair (Academic Coordinator)", email: "coordinator@xellotuition.com", role: "COORDINATOR", passwordHash },
+    { id: "usr-accounts", name: "Joseph Thomas (Accounts Manager)", email: "accounts@xellotuition.com", role: "ACCOUNTS", passwordHash },
+  ];
   await prisma.user.createMany({
-    data: [
-      {
-        id: "usr-admin",
-        name: "Shamrood",
-        email: "admin@xellotuition.com",
-        role: "OWNER",
-        passwordHash,
-      },
-      {
-        id: "usr-coord",
-        name: "Aisha Nair (Academic Coordinator)",
-        email: "coordinator@xellotuition.com",
-        role: "COORDINATOR",
-        passwordHash,
-      },
-      {
-        id: "usr-accounts",
-        name: "Joseph Thomas (Accounts Manager)",
-        email: "accounts@xellotuition.com",
-        role: "ACCOUNTS",
-        passwordHash,
-      },
-    ],
+    data: process.env.NODE_ENV === "production" ? [owner] : [owner, ...demoStaff],
   });
-  console.log("✅ Seeded Admin & Coordinator Users.");
+  console.log("✅ Seeded staff logins.");
   
   console.log(
     process.env.NODE_ENV === "production"

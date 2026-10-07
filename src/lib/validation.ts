@@ -72,9 +72,18 @@ export function checkInternationalPhone(raw: string): PhoneCheck {
   return { ok: true, display, canonical };
 }
 
+/** Digits including the country code; a bare (or 0-prefixed) 10-digit Indian mobile counts as +91. */
+export function phoneKey(value: string): string {
+  let digits = value.replace(/\D/g, "");
+  if (/^0[6-9]\d{9}$/.test(digits)) digits = digits.slice(1);
+  if (/^[6-9]\d{9}$/.test(digits)) digits = `91${digits}`;
+  return digits;
+}
+
+/** Same number however it is written ("9876543210", "+91 98765 43210"). Used to flag duplicates, never to merge. */
 export function phonesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
   if (!a || !b) return false;
-  return a.replace(/\D/g, "") === b.replace(/\D/g, "");
+  return phoneKey(a) === phoneKey(b);
 }
 
 export function isValidTimeZone(value: string): boolean {

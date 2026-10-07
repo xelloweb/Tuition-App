@@ -36,7 +36,7 @@ export function MobileTabs({
             id="tab-select"
             value={activeTab}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full appearance-none rounded-2xl border border-slate-800 bg-slate-900/90 backdrop-blur-md px-4 py-3 text-sm font-bold text-white shadow-lg focus:border-teal-400 focus:outline-hidden pr-10"
+            className="w-full appearance-none rounded-2xl border border-slate-800 bg-slate-900/90 px-4 py-3 text-sm font-bold text-white shadow-lg focus:border-teal-400 focus:outline-hidden pr-10"
           >
             {tabs.map((tab) => (
               <option key={tab.id} value={tab.id} className="bg-slate-900 text-white">
@@ -51,7 +51,7 @@ export function MobileTabs({
       </div>
 
       {/* Desktop / Tablet Horizontal Segmented Bar */}
-      <div className="hidden sm:flex items-center gap-1.5 p-1 rounded-2xl bg-slate-900/80 border border-slate-800/80 backdrop-blur-md overflow-x-auto scrollbar-none">
+      <div className="hidden sm:flex items-center gap-1.5 p-1 rounded-2xl bg-slate-900/80 border border-slate-800/80 overflow-x-auto scrollbar-none">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTab;
           const Icon = tab.icon;
@@ -69,14 +69,14 @@ export function MobileTabs({
               {Icon && (
                 <Icon
                   className={`h-4 w-4 shrink-0 ${
-                    isActive ? "text-teal-300" : "text-slate-500"
+                    isActive ? "text-teal-300" : "text-slate-400"
                   }`}
                 />
               )}
               <span>{tab.label}</span>
               {tab.count !== undefined && (
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                  className={`rounded-full px-2 py-0.5 text-xs font-bold ${
                     isActive
                       ? "bg-teal-400/20 text-teal-200 border border-teal-400/30"
                       : "bg-slate-800 text-slate-400 border border-slate-700/50"

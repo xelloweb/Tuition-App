@@ -54,16 +54,16 @@ export default async function ReportsPage() {
           <BarChart3 className="h-4 w-4" />
           <span>Operational Intelligence & Audit Exports</span>
         </div>
-        <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
+        <h1 className="text-2xl font-bold tracking-tight text-white mt-1">
           Reports & Permission-Controlled CSV Exports
-        </h2>
+        </h1>
         <p className="text-xs text-slate-400 mt-0.5">
           All exports are automatically protected against spreadsheet formula injection (CSV Injection).
         </p>
       </div>
 
       {/* CSV Downloads Bar */}
-      <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-6 shadow-xl space-y-4">
+      <div className="rounded-2xl border border-slate-800/80 bg-slate-900 p-6 shadow-xl space-y-4">
         <div className="flex items-center gap-2 text-sm font-bold text-white">
           <FileSpreadsheet className="h-4 w-4 text-teal-400" />
           Downloadable Formula-Safe CSV Datasets
@@ -75,7 +75,7 @@ export default async function ReportsPage() {
             <div className="font-bold text-white text-sm">
               Student Packages & Balances
             </div>
-            <p className="text-slate-400 text-[11px] leading-relaxed">
+            <p className="text-slate-400 text-xs leading-relaxed">
               Full breakdown of total entitlement, consumed classes, remaining balance, and subject allocations.
             </p>
             <a
@@ -93,7 +93,7 @@ export default async function ReportsPage() {
             <div className="font-bold text-white text-sm">
               Attendance & Delivered Sessions
             </div>
-            <p className="text-slate-400 text-[11px] leading-relaxed">
+            <p className="text-slate-400 text-xs leading-relaxed">
               Detailed session outcomes, topics taught, tutor names, and credit consumption flags.
             </p>
             <a
@@ -113,7 +113,7 @@ export default async function ReportsPage() {
               <div className="font-bold text-white text-sm">
                 Invoices & Collections Ledger
               </div>
-              <p className="text-slate-400 text-[11px] leading-relaxed">
+              <p className="text-slate-400 text-xs leading-relaxed">
                 Invoices, paid amounts, balance due, and overdue aging status.
               </p>
               <a
@@ -130,10 +130,10 @@ export default async function ReportsPage() {
             </>
           ) : (
             <div className="rounded-2xl border border-slate-800/60 p-5 space-y-3 bg-slate-950/30">
-              <div className="font-bold text-slate-500 text-sm">
+              <div className="font-bold text-slate-400 text-sm">
                 Collections & Invoices
               </div>
-              <p className="text-slate-600 text-[11px]">
+              <p className="text-slate-400 text-xs">
                 Restricted: Financial exports require Accounts or Owner permissions.
               </p>
             </div>
@@ -144,7 +144,7 @@ export default async function ReportsPage() {
       {/* Summary KPI Comparisons */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Delivered vs Consumed Comparison */}
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-6 shadow-xl space-y-3">
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-900 p-6 shadow-xl space-y-3">
           <h3 className="font-bold text-sm text-white">
             Delivered Classes vs Credits Consumed
           </h3>
@@ -153,14 +153,14 @@ export default async function ReportsPage() {
           </p>
           <div className="grid grid-cols-2 gap-4 pt-2 text-center text-xs">
             <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800">
-              <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Classes Delivered</span>
-              <div className="text-2xl font-black text-white mt-1">
+              <span className="text-slate-400 uppercase tracking-wider text-xs font-bold">Classes Delivered</span>
+              <div className="text-2xl font-bold text-white mt-1">
                 {totalSessionsDelivered}
               </div>
             </div>
             <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800">
-              <span className="text-teal-400 uppercase tracking-wider text-[10px] font-bold">Credits Consumed</span>
-              <div className="text-2xl font-black text-teal-300 mt-1">
+              <span className="text-teal-400 uppercase tracking-wider text-xs font-bold">Credits Consumed</span>
+              <div className="text-2xl font-bold text-teal-300 mt-1">
                 {totalCreditsConsumed}
               </div>
             </div>
@@ -168,7 +168,7 @@ export default async function ReportsPage() {
         </div>
 
         {/* Attendance by Subject Breakdown */}
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl p-6 shadow-xl space-y-3">
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-900 p-6 shadow-xl space-y-3">
           <h3 className="font-bold text-sm text-white">
             Classes Delivered by Subject
           </h3>

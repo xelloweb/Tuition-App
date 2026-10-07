@@ -111,9 +111,9 @@ export function PayoutsClient({
                 : "Faculty Payroll & Earnings"}
             </span>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
-            {isTeacher ? "My Teaching Earnings & Payouts" : "Teacher Payout Runs & Snapshots"}
-          </h2>
+          <h1 className="text-2xl font-bold tracking-tight text-white mt-1">
+            {isTeacher ? "My earnings" : "Trainer payouts"}
+          </h1>
           <p className="text-xs text-slate-400 mt-0.5">
             {isTeacher
               ? `Welcome ${teacherName || ""}. Your earnings are calculated strictly from your completed classes and agreed standard-wise hourly rates.`
@@ -125,7 +125,7 @@ export function PayoutsClient({
           <button
             onClick={handleCreateRun}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-teal-400 to-emerald-500 px-5 py-3 text-xs font-black text-slate-950 hover:brightness-110 shadow-lg shadow-teal-500/20 shrink-0 disabled:opacity-50 transition-all active:scale-95"
+            className="inline-flex items-center gap-2 rounded-2xl bg-teal-400 px-5 py-3 text-xs font-bold text-slate-950 hover:brightness-110 shrink-0 disabled:opacity-50 transition-all active:scale-95"
           >
             <Plus className="h-4 w-4 stroke-[3]" />
             {loading ? "Creating..." : `Create Payout Run (${unbatchedItems.length} Sessions)`}
@@ -148,50 +148,50 @@ export function PayoutsClient({
       {/* Teacher-Specific Summary Cards */}
       {isTeacher && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="rounded-3xl border border-teal-500/20 bg-teal-500/5 backdrop-blur-xl p-4 sm:p-5 shadow-lg space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-400">
+          <div className="rounded-2xl border border-teal-500/20 bg-teal-500/5 p-4 sm:p-5 shadow-lg space-y-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-teal-400">
               Total Lifetime Earned
             </span>
-            <div className="text-2xl sm:text-3xl font-black text-teal-300">
+            <div className="text-2xl sm:text-3xl font-bold text-teal-300">
               ₹{totalLifetimeEarned.toLocaleString("en-IN")}
             </div>
-            <p className="text-[11px] text-teal-400/80">
+            <p className="text-xs text-teal-400/80">
               From all {totalCompletedClasses} completed classes
             </p>
           </div>
 
-          <div className="rounded-3xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-xl p-4 sm:p-5 shadow-lg space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 sm:p-5 shadow-lg space-y-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
               Pending Payout
             </span>
-            <div className="text-2xl sm:text-3xl font-black text-amber-300">
+            <div className="text-2xl sm:text-3xl font-bold text-amber-300">
               ₹{totalPendingPayout.toLocaleString("en-IN")}
             </div>
-            <p className="text-[11px] text-amber-400/80">
+            <p className="text-xs text-amber-400/80">
               {unbatchedItems.length} class(es) awaiting batch processing
             </p>
           </div>
 
-          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 backdrop-blur-xl p-4 sm:p-5 shadow-lg space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 sm:p-5 shadow-lg space-y-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
               Paid Out to Bank
             </span>
-            <div className="text-2xl sm:text-3xl font-black text-emerald-300">
+            <div className="text-2xl sm:text-3xl font-bold text-emerald-300">
               ₹{totalPaidOut.toLocaleString("en-IN")}
             </div>
-            <p className="text-[11px] text-emerald-400/80">
+            <p className="text-xs text-emerald-400/80">
               Transferred via verified payout runs
             </p>
           </div>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 backdrop-blur-xl p-4 sm:p-5 shadow-lg space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5 shadow-lg space-y-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Classes Delivered
             </span>
-            <div className="text-2xl sm:text-3xl font-black text-white">
+            <div className="text-2xl sm:text-3xl font-bold text-white">
               {totalCompletedClasses}
             </div>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-xs text-slate-400">
               Sessions conducted & attendance verified
             </p>
           </div>
@@ -199,7 +199,7 @@ export function PayoutsClient({
       )}
 
       {/* Unbatched Pending Earnings Banner & Itemized Breakdown */}
-      <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl shadow-xl overflow-hidden">
+      <div className="rounded-2xl border border-slate-800/80 bg-slate-900 shadow-xl overflow-hidden">
         <div className="p-5 sm:p-6 border-b border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <span className="text-xs font-semibold text-slate-400">
@@ -207,10 +207,10 @@ export function PayoutsClient({
                 ? "Conducted Classes Awaiting Payout Batch"
                 : "Approved Sessions Awaiting Payout Run"}
             </span>
-            <div className="text-2xl sm:text-3xl font-black text-white mt-1">
+            <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
               ₹{totalUnbatched.toLocaleString("en-IN")}
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5">
               {unbatchedItems.length} session(s) taught and verified with standard-specific hourly rates
             </p>
           </div>
@@ -220,12 +220,12 @@ export function PayoutsClient({
         </div>
 
         {unbatchedItems.length === 0 ? (
-          <div className="py-12 text-center text-xs text-slate-500">
+          <div className="py-12 text-center text-xs text-slate-400">
             No unbatched completed sessions pending right now.
           </div>
         ) : (
           <div className="p-4 sm:p-5 bg-slate-950/40">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-3">
               Class-by-Class Earnings Breakdown ({unbatchedItems.length} Sessions)
             </span>
             <div className="divide-y divide-slate-800/80 rounded-2xl border border-slate-800/80 bg-slate-900/70 overflow-hidden text-xs">
@@ -243,17 +243,17 @@ export function PayoutsClient({
                         <span className="font-bold text-white">
                           {item.teacher.name}
                         </span>
-                        <span className="rounded-lg bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-[10px] font-semibold text-teal-300">
+                        <span className="rounded-lg bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-xs font-semibold text-teal-300">
                           {subject?.name || "Subject"}
                         </span>
                         {student && (
-                          <span className="rounded-lg bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 text-[10px] font-bold text-purple-300">
+                          <span className="rounded-lg bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 text-xs font-bold text-purple-300">
                             {student.name} • {student.grade}
                           </span>
                         )}
                         <StatusBadge status={item.status || "APPROVED"} size="sm" />
                       </div>
-                      <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-2">
+                      <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2">
                         <span>
                           Class Date: {formatInTimeZone(item.sessionDate, "Asia/Kolkata")}
                         </span>
@@ -264,14 +264,14 @@ export function PayoutsClient({
 
                     <div className="flex items-center gap-4 shrink-0 text-right">
                       <div>
-                        <div className="text-[10px] text-slate-500 uppercase">Rate × Hours</div>
+                        <div className="text-xs text-slate-400 uppercase">Rate × Hours</div>
                         <div className="font-semibold text-slate-300">
                           ₹{item.rateSnapshot}/hr × {hours}h
                         </div>
                       </div>
                       <div>
-                        <div className="text-[10px] text-slate-500 uppercase">Earned</div>
-                        <div className="text-base font-black text-emerald-400">
+                        <div className="text-xs text-slate-400 uppercase">Earned</div>
+                        <div className="text-base font-bold text-emerald-400">
                           ₹{item.amount.toLocaleString("en-IN")}
                         </div>
                       </div>
@@ -285,7 +285,7 @@ export function PayoutsClient({
       </div>
 
       {/* Payout Runs List */}
-      <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl shadow-xl overflow-hidden">
+      <div className="rounded-2xl border border-slate-800/80 bg-slate-900 shadow-xl overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-slate-800/80">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
             {isTeacher ? "My Processed Payout Batches & History" : `Payout Batches & History (${payoutRuns.length})`}
@@ -294,7 +294,7 @@ export function PayoutsClient({
 
         <div className="divide-y divide-slate-800/80">
           {payoutRuns.length === 0 ? (
-            <div className="py-12 text-center text-xs text-slate-500">
+            <div className="py-12 text-center text-xs text-slate-400">
               No payout batches processed yet.
             </div>
           ) : (
@@ -326,7 +326,7 @@ export function PayoutsClient({
                       {formatInTimeZone(run.periodEnd, "Asia/Kolkata")}
                     </div>
                     {run.approvedByName && (
-                      <div className="text-[11px] text-teal-400 mt-0.5">
+                      <div className="text-xs text-teal-400 mt-0.5">
                         Approved by {run.approvedByName}
                       </div>
                     )}
@@ -334,10 +334,10 @@ export function PayoutsClient({
 
                   <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
                     <div className="text-right">
-                      <span className="text-[10px] uppercase text-slate-500">
+                      <span className="text-xs uppercase text-slate-400">
                         {isTeacher ? "Your Payout" : "Total Payout"}
                       </span>
-                      <div className="font-black text-base text-white">
+                      <div className="font-bold text-base text-white">
                         ₹{runTeacherTotal.toLocaleString("en-IN")}
                       </div>
                     </div>

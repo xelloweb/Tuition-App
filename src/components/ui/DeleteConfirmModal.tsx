@@ -56,16 +56,16 @@ export function DeleteConfirmModal({
         {itemName && (
           <div className="rounded-2xl bg-slate-900/80 p-3.5 border border-slate-800 space-y-1">
             <span className="font-bold text-white text-sm block">{itemName}</span>
-            {itemDetails && <span className="text-slate-400 text-[11px] block">{itemDetails}</span>}
+            {itemDetails && <span className="text-slate-400 text-xs block">{itemDetails}</span>}
           </div>
         )}
 
         {errorMessage ? (
-          <div role="alert" className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-2.5 text-[11px] text-amber-200">
+          <div role="alert" className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-2.5 text-xs text-amber-200">
             {errorMessage}
           </div>
         ) : (
-          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-2.5 text-[11px] text-rose-300">
+          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-2.5 text-xs text-rose-300">
             ⚠️ This action is permanent and audited in the system logs.
           </div>
         )}
@@ -95,7 +95,7 @@ export function DeleteConfirmModal({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 px-4 py-2 min-h-[44px] text-xs font-bold text-white hover:brightness-110 shadow-lg shadow-rose-500/20 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-50 transition-all active:scale-95"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 min-h-[44px] text-xs font-bold text-white hover:brightness-110 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-50 transition-all active:scale-95"
           >
             {loading ? (
               <>
