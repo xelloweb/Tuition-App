@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
 import { QuickAddSubjectModal } from "@/components/subjects/QuickAddSubjectModal";
 import { Stepper, StepDef } from "./admission/Stepper";
-import { SlotDraft, WeeklyScheduleStep, toMinutes, weekdayLabel } from "./admission/WeeklyScheduleStep";
+import { SlotDraft, WeeklyScheduleStep, toMinutes, fromMinutes, weekdayLabel } from "./admission/WeeklyScheduleStep";
 import { ReviewData, ReviewStep } from "./admission/ReviewStep";
 
 export interface SubjectOption {
@@ -49,7 +49,20 @@ export interface StudentFormRecord {
   learningGoals: string | null;
   coordinatorNotes: string | null;
   draftData?: string | null;
-  enrolments?: { id: string; subjectId: string; teacherId: string | null; teacher?: { id: string; name: string; active?: boolean } | null }[];
+  enrolments?: {
+    id: string;
+    subjectId: string;
+    teacherId: string | null;
+    teacher?: { id: string; name: string; active?: boolean } | null;
+    timetableSlots?: {
+      id: string;
+      teacherId: string | null;
+      weekday: number;
+      startMinutes: number;
+      endMinutes: number;
+      timeZone: string;
+    }[];
+  }[];
 }
 
 interface GuardianMatch {
@@ -114,6 +127,14 @@ interface StudentFormModalProps {
 /** Packages created during admission use 60-minute classes. */
 const CLASS_MINUTES = 60;
 
+export const PACKAGE_PRESETS = [
+  { label: "Weekly 3 Classes (12/mo)", name: "Monthly Package (3 Classes/week)", totalCredits: "12", price: "3000", weekly: 3 },
+  { label: "Weekly 5 Classes (20/mo)", name: "Monthly Package (5 Classes/week)", totalCredits: "20", price: "5000", weekly: 5 },
+  { label: "Weekly 2 Classes (8/mo)", name: "Monthly Package (2 Classes/week)", totalCredits: "8", price: "2000", weekly: 2 },
+  { label: "Weekly 4 Classes (16/mo)", name: "Monthly Package (4 Classes/week)", totalCredits: "16", price: "4000", weekly: 4 },
+  { label: "Weekly 1 Class (4/mo)", name: "Monthly Package (1 Class/week)", totalCredits: "4", price: "1000", weekly: 1 },
+];
+
 const FIELD_LABELS: Record<string, string> = {
   name: "Student name",
   grade: "Class / grade",
@@ -173,21 +194,13 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
   const initial = useMemo(() => (draft ? readSnapshot(draft.data) : readSnapshot(student?.draftData)), [draft, student]);
 
   const steps: (StepDef & { id: StepId })[] = useMemo(
-    () =>
-      isEdit && !legacyDraft
-        ? [
-            { id: "details", label: "Student details" },
-            { id: "subjects", label: "Subjects & trainers" },
-            { id: "package", label: "Add a package" },
-            { id: "review", label: "Review & save" },
-          ]
-        : [
-            { id: "details", label: "Student details" },
-            { id: "subjects", label: "Subjects & trainers" },
-            { id: "package", label: "Package & fees" },
-            { id: "schedule", label: "Weekly schedule" },
-            { id: "review", label: "Review & confirm" },
-          ],
+    () => [
+      { id: "details", label: "Student details" },
+      { id: "subjects", label: "Subjects & trainers" },
+      { id: "package", label: isEdit ? "Add a package" : "Package & fees" },
+      { id: "schedule", label: "Weekly timetable" },
+      { id: "review", label: isEdit && !legacyDraft ? "Review & save" : "Review & confirm" },
+    ],
     [isEdit, legacyDraft]
   );
   const [stepIndex, setStepIndex] = useState(() => Math.max(0, steps.findIndex((s) => s.id === initial.step)));
@@ -221,21 +234,116 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
       return student.enrolments.map((e) => ({ key: e.id, subjectId: e.subjectId, teacherId: e.teacherId ?? "", credits: "" }));
     }
     if (isEdit) return [];
-    return [{ key: newRowKey(), subjectId: "", teacherId: "", credits: "20" }];
+    return [{ key: newRowKey(), subjectId: "", teacherId: "", credits: "12" }];
   });
   const [quickSubjectRowKey, setQuickSubjectRowKey] = useState<string | null>(null);
   const [quickSubjectOpen, setQuickSubjectOpen] = useState(false);
 
   // 3. Package & fees
   const [includePackage, setIncludePackage] = useState(initial.includePackage ?? !isEdit);
-  const [packageName, setPackageName] = useState(initial.packageName ?? (isEdit ? "Top-up package" : "Multi-subject package"));
-  const [totalCredits, setTotalCredits] = useState(initial.totalCredits ?? (isEdit ? "10" : "20"));
-  const [packagePrice, setPackagePrice] = useState(initial.packagePrice ?? (isEdit ? "9000" : "18000"));
+  const [packageName, setPackageName] = useState(initial.packageName ?? (isEdit ? "Monthly Package (3 Classes/week)" : "Monthly Package (3 Classes/week)"));
+  const [totalCredits, setTotalCredits] = useState(initial.totalCredits ?? (isEdit ? "12" : "12"));
+  const [packagePrice, setPackagePrice] = useState(initial.packagePrice ?? (isEdit ? "3000" : "3000"));
   const [startDate, setStartDate] = useState(initial.startDate ?? today());
   const [expiryDate, setExpiryDate] = useState(initial.expiryDate ?? "");
 
   // 4. Weekly schedule
-  const [slots, setSlots] = useState<SlotDraft[]>(initial.slots ?? []);
+  const [slots, setSlots] = useState<SlotDraft[]>(() => {
+    if (initial.slots?.length) return initial.slots;
+    if (isEdit && student?.enrolments?.length) {
+      const existing: SlotDraft[] = [];
+      for (const enr of student.enrolments) {
+        if (enr.timetableSlots?.length) {
+          for (const s of enr.timetableSlots) {
+            existing.push({
+              key: s.id,
+              subjectId: enr.subjectId,
+              teacherId: s.teacherId ?? "",
+              weekday: String(s.weekday),
+              start: fromMinutes(s.startMinutes),
+              end: fromMinutes(s.endMinutes),
+            });
+          }
+        }
+      }
+      if (existing.length > 0) return existing;
+    }
+    return [];
+  });
+
+  // In edit mode, if slots were not included on student.enrolments, load them from the timetable endpoint
+  useEffect(() => {
+    if (!isEdit || !student?.id || slots.length > 0) return;
+    let active = true;
+    apiRequest<{
+      timetable?: {
+        slots: { id: string; enrolmentId: string; teacherId: string | null; weekday: number; startMinutes: number; endMinutes: number }[];
+        enrolments: { id: string; subjectId: string }[];
+      };
+    }>(`/api/students/${student.id}/timetable`)
+      .then((res) => {
+        if (!active || !res.timetable?.slots?.length) return;
+        const enrMap = new Map(res.timetable.enrolments.map((e) => [e.id, e.subjectId]));
+        const loaded: SlotDraft[] = res.timetable.slots.map((s) => ({
+          key: s.id,
+          subjectId: enrMap.get(s.enrolmentId) ?? "",
+          teacherId: s.teacherId ?? "",
+          weekday: String(s.weekday),
+          start: fromMinutes(s.startMinutes),
+          end: fromMinutes(s.endMinutes),
+        }));
+        if (loaded.length > 0) setSlots(loaded);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [isEdit, student?.id]);
+
+  const calculateAllocations = (targetTotal: number, currentRows: Row[], currentSlots: SlotDraft[] = slots) => {
+    const validRows = currentRows.filter((r) => r.subjectId);
+    if (validRows.length === 0 || targetTotal <= 0) return currentRows;
+
+    const slotCounts = new Map<string, number>();
+    for (const r of validRows) slotCounts.set(r.subjectId, 0);
+    for (const s of currentSlots) {
+      if (slotCounts.has(s.subjectId)) {
+        slotCounts.set(s.subjectId, (slotCounts.get(s.subjectId) || 0) + 1);
+      }
+    }
+    const totalSlots = currentSlots.filter((s) => slotCounts.has(s.subjectId)).length;
+
+    if (totalSlots > 0) {
+      let rem = targetTotal;
+      return currentRows.map((r, i) => {
+        if (!r.subjectId) return r;
+        const count = slotCounts.get(r.subjectId) || 0;
+        const isLast = i === currentRows.map((x) => x.subjectId).lastIndexOf(r.subjectId);
+        const share = isLast ? rem : Math.min(rem, Math.round((count / totalSlots) * targetTotal));
+        rem = Math.max(0, rem - share);
+        return { ...r, credits: String(share) };
+      });
+    }
+
+    const base = Math.floor(targetTotal / validRows.length);
+    let remainder = targetTotal % validRows.length;
+    let validIndex = 0;
+    return currentRows.map((r) => {
+      if (!r.subjectId) return r;
+      const extra = validIndex < remainder ? 1 : 0;
+      validIndex++;
+      return { ...r, credits: String(base + extra) };
+    });
+  };
+
+  const applyPreset = (preset: typeof PACKAGE_PRESETS[0]) => {
+    setPackageName(preset.name);
+    setTotalCredits(preset.totalCredits);
+    setPackagePrice(preset.price);
+    const target = Number(preset.totalCredits);
+    setRows((prev) => calculateAllocations(target, prev, slots));
+    clearFieldError("package.name", "package.totalCredits", "package.price");
+  };
   const [booking, setBooking] = useState<Booking | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
@@ -406,8 +514,9 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
         const credits = Number(r.credits || 0);
         if (!Number.isInteger(credits) || credits < 0) errors[`package.allocations.${i}.allocatedCredits`] = "Whole number, 0 or more.";
       });
-      if (Number.isInteger(total) && allocatedTotal !== total) {
-        errors["package.totalCredits"] = `Subject classes add up to ${allocatedTotal}, but the package total is ${total}. Adjust them or use “Set total”.`;
+      // Re-balance credits automatically if they do not match total, instead of blocking
+      if (Number.isInteger(total) && total > 0 && allocatedTotal !== total) {
+        setRows((prev) => calculateAllocations(total, prev, slots));
       }
     }
     if (id === "schedule") {
@@ -427,6 +536,17 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
 
   const buildPayload = () => {
     const enrolments = rows.map((r) => ({ subjectId: r.subjectId, teacherId: r.teacherId || null }));
+    const validRows = rows.filter((r) => r.subjectId);
+    const targetTotal = Number(totalCredits) || 0;
+    let finalAllocations: { subjectId: string; allocatedCredits: number }[] = [];
+    const manualSum = validRows.reduce((sum, r) => sum + (Number(r.credits) || 0), 0);
+    if (manualSum === targetTotal && targetTotal > 0) {
+      finalAllocations = validRows.map((r) => ({ subjectId: r.subjectId, allocatedCredits: Number(r.credits) || 0 }));
+    } else if (targetTotal > 0 && validRows.length > 0) {
+      const balanced = calculateAllocations(targetTotal, rows, slots);
+      finalAllocations = balanced.filter((r) => r.subjectId).map((r) => ({ subjectId: r.subjectId, allocatedCredits: Number(r.credits) || 0 }));
+    }
+
     const pkg = includePackage
       ? {
           name: packageName.trim() || undefined,
@@ -434,7 +554,7 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
           price: Number(packagePrice),
           startDate,
           expiryDate: expiryDate || null,
-          allocations: rows.map((r) => ({ subjectId: r.subjectId, allocatedCredits: Number(r.credits || 0) })),
+          allocations: finalAllocations,
         }
       : null;
     const common = {
@@ -456,7 +576,8 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
         guardianName: guardianName.trim(),
         whatsappNumber: whatsappNumber.trim(),
         newPackage: pkg,
-        ...(legacyDraft ? { slots: slotPayload(), draftData: null } : {}),
+        slots: slotPayload(),
+        ...(legacyDraft ? { draftData: null } : {}),
       };
     }
     return {
@@ -587,14 +708,22 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
     },
     subjects: rows.filter((r) => r.subjectId).map((r) => ({ name: subjectName(r.subjectId), trainer: r.teacherId ? teacherName(r.teacherId) : null })),
     pkg: includePackage
-      ? {
-          name: packageName.trim() || `${totalCredits}-class package`,
-          totalCredits: Number(totalCredits) || 0,
-          price: Number(packagePrice) || 0,
-          startDate,
-          expiryDate,
-          allocations: rows.filter((r) => r.subjectId).map((r) => ({ subject: subjectName(r.subjectId), credits: Number(r.credits || 0) })),
-        }
+      ? (() => {
+          const validRows = rows.filter((r) => r.subjectId);
+          const targetTotal = Number(totalCredits) || 0;
+          const manualSum = validRows.reduce((sum, r) => sum + (Number(r.credits) || 0), 0);
+          const effective = manualSum === targetTotal && targetTotal > 0
+            ? validRows.map((r) => ({ subjectId: r.subjectId, allocatedCredits: Number(r.credits) || 0 }))
+            : calculateAllocations(targetTotal, rows, slots).filter((r) => r.subjectId).map((r) => ({ subjectId: r.subjectId, allocatedCredits: Number(r.credits) || 0 }));
+          return {
+            name: packageName.trim() || `${totalCredits}-class package`,
+            totalCredits: Number(totalCredits) || 0,
+            price: Number(packagePrice) || 0,
+            startDate,
+            expiryDate,
+            allocations: effective.map((a) => ({ subject: subjectName(a.subjectId), credits: a.allocatedCredits })),
+          };
+        })()
       : null,
     schedule: hasSchedule
       ? rows
@@ -896,12 +1025,52 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
               )}
               {includePackage && (
                 <div className="space-y-4 rounded-card border border-line p-3 sm:p-4">
+                  <div>
+                    <p className="text-xs font-semibold text-ink-subtle uppercase tracking-wider mb-2">Package Presets</p>
+                    <div className="flex flex-wrap gap-2">
+                      {PACKAGE_PRESETS.map((preset) => {
+                        const isSelected = totalCredits === preset.totalCredits && packageName === preset.name;
+                        return (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() => applyPreset(preset)}
+                            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all border ${
+                              isSelected
+                                ? "bg-teal-500/20 border-teal-500/50 text-teal-300 shadow-xs"
+                                : "bg-surface border-line text-ink-muted hover:border-teal-500/30 hover:text-ink"
+                            }`}
+                          >
+                            {preset.label} (₹{Number(preset.price).toLocaleString("en-IN")})
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <Field label="Package name" name="package.name" error={err("package.name")} className="sm:col-span-3">
                       {(p) => <input {...p} type="text" value={packageName} onChange={(e) => setPackageName(e.target.value)} className={ctl(!!err("package.name"))} />}
                     </Field>
                     <Field label="Total classes" name="package.totalCredits" required error={err("package.totalCredits")}>
-                      {(p) => <input {...p} type="number" inputMode="numeric" min={1} value={totalCredits} onChange={(e) => { setTotalCredits(e.target.value); clearFieldError("package.totalCredits"); }} className={`${ctl(!!err("package.totalCredits"))} tabular-nums`} />}
+                      {(p) => (
+                        <input
+                          {...p}
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          value={totalCredits}
+                          onChange={(e) => {
+                            setTotalCredits(e.target.value);
+                            clearFieldError("package.totalCredits");
+                            const target = Number(e.target.value);
+                            if (Number.isInteger(target) && target > 0) {
+                              setRows((prev) => calculateAllocations(target, prev, slots));
+                            }
+                          }}
+                          className={`${ctl(!!err("package.totalCredits"))} tabular-nums`}
+                        />
+                      )}
                     </Field>
                     <Field label="Price (₹, whole rupees)" name="package.price" required error={err("package.price")}>
                       {(p) => <input {...p} type="number" inputMode="numeric" min={0} value={packagePrice} onChange={(e) => { setPackagePrice(e.target.value); clearFieldError("package.price"); }} className={`${ctl(!!err("package.price"))} tabular-nums`} />}
@@ -918,15 +1087,43 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
                   )}
                   <div className="space-y-2 border-t border-line pt-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-ink">Classes per subject</p>
-                      <p className={`text-sm font-semibold tabular-nums ${allocatedTotal === Number(totalCredits) ? "text-success" : "text-warning"}`}>
-                        Allocated {allocatedTotal} of {totalCredits || 0}
-                        {allocatedTotal !== Number(totalCredits) && allocatedTotal > 0 && (
-                          <button type="button" onClick={() => { setTotalCredits(String(allocatedTotal)); clearFieldError("package.totalCredits"); }} className="ml-2 min-h-[44px] underline">
-                            Set total to {allocatedTotal}
-                          </button>
+                      <div>
+                        <p className="text-sm font-semibold text-ink">Classes per subject</p>
+                        <p className="text-xs text-ink-subtle">
+                          The package determines total monthly classes. In the next step, you can set recurring weekly days and times for each subject.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const balanced = calculateAllocations(Number(totalCredits) || 0, rows, []);
+                            setRows(balanced);
+                            clearFieldError("package.totalCredits");
+                          }}
+                        >
+                          Split evenly
+                        </Button>
+                        {slots.length > 0 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const balanced = calculateAllocations(Number(totalCredits) || 0, rows, slots);
+                              setRows(balanced);
+                              clearFieldError("package.totalCredits");
+                            }}
+                          >
+                            Sync with timetable ({slots.length} slots)
+                          </Button>
                         )}
-                      </p>
+                        <p className={`text-sm font-semibold tabular-nums ${allocatedTotal === Number(totalCredits) ? "text-success" : "text-warning"}`}>
+                          Allocated {allocatedTotal} of {totalCredits || 0}
+                        </p>
+                      </div>
                     </div>
                     {rows.length === 0 ? (
                       <p className="text-sm text-ink-subtle">Add a subject first to allocate classes.</p>
@@ -961,6 +1158,11 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
               slotError={(index, field) => fieldErrors[`slots.${index}.${field}`]}
               clearSlotErrors={(index) => clearFieldError(`slots.${index}.weekday`, `slots.${index}.start`, `slots.${index}.end`, `slots.${index}.teacherId`, `slots.${index}.enrolmentId`)}
               classMinutes={CLASS_MINUTES}
+              packageInfo={{
+                includePackage,
+                packageName,
+                totalCredits: Number(totalCredits) || 0,
+              }}
             />
           )}
 

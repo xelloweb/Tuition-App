@@ -27,7 +27,11 @@ export const studentListInclude = {
   },
   enrolments: {
     where: { status: "ACTIVE" },
-    include: { subject: true, teacher: { select: teacherPublicSelect } },
+    include: {
+      subject: true,
+      teacher: { select: teacherPublicSelect },
+      timetableSlots: { where: { active: true } },
+    },
     orderBy: { createdAt: "asc" },
   },
   guardian: { select: { id: true, name: true, whatsappNumber: true } },
@@ -148,6 +152,16 @@ function parsePackage(v: FieldCollector, value: unknown, enrolledSubjectIds: str
   const allocated = allocations.reduce((sum, a) => sum + a.allocatedCredits, 0);
   if (allocated > totalCredits) {
     v.add("package.totalCredits", `Subject allocations (${allocated}) exceed the package total (${totalCredits}).`);
+  }
+  // If no allocations were provided or explicit sum is 0, auto-distribute across enrolled subjects
+  if (allocations.length === 0 && enrolledSubjectIds && enrolledSubjectIds.length > 0 && totalCredits > 0) {
+    const baseCredits = Math.floor(totalCredits / enrolledSubjectIds.length);
+    let rem = totalCredits % enrolledSubjectIds.length;
+    for (const sid of enrolledSubjectIds) {
+      const extra = rem > 0 ? 1 : 0;
+      if (rem > 0) rem--;
+      allocations.push({ subjectId: sid, allocatedCredits: baseCredits + extra });
+    }
   }
   return { name, totalCredits, price, startDate, expiryDate, allocations };
 }
@@ -597,14 +611,15 @@ export async function updateStudent(id: string, f: StudentFields, user: CurrentU
         changes.newPackage = { from: null, to: pkg };
       }
 
-      if (confirmingLegacyDraft && f.slots?.length) {
+      const shouldApplySlots = confirmingLegacyDraft ? Boolean(f.slots?.length) : f.slots !== undefined;
+      if (shouldApplySlots) {
         const current = await tx.subjectEnrollment.findMany({ where: { studentId: id, status: "ACTIVE" }, select: { id: true, subjectId: true } });
         const plan = await applyTimetableInTransaction(
           tx,
           id,
           {
             timeZone: BUSINESS_TIME_ZONE,
-            slots: f.slots.map((slot) => ({
+            slots: (f.slots ?? []).map((slot) => ({
               enrolmentId: current.find((e) => e.subjectId === slot.subjectId)?.id,
               teacherId: slot.teacherId ?? null,
               weekday: slot.weekday,
@@ -612,7 +627,8 @@ export async function updateStudent(id: string, f: StudentFields, user: CurrentU
               end: slot.end,
             })),
           },
-          user
+          user,
+          confirmingLegacyDraft ? "ADMISSION_TIMETABLE" : "UPDATE_TIMETABLE"
         );
         legacyBooking = { weeklySlots: plan.slots.length, bookedClasses: plan.occurrences.length, notBooked: plan.issues.map((i) => i.message) };
         changes.timetable = { from: null, to: legacyBooking };

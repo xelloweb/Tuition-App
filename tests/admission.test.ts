@@ -5,7 +5,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { prisma, coordinator, owner, makeSubject, makeTeacher, uid, expectFieldError } from "./helpers";
-import { checkAdmission, createStudent, parseStudentFields } from "../src/lib/services/students";
+import { checkAdmission, createStudent, parseStudentFields, updateStudent } from "../src/lib/services/students";
 import { createDraft, deleteDraft, updateDraft } from "../src/lib/services/admission-drafts";
 import { ApiError } from "../src/lib/api-errors";
 
@@ -95,6 +95,86 @@ describe("admission", () => {
     await expectFieldError(createStudent(parseStudentFields(garbage, { partial: false }), coordinator, null), (f) => Boolean(f["slots.0.weekday"] && f["slots.0.start"]));
     const notEnrolled = admission(subject.id, trainer.id, [{ subjectId: "not-a-subject", weekday: 1, start: "09:00", end: "10:00" }]);
     await expectFieldError(createStudent(parseStudentFields(notEnrolled, { partial: false }), coordinator, null), (f) => Boolean(f["slots.0.enrolmentId"]));
+  });
+
+  test("recurring weekly timetable during admission across multiple subjects based on a single monthly package", async () => {
+    const science = await makeSubject("Science");
+    const hindi = await makeSubject("Hindi");
+    const socialScience = await makeSubject("Social Science");
+
+    const trainerSci = await makeTeacher("Science Trainer");
+    const trainerHin = await makeTeacher("Hindi Trainer");
+    const trainerSoc = await makeTeacher("Social Science Trainer");
+
+    // 1 single package: 12 classes / month (Weekly 3 Classes) across 3 subjects
+    // Timetable:
+    // - Monday: 8:00 PM to 9:00 PM (Science)
+    // - Wednesday: 8:30 PM to 9:30 PM (Hindi)
+    // - Friday: 8:00 PM to 9:00 PM (Social Science)
+    const body = {
+      name: `Multi-Subject Timetable Student ${uid("s")}`,
+      grade: "8th Grade",
+      guardianName: "Parent Name",
+      whatsappNumber: "+91 98470 33333",
+      country: "India",
+      enrolments: [
+        { subjectId: science.id, teacherId: trainerSci.id },
+        { subjectId: hindi.id, teacherId: trainerHin.id },
+        { subjectId: socialScience.id, teacherId: trainerSoc.id },
+      ],
+      initialPackage: {
+        name: "Monthly Package (3 Classes/week)",
+        totalCredits: 12,
+        price: 3000,
+        startDate: today(),
+        allocations: [
+          { subjectId: science.id, allocatedCredits: 4 },
+          { subjectId: hindi.id, allocatedCredits: 4 },
+          { subjectId: socialScience.id, allocatedCredits: 4 },
+        ],
+      },
+      slots: [
+        { subjectId: science.id, weekday: 1, start: "20:00", end: "21:00" }, // Mon 8-9 PM
+        { subjectId: hindi.id, weekday: 3, start: "20:30", end: "21:30" }, // Wed 8:30-9:30 PM
+        { subjectId: socialScience.id, weekday: 5, start: "20:00", end: "21:00" }, // Fri 8-9 PM
+      ],
+    };
+
+    const { result, booking } = await createStudent(parseStudentFields(body, { partial: false }), coordinator, null);
+    assert.equal(booking?.weeklySlots, 3);
+    assert.equal(booking?.bookedClasses, 12, "all 12 classes booked across 4 weeks");
+    assert.deepEqual(booking?.notBooked, []);
+
+    // Verify weekly timetable slots in database
+    const slots = await prisma.timetableSlot.findMany({
+      where: { enrolment: { studentId: result.id }, active: true },
+      include: { enrolment: { include: { subject: true } } },
+    });
+    assert.equal(slots.length, 3);
+
+    // Verify sessions generated for each subject: 4 Science, 4 Hindi, 4 Social Science = 12 total
+    const sessions = await prisma.session.findMany({
+      where: { studentId: result.id, status: "SCHEDULED" },
+      include: { subject: true },
+    });
+    assert.equal(sessions.length, 12);
+    const sciSessions = sessions.filter((s) => s.subjectId === science.id);
+    const hinSessions = sessions.filter((s) => s.subjectId === hindi.id);
+    const socSessions = sessions.filter((s) => s.subjectId === socialScience.id);
+    assert.equal(sciSessions.length, 4);
+    assert.equal(hinSessions.length, 4);
+    assert.equal(socSessions.length, 4);
+
+    // Edit timetable later via updateStudent:
+    // Update student's timetable by adjusting recurring slots
+    const updatedFields = parseStudentFields({
+      slots: [
+        { subjectId: science.id, weekday: 1, start: "20:00", end: "21:00" },
+        { subjectId: hindi.id, weekday: 3, start: "20:30", end: "21:30" },
+      ],
+    }, { partial: true });
+    const updated = await updateStudent(result.id, updatedFields, coordinator);
+    assert.equal(updated.booking?.weeklySlots, 2);
   });
 
   test("students cannot be saved as placeholder drafts any more", () => {

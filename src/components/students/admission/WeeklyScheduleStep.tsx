@@ -51,6 +51,12 @@ export function displayTime(hhmm: string): string {
 let slotCounter = 0;
 export const newSlotKey = () => `slot-${Date.now().toString(36)}-${(slotCounter++).toString(36)}`;
 
+export interface PackageSummary {
+  includePackage: boolean;
+  packageName: string;
+  totalCredits: number;
+}
+
 interface SubjectRow {
   key: string;
   subjectId: string;
@@ -67,6 +73,7 @@ export function WeeklyScheduleStep({
   slotError,
   clearSlotErrors,
   classMinutes,
+  packageInfo,
 }: {
   rows: SubjectRow[];
   subjectName: (subjectId: string) => string;
@@ -78,6 +85,7 @@ export function WeeklyScheduleStep({
   slotError: (index: number, field: "weekday" | "start" | "end" | "teacherId" | "enrolmentId") => string | undefined;
   clearSlotErrors: (index: number) => void;
   classMinutes: number;
+  packageInfo?: PackageSummary | null;
 }) {
   const update = (key: string, patch: Partial<SlotDraft>) => {
     const index = slots.findIndex((s) => s.key === key);
@@ -110,11 +118,51 @@ export function WeeklyScheduleStep({
     return <p className="text-sm text-ink-muted">Add a subject first; weekly slots are set per subject.</p>;
   }
 
+  const weeklyTarget = packageInfo?.includePackage && packageInfo.totalCredits > 0
+    ? Math.max(1, Math.round(packageInfo.totalCredits / 4))
+    : null;
+  const currentWeeklyCount = slots.length;
+
   return (
     <div className="space-y-4">
+      {packageInfo?.includePackage && packageInfo.totalCredits > 0 && (
+        <div className="rounded-card border border-teal-500/25 bg-teal-500/5 p-3.5 sm:p-4 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-2 w-2 rounded-full bg-teal-400 animate-pulse" />
+              <h4 className="font-semibold text-sm text-ink">
+                Selected Package: <span className="text-teal-400">{packageInfo.packageName || "Monthly Package"}</span>
+              </h4>
+            </div>
+            <span className="text-xs font-mono font-semibold rounded-full bg-surface px-2.5 py-1 border border-line text-ink">
+              {packageInfo.totalCredits} classes/month (~{weeklyTarget} classes/week)
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <p className="text-ink-muted">
+              Configured recurring schedule: <strong className="text-ink">{currentWeeklyCount} class{currentWeeklyCount === 1 ? "" : "es"} per week</strong> ({currentWeeklyCount * 4} classes/month)
+            </p>
+            {weeklyTarget !== null && (
+              currentWeeklyCount === weeklyTarget ? (
+                <span className="inline-flex items-center gap-1 font-semibold text-emerald-400">
+                  ✓ Matches weekly package limit ({currentWeeklyCount} / {weeklyTarget} classes/week)
+                </span>
+              ) : currentWeeklyCount < weeklyTarget ? (
+                <span className="inline-flex items-center gap-1 font-semibold text-amber-400">
+                  {currentWeeklyCount} of {weeklyTarget} weekly classes configured ({weeklyTarget - currentWeeklyCount} more recommended)
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 font-semibold text-rose-400">
+                  ⚠ {currentWeeklyCount} weekly classes ({currentWeeklyCount * 4}/month) exceeds {packageInfo.totalCredits} monthly package limit
+                </span>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
       <p className="text-sm text-ink-muted">
-        Add each subject&apos;s recurring weekly classes. All times are <strong className="text-ink">IST</strong>. Classes are{" "}
-        {classMinutes} minutes. When you confirm, the next four weeks are booked against the package&apos;s classes.
+        Configure recurring weekly classes across any selected enrolled subjects. Classes repeat automatically every week in <strong className="text-ink">IST</strong> and are tracked against the monthly package.
       </p>
       {subjectRows.map((row) => {
         const assigned = row.teacherId ? teacherName(row.teacherId) : null;
@@ -124,7 +172,12 @@ export function WeeklyScheduleStep({
           <section key={row.key} aria-labelledby={headingId} className="space-y-3 rounded-card border border-line bg-canvas/40 p-3 sm:p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
-                <h3 id={headingId} className="font-semibold text-ink">{subjectName(row.subjectId)}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 id={headingId} className="font-semibold text-ink">{subjectName(row.subjectId)}</h3>
+                  <span className="text-xs rounded-full bg-surface px-2 py-0.5 border border-line text-ink-subtle">
+                    {entries.length} weekly slot{entries.length === 1 ? "" : "s"}
+                  </span>
+                </div>
                 <p className="text-sm text-ink-subtle">
                   {assigned ? `Trainer: ${assigned}` : "No trainer assigned yet: classes are booked once a trainer is set."}
                 </p>
@@ -134,7 +187,7 @@ export function WeeklyScheduleStep({
               </Button>
             </div>
             {entries.length === 0 ? (
-              <p className="text-sm text-ink-subtle">No weekly slots yet.</p>
+              <p className="text-sm text-ink-subtle">No weekly slots yet for {subjectName(row.subjectId)}.</p>
             ) : (
               <ul className="space-y-2">
                 {entries.map(({ slot, index }) => {
@@ -143,6 +196,12 @@ export function WeeklyScheduleStep({
                   const startError = slotError(index, "start");
                   return (
                     <li key={slot.key} className="rounded-control border border-line p-3" data-field={`slots.${index}.start`} tabIndex={-1}>
+                      <div className="mb-2 flex items-center justify-between text-xs text-ink-subtle">
+                        <span className="font-medium text-ink">
+                          {weekdayLabel(slot.weekday)} · {displayTime(slot.start)} to {displayTime(slot.end)} IST
+                        </span>
+                        <span className="text-ink-muted">Repeats weekly</span>
+                      </div>
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1.1fr_1fr_1fr_1.5fr_auto] sm:items-start">
                         <Field label="Day" error={slotError(index, "weekday")}>
                           {(p) => (
