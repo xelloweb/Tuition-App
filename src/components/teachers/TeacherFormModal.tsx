@@ -114,7 +114,7 @@ export function TeacherFormModal({
       : ["High School (9th–10th)", "Plus One (+1 / 11th)", "Plus Two (+2 / 12th)"]
   );
 
-  const initialBase = teacher?.defaultRate ?? 550;
+  const initialBase = teacher?.defaultRate ?? 150;
   const initialOverrides = parseGradeRates(teacher?.gradeRates);
   const [baseRate, setBaseRate] = useState(String(initialBase));
   const [tierRates, setTierRates] = useState<Record<RateTierKey, string>>(() => {
@@ -136,7 +136,7 @@ export function TeacherFormModal({
   const showRates = canSetRates;
   const ratesHiddenNote = isEdit
     ? "Pay rates are managed by the owner and are not shown for your role."
-    : "Pay rates are set by the owner after the profile is created (default base rate ₹500/hr).";
+    : "Pay rates are set by the owner after the profile is created (default base rate ₹150/hr).";
 
   const subjectChoices = useMemo(
     () => Array.from(new Set([...availableSubjects.map((s) => s.name), ...PRESET_SUBJECTS, ...selectedSubjects])),

@@ -32,70 +32,77 @@ async function main() {
     console.log("Account safety check: development build, nothing to do.");
     return;
   }
-  const rawSeed = (process.env.SEED_ADMIN_PASSWORD ?? "").trim();
-  const seedPassword = rawSeed.length >= 12 && !newPasswordProblem(rawSeed)
-    ? rawSeed
-    : "xelloadmin1234";
+  const seedPassword = process.env.SEED_ADMIN_PASSWORD ?? "";
+  const seedUsable = seedPassword.length >= 12 && !newPasswordProblem(seedPassword);
+  const users = await prisma.user.findMany({ where: { passwordHash: { not: null } } });
+  const affected = [];
+  for (const user of users) {
+    const published = await matchesAny(user.passwordHash!, PUBLISHED);
+    // Staff other than the owner must never share the owner's setup password.
+    const sharesSetupPassword = user.role !== "OWNER" && seedUsable && (await matchesAny(user.passwordHash!, [seedPassword]));
+    if (published || sharesSetupPassword) affected.push({ ...user, reason: published ? "published" : "shared" });
+  }
+  if (affected.length === 0) {
+    console.log("Account safety check: no login uses a published or shared setup password.");
+    return;
+  }
+  const base = (process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
 
-  // 1. Ensure Owner account exists and has a valid password
-  const owners = await prisma.user.findMany({ where: { role: "OWNER" } });
-  if (owners.length === 0) {
-    await prisma.user.create({
-      data: {
-        id: "usr-admin",
-        name: "Devanand Nambiar (Admin / Owner)",
-        email: "admin@xellotuition.com",
-        role: "OWNER",
-        passwordHash: await bcrypt.hash(seedPassword, 12),
-        active: true,
-      },
-    });
-    console.log("Account safety check: Created owner admin@xellotuition.com with master admin password.");
-  } else {
-    for (const owner of owners) {
-      const published = owner.passwordHash ? await matchesAny(owner.passwordHash, PUBLISHED) : false;
-      if (!owner.passwordHash || published) {
-        await prisma.user.update({
-          where: { id: owner.id },
+  for (const user of affected) {
+    if (user.role === "OWNER" && seedUsable) {
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: user.id },
           data: {
             passwordHash: await bcrypt.hash(seedPassword, 12),
             inviteToken: null,
             inviteExpiresAt: null,
-            active: true,
             sessionVersion: { increment: 1 },
           },
-        });
-        console.log(`Account safety check: Restored master password for owner ${owner.email}.`);
-      }
-    }
-  }
-
-  // 2. Check other non-owner staff accounts
-  const nonOwners = await prisma.user.findMany({
-    where: { role: { not: "OWNER" }, passwordHash: { not: null } },
-  });
-
-  for (const user of nonOwners) {
-    const published = await matchesAny(user.passwordHash!, PUBLISHED);
-    const sharesSetupPassword = await matchesAny(user.passwordHash!, [seedPassword]);
-    if (published || sharesSetupPassword) {
-      await prisma.$transaction([
-        prisma.user.update({
-          where: { id: user.id },
-          data: { passwordHash: null, sessionVersion: { increment: 1 } },
         }),
         prisma.auditLog.create({
           data: {
             entityType: "USER",
             entityId: user.id,
-            action: "REVOKE_PUBLISHED_PASSWORD",
+            action: "REPLACE_PUBLISHED_PASSWORD",
             actorRole: "SYSTEM",
             actorName: "Deploy safety check",
-            details: JSON.stringify({ email: user.email, reason: published ? "published" : "shared", sessionsEnded: true }),
+            details: JSON.stringify({ email: user.email, replacedWith: "SEED_ADMIN_PASSWORD", sessionsEnded: true }),
           },
         }),
       ]);
-      console.log(`Account safety check: Revoked demo/shared password for staff ${user.email}.`);
+      console.log(`Account safety check: ${user.email} (owner) now uses the SEED_ADMIN_PASSWORD value; old sessions ended.`);
+      continue;
+    }
+
+    const isOwner = user.role === "OWNER";
+    const inviteToken = isOwner ? crypto.randomBytes(32).toString("hex") : null;
+    const inviteExpiresAt = isOwner ? new Date(Date.now() + 48 * 60 * 60 * 1000) : null;
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: null, inviteToken, inviteExpiresAt, sessionVersion: { increment: 1 } },
+      }),
+      prisma.auditLog.create({
+        data: {
+          entityType: "USER",
+          entityId: user.id,
+          action: "REVOKE_PUBLISHED_PASSWORD",
+          actorRole: "SYSTEM",
+          actorName: "Deploy safety check",
+          details: JSON.stringify({ email: user.email, reason: user.reason, resetLinkIssued: isOwner, sessionsEnded: true }),
+        },
+      }),
+    ]);
+    if (isOwner) {
+      console.log(
+        `Account safety check: ${user.email} (owner) used a published password. Set a new one within 48 hours at ${base || "<site address>"}/setup-password?token=${inviteToken}`
+      );
+    } else {
+      const why = user.reason === "published" ? "used a published password" : "shared the owner's setup password";
+      console.log(
+        `Account safety check: ${user.email} ${why}; it no longer works. The owner can create a reset link on the Users page.`
+      );
     }
   }
 }

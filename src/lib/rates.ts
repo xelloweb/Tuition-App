@@ -16,13 +16,22 @@ export interface RateTier {
 }
 
 export const RATE_TIERS: RateTier[] = [
-  { key: "PRIMARY", label: "KG – 5th (Primary)", offset: -100, floor: 300 },
-  { key: "MIDDLE", label: "6th – 7th (Middle)", offset: -75, floor: 350 },
-  { key: "SECONDARY", label: "8th – 9th", offset: -50, floor: 350 },
-  { key: "TENTH", label: "10th Standard", offset: 0, floor: 0 },
-  { key: "PLUS_ONE", label: "Plus One (+1)", offset: 50, floor: 0 },
-  { key: "PLUS_TWO", label: "Plus Two (+2) / Entrance", offset: 100, floor: 0 },
+  { key: "PRIMARY", label: "KG – 5th Standard", offset: 0, floor: 150 },
+  { key: "MIDDLE", label: "6th – 7th Standard", offset: 0, floor: 150 },
+  { key: "SECONDARY", label: "8th – 9th Standard", offset: 0, floor: 150 },
+  { key: "TENTH", label: "10th Standard", offset: 0, floor: 150 },
+  { key: "PLUS_ONE", label: "Plus One (+1)", offset: 50, floor: 200 },
+  { key: "PLUS_TWO", label: "Plus Two (+2)", offset: 50, floor: 200 },
 ];
+
+export const STANDARD_TIER_RATES: Record<RateTierKey, number> = {
+  PRIMARY: 150,
+  MIDDLE: 150,
+  SECONDARY: 150,
+  TENTH: 150,
+  PLUS_ONE: 200,
+  PLUS_TWO: 200,
+};
 
 export const RATE_LIMITS = { min: 100, max: 100000 };
 
@@ -81,41 +90,88 @@ export function serializeGradeRates(overrides: GradeRateOverrides): string | nul
 }
 
 export function defaultTierRate(baseRate: number, tier: RateTierKey): number {
-  const def = RATE_TIERS.find((t) => t.key === tier)!;
-  return Math.max(def.floor, baseRate + def.offset);
+  if (baseRate && baseRate !== 150 && baseRate !== 500) {
+    if (tier === "PLUS_ONE" || tier === "PLUS_TWO") {
+      return baseRate + 50;
+    }
+    return baseRate;
+  }
+  return STANDARD_TIER_RATES[tier];
 }
 
 /** Classifies a student grade label into a pay tier (null when unrecognised). */
 export function tierForGrade(studentGrade: string | null | undefined): RateTierKey | null {
   if (!studentGrade) return null;
-  const g = studentGrade.toLowerCase();
-  if (g.includes("12th") || g.includes("+2") || g.includes("plus two") || g.includes("neet") || g.includes("jee")) {
+  const g = studentGrade.toLowerCase().trim();
+
+  // Plus Two / 12th
+  if (
+    /\b(12|12th|\+2|plus two|neet|jee)\b/.test(g) ||
+    g.includes("12th") || g.includes("+2") || g.includes("plus two") ||
+    g.includes("neet") || g.includes("jee")
+  ) {
     return "PLUS_TWO";
   }
-  if (g.includes("11th") || g.includes("+1") || g.includes("plus one")) return "PLUS_ONE";
-  if (g.includes("10th") || g.includes("sslc") || g.includes("matric")) return "TENTH";
-  if (g.includes("8th") || g.includes("9th")) return "SECONDARY";
-  if (g.includes("6th") || g.includes("7th") || g.includes("middle")) return "MIDDLE";
+
+  // Plus One / 11th
   if (
+    /\b(11|11th|\+1|plus one)\b/.test(g) ||
+    g.includes("11th") || g.includes("+1") || g.includes("plus one")
+  ) {
+    return "PLUS_ONE";
+  }
+
+  // 10th Standard
+  if (
+    /\b(10|10th|sslc|matric)\b/.test(g) ||
+    g.includes("10th") || g.includes("sslc") || g.includes("matric")
+  ) {
+    return "TENTH";
+  }
+
+  // 8th - 9th Standard
+  if (
+    /\b(8|8th|9|9th)\b/.test(g) ||
+    g.includes("8th") || g.includes("9th")
+  ) {
+    return "SECONDARY";
+  }
+
+  // 6th - 7th Standard
+  if (
+    /\b(6|6th|7|7th|middle)\b/.test(g) ||
+    g.includes("6th") || g.includes("7th") || g.includes("middle")
+  ) {
+    return "MIDDLE";
+  }
+
+  // KG - 5th Standard
+  if (
+    /\b(kg|lkg|ukg|1|1st|2|2nd|3|3rd|4|4th|5|5th|primary|kindergarten)\b/.test(g) ||
     g.includes("1st") || g.includes("2nd") || g.includes("3rd") || g.includes("4th") || g.includes("5th") ||
     g.includes("primary") || g.includes("kg") || g.includes("kindergarten")
   ) {
     return "PRIMARY";
   }
+
   return null;
 }
 
 type RateSource = { defaultRate?: number | null; gradeRates?: string | null } | null | undefined;
 
 export function getTierRate(teacher: RateSource, tier: RateTierKey): number {
-  const baseRate = Number(teacher?.defaultRate) || 500;
-  return parseGradeRates(teacher?.gradeRates)[tier] ?? defaultTierRate(baseRate, tier);
+  const overrides = parseGradeRates(teacher?.gradeRates);
+  if (overrides[tier] !== undefined) {
+    return overrides[tier]!;
+  }
+  const baseRate = Number(teacher?.defaultRate) || 150;
+  return defaultTierRate(baseRate, tier);
 }
 
 /** Hourly rate used for payouts: the tier override if set, otherwise the default formula. */
 export function getTeacherRateForGrade(teacher: RateSource, studentGrade?: string | null): number {
-  const baseRate = Number(teacher?.defaultRate) || 500;
-  if (!teacher) return baseRate;
   const tier = tierForGrade(studentGrade);
-  return tier ? getTierRate(teacher, tier) : baseRate;
+  if (tier) return getTierRate(teacher, tier);
+  const baseRate = Number(teacher?.defaultRate);
+  return baseRate && baseRate !== 500 ? baseRate : 150;
 }

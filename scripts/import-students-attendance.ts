@@ -169,9 +169,29 @@ async function main() {
         phone: "+91 94471 88201",
         subjects: "General",
         grades: "1st to 12th",
+        defaultRate: 150,
       },
     });
   }
+
+  // Ensure all trainers have the standard hourly pay rates based on student class level:
+  // KG to 5th: ₹150/hr, 6th to 7th: ₹150/hr, 8th to 9th: ₹150/hr, 10th: ₹150/hr, Plus One and Plus Two: ₹200/hr
+  const standardGradeRates = JSON.stringify({
+    PRIMARY: 150,
+    MIDDLE: 150,
+    SECONDARY: 150,
+    TENTH: 150,
+    PLUS_ONE: 200,
+    PLUS_TWO: 200,
+  });
+
+  const rateUpdateResult = await prisma.teacher.updateMany({
+    data: {
+      defaultRate: 150,
+      gradeRates: standardGradeRates,
+    },
+  });
+  console.log(`✅ Applied standard hourly pay rates to ${rateUpdateResult.count} trainers.`);
 
   let createdCount = 0;
   let updatedCount = 0;
