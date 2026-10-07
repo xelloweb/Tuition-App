@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 const PUBLISHED_SECRET_HASHES = new Set([
   "1ccf61c5ee039472abed666a10bdec52faf1529bfdf02c72364103052e97d050",
   "12d01622bc5f7c566f8cc5cac2aa691629c6f9af666d085c5aeb6bc331bbbdc0",
+  "4046090622c1d0bf223f935eb7a1d6b4b680fe6bd9f3bb73dbfec1af3575e8c4", // current .env.example placeholder
 ]);
 
 function isPublishedSecret(secret: string): boolean {
