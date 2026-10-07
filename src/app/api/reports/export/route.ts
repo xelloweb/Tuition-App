@@ -176,7 +176,7 @@ export async function GET(req: NextRequest) {
         const end = new Date(endDateStr);
         end.setHours(23, 59, 59, 999);
         dateFilter = {
-          paymentDate: {
+          receivedDate: {
             gte: start,
             lte: end
           }
@@ -187,9 +187,9 @@ export async function GET(req: NextRequest) {
         where: dateFilter,
         include: {
           student: true,
-          invoice: true
+          allocations: { include: { invoice: true } }
         },
-        orderBy: { paymentDate: "desc" }
+        orderBy: { receivedDate: "desc" }
       });
 
       const headers = [
@@ -204,17 +204,20 @@ export async function GET(req: NextRequest) {
         "Notes"
       ];
 
-      const rows = payments.map((p) => [
-        p.id,
-        p.paymentDate.toISOString().split("T")[0],
-        p.student.studentCode,
-        p.student.name,
-        p.amount,
-        p.paymentMethod,
-        p.reference || "",
-        p.invoice?.invoiceNumber || "",
-        p.notes || ""
-      ]);
+      const rows = payments.map((p) => {
+        const invoiceNumbers = p.allocations?.map((a) => a.invoice.invoiceNumber).join(", ") || "";
+        return [
+          p.id,
+          p.receivedDate.toISOString().split("T")[0],
+          p.student.studentCode,
+          p.student.name,
+          p.amount,
+          p.paymentMethod,
+          p.reference || "",
+          invoiceNumbers,
+          p.notes || ""
+        ];
+      });
 
       const csv = generateSafeCsv(headers, rows);
       return new NextResponse(csv, {

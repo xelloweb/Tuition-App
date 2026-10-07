@@ -108,7 +108,8 @@ export default async function ReportsPage() {
 
           {/* Collections Export (Financial) */}
           {showFinancial ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 space-y-3">
+            <>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 space-y-3">
               <div className="font-bold text-white text-sm">
                 Invoices & Collections Ledger
               </div>
@@ -126,6 +127,7 @@ export default async function ReportsPage() {
             </div>
             
             <PaymentReportForm />
+            </>
           ) : (
             <div className="rounded-2xl border border-slate-800/60 p-5 space-y-3 bg-slate-950/30">
               <div className="font-bold text-slate-500 text-sm">
