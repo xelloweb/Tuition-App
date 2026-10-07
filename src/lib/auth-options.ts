@@ -6,14 +6,25 @@ import { prisma } from "@/lib/prisma";
 
 /**
  * SHA-256 of secrets that have been published in this repository (the old
- * .env.example value and the old hard-coded fallback). Anyone with access to
- * the repo could forge sessions with them, so production refuses them.
+ * .env.example value and hard-coded fallbacks). Anyone with access to the repo
+ * could forge sessions with them, so production refuses them.
  */
 const PUBLISHED_SECRET_HASHES = new Set([
   "1ccf61c5ee039472abed666a10bdec52faf1529bfdf02c72364103052e97d050",
   "12d01622bc5f7c566f8cc5cac2aa691629c6f9af666d085c5aeb6bc331bbbdc0",
   "4046090622c1d0bf223f935eb7a1d6b4b680fe6bd9f3bb73dbfec1af3575e8c4", // current .env.example placeholder
+  "428fb5d3372160fe1023608b34457c8a413973d035e308a1926d6cb67d986b3c", // fallback committed in 95b7914
 ]);
+
+/** Thrown when production has no usable NEXTAUTH_SECRET; the layout shows a setup notice. */
+export class AuthSecretMissingError extends Error {
+  constructor() {
+    super(
+      "NEXTAUTH_SECRET is missing, too short or publicly known. Generate a new one (e.g. `openssl rand -base64 32`) and set it in the hosting environment."
+    );
+    this.name = "AuthSecretMissingError";
+  }
+}
 
 function isPublishedSecret(secret: string): boolean {
   return PUBLISHED_SECRET_HASHES.has(createHash("sha256").update(secret).digest("hex"));
@@ -24,11 +35,13 @@ function isPublishedSecret(secret: string): boolean {
  * and unique; a missing or published secret would let anyone mint an owner session.
  */
 export function getAuthSecret(): string {
-  let secret = process.env.NEXTAUTH_SECRET?.trim() ?? "";
-  if (secret.length < 32 || isPublishedSecret(secret)) {
-    secret = "FallbackSecretForHostingerBecauseEnvUpdateFailed-1234567890";
+  const secret = process.env.NEXTAUTH_SECRET?.trim() ?? "";
+  if (process.env.NODE_ENV === "production") {
+    // Never fall back to a value written in this public repository: fail closed instead.
+    if (secret.length < 32 || isPublishedSecret(secret)) throw new AuthSecretMissingError();
+    return secret;
   }
-  return secret;
+  return secret || "local-development-only-secret-not-for-production";
 }
 
 /** Shared demo password for seeded accounts: local development only, and only when explicitly enabled. */
@@ -99,5 +112,9 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/login",
   },
-  secret: getAuthSecret(),
+  // Read on each request (not at import), so `next build` works without the secret
+  // while a live request without a usable secret fails closed.
+  get secret() {
+    return getAuthSecret();
+  },
 };
