@@ -7,7 +7,8 @@
     "build": "prisma generate && prisma db push --skip-generate && npm run seed && npm run secure-accounts && next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "seed": "npx tsx prisma/seed.ts",
+    "seed": "npx tsx prisma/seed.ts && npx tsx scripts/import-students-attendance.ts",
+    "import-students": "npx tsx scripts/import-students-attendance.ts",
     "test": "node scripts/run-tests.mjs",
     "typecheck": "tsc --noEmit",
     "secure-accounts": "npx tsx scripts/secure-accounts.ts"
