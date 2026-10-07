@@ -26,6 +26,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showForgotHelp, setShowForgotHelp] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,9 +121,67 @@ export default function LoginPage() {
             {!loading && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
           </button>
         </form>
-        <p className="mt-6 text-sm text-slate-300">
-          Forgot your password? Ask the owner for a reset link.
-        </p>
+        <div className="mt-6 pt-4 border-t border-slate-800 flex flex-col items-center">
+          <button
+            type="button"
+            onClick={() => setShowForgotHelp((prev) => !prev)}
+            className="text-sm font-medium text-teal-400 hover:text-teal-300 hover:underline focus:outline-none cursor-pointer"
+          >
+            Forgot your password?
+          </button>
+
+          {showForgotHelp && (
+            <div className="w-full mt-3 rounded-xl border border-teal-500/30 bg-slate-950 p-4 text-xs text-slate-300 space-y-3 animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-white text-sm">Password Recovery</span>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotHelp(false)}
+                  className="text-slate-400 hover:text-white px-1.5 py-0.5 rounded text-sm cursor-pointer"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <p className="font-medium text-slate-200">• Teachers & Staff:</p>
+                <p className="text-slate-400">
+                  Contact the Tuition Administrator to request a secure password reset link.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="font-medium text-slate-200">• Administrator / Owner:</p>
+                <p className="text-slate-400">
+                  Sign in with <span className="text-teal-300 font-mono">admin@xellotuition.com</span>. You can change your password under Settings once signed in.
+                </p>
+              </div>
+
+              <div className="pt-2 flex flex-wrap gap-2">
+                <a
+                  href="mailto:admin@xellotuition.com?subject=Password%20Reset%20Request"
+                  className="rounded-lg bg-teal-500/20 px-3 py-1.5 text-xs font-semibold text-teal-300 hover:bg-teal-500/30 border border-teal-500/40 inline-flex items-center gap-1.5"
+                >
+                  Email Admin
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText("admin@xellotuition.com");
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 border border-slate-700 cursor-pointer"
+                >
+                  {copied ? "Copied!" : "Copy Admin Email"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        
       </div>
     </main>
   );
