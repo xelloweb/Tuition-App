@@ -7,10 +7,33 @@ import { prisma } from "../prisma";
 import { CurrentUser } from "../types";
 import { ApiError, notFoundError, validationError } from "../api-errors";
 import { formatInTimeZone } from "../timezones";
+import { linkDraftInTransaction, readStored } from "./parent-submissions";
 
 const MAX_DRAFT_CHARS = 200_000;
 
-export function presentDraft(d: { id: string; label: string; data: string; createdByName: string; updatedByName: string; createdAt: Date; updatedAt: Date }) {
+type DraftRow = {
+  id: string;
+  label: string;
+  data: string;
+  createdByName: string;
+  updatedByName: string;
+  createdAt: Date;
+  updatedAt: Date;
+  parentSubmission?: { id: string; reference: string; submittedData: string } | null;
+};
+
+/** Parent's preferred times shown (unconfirmed) on the schedule step. */
+export function intakeContext(s: { id: string; reference: string; submittedData: string }) {
+  const stored = readStored(s.submittedData);
+  return {
+    id: s.id,
+    reference: s.reference,
+    preferences: (stored?.preferences ?? []).map((p) => ({ subjectId: p.subjectId, subjectName: p.subjectName, weekday: p.weekday, start: p.start, end: p.end })),
+  };
+}
+export type IntakeContext = ReturnType<typeof intakeContext>;
+
+export function presentDraft(d: DraftRow) {
   return {
     id: d.id,
     label: d.label,
@@ -19,8 +42,11 @@ export function presentDraft(d: { id: string; label: string; data: string; creat
     updatedByName: d.updatedByName,
     createdAt: d.createdAt.toISOString(),
     updatedAt: d.updatedAt.toISOString(),
+    submission: d.parentSubmission ? intakeContext(d.parentSubmission) : null,
   };
 }
+
+const withSubmission = { parentSubmission: { select: { id: true, reference: true, submittedData: true } } } as const;
 export type AdmissionDraftItem = ReturnType<typeof presentDraft>;
 
 function readDraftBody(body: Record<string, unknown>) {
@@ -36,19 +62,25 @@ function readDraftBody(body: Record<string, unknown>) {
 }
 
 export async function listDrafts() {
-  const drafts = await prisma.admissionDraft.findMany({ orderBy: { updatedAt: "desc" } });
+  const drafts = await prisma.admissionDraft.findMany({ orderBy: { updatedAt: "desc" }, include: withSubmission });
   return drafts.map(presentDraft);
 }
 
+/** Body: { data, submissionId? } — a draft started from a parent submission is linked to it (one draft per submission). */
 export async function createDraft(body: Record<string, unknown>, user: CurrentUser) {
   const { json, label } = readDraftBody(body);
-  const draft = await prisma.admissionDraft.create({
-    data: { label, data: json, createdByName: user.name, updatedByName: user.name },
+  const submissionId = typeof body.submissionId === "string" && body.submissionId ? body.submissionId : null;
+  const id = await prisma.$transaction(async (tx) => {
+    const draft = await tx.admissionDraft.create({
+      data: { label, data: json, createdByName: user.name, updatedByName: user.name },
+    });
+    if (submissionId) await linkDraftInTransaction(tx, submissionId, draft.id, user);
+    await tx.auditLog.create({
+      data: { entityType: "ADMISSION_DRAFT", entityId: draft.id, action: "CREATE_ADMISSION_DRAFT", actorRole: user.role, actorName: user.name, details: JSON.stringify({ label, submissionId }) },
+    });
+    return draft.id;
   });
-  await prisma.auditLog.create({
-    data: { entityType: "ADMISSION_DRAFT", entityId: draft.id, action: "CREATE_ADMISSION_DRAFT", actorRole: user.role, actorName: user.name, details: JSON.stringify({ label }) },
-  });
-  return presentDraft(draft);
+  return presentDraft(await prisma.admissionDraft.findUniqueOrThrow({ where: { id }, include: withSubmission }));
 }
 
 /** Saves over a draft only if nobody else saved it since `baseUpdatedAt`. */
@@ -69,7 +101,7 @@ export async function updateDraft(id: string, body: Record<string, unknown>, use
       `${current.updatedByName} saved this draft at ${formatInTimeZone(current.updatedAt)} IST after you opened it. Close the form and open the draft again to see their changes.`
     );
   }
-  return presentDraft(await prisma.admissionDraft.findUniqueOrThrow({ where: { id } }));
+  return presentDraft(await prisma.admissionDraft.findUniqueOrThrow({ where: { id }, include: withSubmission }));
 }
 
 export async function deleteDraft(id: string, user: CurrentUser) {

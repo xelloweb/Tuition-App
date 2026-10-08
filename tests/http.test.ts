@@ -312,3 +312,125 @@ describe("HTTP API", { skip: !BASE }, () => {
     assert.match(await billing.text(), /Access restricted/);
   });
 });
+
+describe("parent admission form (public) over HTTP", { skip: !BASE }, () => {
+  let subjectId = "";
+  let n = 0;
+  const key = () => `http-${run}-${++n}-abcdefghijklmnop`;
+  const fromAddress = (last: number) => ({ "X-Forwarded-For": `198.51.100.${last}` });
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const form = (extra: Record<string, unknown> = {}) => ({
+    studentName: `HTTP Applicant ${run}`,
+    grade: "9th Grade",
+    board: "CBSE",
+    subjectIds: [subjectId],
+    guardianName: "Fictional Parent",
+    relationship: "Mother",
+    whatsappNumber: "050 765 4321",
+    country: "UAE",
+    preferences: [{ subjectId, weekday: 6, start: "10:00", end: "11:00" }],
+    consent: true,
+    ...extra,
+  });
+  async function freshToken() {
+    const res = await fetch(`${BASE}/api/public/admission-enquiries/token`);
+    return ((await res.json()) as { formToken: string }).formToken;
+  }
+  async function send(body: Record<string, unknown>, headers: Record<string, string> = {}) {
+    const res = await fetch(`${BASE}/api/public/admission-enquiries`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: BASE, ...headers },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    let json: Record<string, unknown> | null = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+    return { status: res.status, json, text };
+  }
+  let token = "";
+
+  before(async () => {
+    const subjects = await call("admin", "GET", "/api/subjects");
+    subjectId = (subjects.json!.subjects as { id: string }[])[0].id;
+    token = await freshToken();
+    await sleep(3200); // a real form is open for more than a few seconds
+  });
+
+  test("the form opens without a login and shows only the form", async () => {
+    const res = await fetch(`${BASE}/admission/apply`, { redirect: "manual" });
+    assert.equal(res.status, 200);
+    const html = await res.text();
+    assert.match(html, /Student admission form/);
+    assert.match(html, /All timings must be entered in Indian Standard Time \(IST\)\. These are preferences only\./);
+    assert.doesNotMatch(html, /Sign out|Students Directory|Invoices &amp; payments/);
+  });
+
+  test("anonymous visitors cannot read or change submissions", async () => {
+    for (const [method, path] of [
+      ["GET", "/api/parent-submissions"],
+      ["GET", "/api/parent-submissions/any-id"],
+      ["PATCH", "/api/parent-submissions/any-id"],
+      ["POST", "/api/parent-submissions/any-id/notes"],
+    ]) {
+      const res = await call(null, method, path, method === "GET" ? undefined : {});
+      assert.equal(res.status, 401, `${method} ${path}`);
+    }
+    const inbox = await fetch(`${BASE}/admissions`, { redirect: "manual" });
+    assert.ok([302, 303, 307].includes(inbox.status), "the staff inbox needs a login");
+  });
+
+  test("a submission answers with a reference only; a retry gets the same reference; only staff can see it", async () => {
+    const body = { ...form(), formToken: token, submissionKey: key() };
+    const first = await send(body, fromAddress(1));
+    assert.equal(first.status, 201, first.text);
+    assert.deepEqual(Object.keys(first.json!).sort(), ["reference", "success"]);
+    const retry = await send(body, fromAddress(1));
+    assert.equal(retry.json!.reference, first.json!.reference);
+
+    const list = await call("coordinator", "GET", `/api/parent-submissions?status=ALL&q=${first.json!.reference}`);
+    assert.equal(list.status, 200);
+    const items = list.json!.items as { reference: string; whatsappNumber: string }[];
+    assert.equal(items.length, 1);
+    assert.equal(items[0].whatsappNumber, "+971 507654321", "local UAE number stored with its country code");
+    assert.equal((await call("accounts", "GET", "/api/parent-submissions")).status, 403);
+    assert.equal((await call("teacher_priya", "GET", "/api/parent-submissions")).status, 403);
+  });
+
+  test("a brother or sister with the same parent number is accepted, and nothing says the number is known", async () => {
+    const a = await send({ ...form({ studentName: `Sibling A ${run}`, whatsappNumber: "+971 50 111 2222" }), formToken: token, submissionKey: key() }, fromAddress(4));
+    const b = await send({ ...form({ studentName: `Sibling B ${run}`, whatsappNumber: "+971 50 111 2222" }), formToken: token, submissionKey: key() }, fromAddress(4));
+    assert.equal(a.status, 201);
+    assert.equal(b.status, 201);
+    assert.deepEqual(Object.keys(b.json!).sort(), ["reference", "success"]);
+    assert.notEqual(a.json!.reference, b.json!.reference);
+  });
+
+  test("forged, automated, oversized or malformed requests are refused with safe messages", async () => {
+    assert.equal((await send({ ...form(), formToken: token, submissionKey: key() }, { Origin: "https://evil.example.test", ...fromAddress(2) })).status, 403);
+    assert.equal((await send({ ...form(), formToken: token, submissionKey: key(), website: "http://spam.example" }, fromAddress(2))).status, 400);
+    assert.equal((await send({ ...form(), formToken: token, submissionKey: key(), notes: "x".repeat(40_000) }, fromAddress(2))).status, 413);
+    const tooFast = await send({ ...form(), formToken: await freshToken(), submissionKey: key() }, fromAddress(2));
+    assert.equal(tooFast.status, 400);
+    assert.match(String(tooFast.json!.error), /take a moment/);
+    const stale = await send({ ...form(), formToken: "made.up.token", submissionKey: key() }, fromAddress(2));
+    assert.equal(stale.status, 409);
+    assert.equal((stale.json!.details as { reason: string }).reason, "FORM_EXPIRED");
+    const invalid = await send({ ...form({ whatsappNumber: "123", consent: false }), formToken: token, submissionKey: key() }, fromAddress(2));
+    assert.equal(invalid.status, 400);
+    assert.ok((invalid.json!.fieldErrors as Record<string, string>).whatsappNumber);
+    assert.ok((invalid.json!.fieldErrors as Record<string, string>).consent);
+    assert.doesNotMatch(invalid.text, /prisma|stack|at \w+ \(/i);
+    const notJson = await fetch(`${BASE}/api/public/admission-enquiries`, { method: "POST", headers: { "Content-Type": "text/plain", Origin: BASE }, body: "hello" });
+    assert.equal(notJson.status, 400);
+  });
+
+  test("too many forms from one connection are slowed down", async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) statuses.push((await send({ ...form({ studentName: `Rate ${i} ${run}` }), formToken: token, submissionKey: key() }, fromAddress(3))).status);
+    assert.deepEqual(statuses, [201, 201, 201, 201, 201, 429]);
+  });
+});

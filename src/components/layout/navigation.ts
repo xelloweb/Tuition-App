@@ -11,6 +11,7 @@ import {
   DollarSign,
   FileText,
   GraduationCap,
+  Inbox,
   KeyRound,
   Layers,
   LayoutDashboard,
@@ -57,6 +58,7 @@ const GROUPS: { label: string; items: NavItemDef[] }[] = [
     label: "Academics",
     items: [
       { href: "/students", label: "Students", labelFor: { TEACHER: "My students" }, description: "Profiles, subjects, packages and admissions", icon: Users, roles: ALL },
+      { href: "/admissions", label: "Admissions", description: "Parent form link and parent submissions", icon: Inbox, roles: ["OWNER", "COORDINATOR"] },
       { href: "/teachers", label: "Trainers", labelFor: { TEACHER: "My trainer profile" }, description: "Trainer profiles, subjects and pay rates", icon: GraduationCap, roles: ALL },
       { href: "/timetable", label: "Timetable", description: "Classes by day and week (IST)", icon: CalendarDays, roles: ["OWNER", "COORDINATOR", "TEACHER"] },
       { href: "/attendance", label: "Attendance", description: "Pending and submitted attendance", icon: CheckCircle2, roles: ["OWNER", "COORDINATOR", "TEACHER"] },

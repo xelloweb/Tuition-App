@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { MobileBottomNav } from "./MobileBottomNav";
@@ -13,6 +14,8 @@ interface AppShellProps {
   /** Today's date in IST, formatted on the server. */
   istToday: string;
   ephemeralStorage?: boolean;
+  /** Counts shown next to navigation items, e.g. unread parent submissions. */
+  navBadges?: Record<string, number>;
   children: React.ReactNode;
 }
 
@@ -20,8 +23,12 @@ interface AppShellProps {
 // in the browser and showed them even when the server had no such record.
 const LEGACY_STORAGE_KEYS = ["xello_registered_students_v1", "xello_registered_teachers_v1"];
 
-export function AppShell({ currentUser, istToday, ephemeralStorage = false, children }: AppShellProps) {
+/** Public pages render exactly as parents see them, even for signed-in staff (no menus or staff data). */
+const PUBLIC_PATHS = ["/admission/apply"];
+
+export function AppShell({ currentUser, istToday, ephemeralStorage = false, navBadges = {}, children }: AppShellProps) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     try {
@@ -31,6 +38,8 @@ export function AppShell({ currentUser, istToday, ephemeralStorage = false, chil
     }
   }, []);
 
+  if (pathname && PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return <>{children}</>;
+
   return (
     <div className="flex min-h-screen bg-canvas text-ink">
       <a
@@ -39,7 +48,7 @@ export function AppShell({ currentUser, istToday, ephemeralStorage = false, chil
       >
         Skip to main content
       </a>
-      <Sidebar currentRole={currentUser.role} />
+      <Sidebar currentRole={currentUser.role} badges={navBadges} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Header currentUser={currentUser} istToday={istToday} />
@@ -57,8 +66,8 @@ export function AppShell({ currentUser, istToday, ephemeralStorage = false, chil
           <div className="mx-auto max-w-7xl">{children}</div>
         </main>
 
-        <MobileBottomNav currentRole={currentUser.role} moreOpen={moreOpen} onOpenMore={() => setMoreOpen(true)} />
-        <MobileMoreDrawer currentUser={currentUser} isOpen={moreOpen} onClose={() => setMoreOpen(false)} />
+        <MobileBottomNav currentRole={currentUser.role} moreOpen={moreOpen} onOpenMore={() => setMoreOpen(true)} badges={navBadges} />
+        <MobileMoreDrawer currentUser={currentUser} isOpen={moreOpen} onClose={() => setMoreOpen(false)} badges={navBadges} />
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { ApiError, notFoundError, relatedRecordError, validationError } from "..
 import { nextCode, withCodeRetry } from "../codes";
 import { rememberIdempotentEntity, runIdempotent } from "../idempotency";
 import { applyTimetableInTransaction, retireEnrolmentSlots, SlotInput } from "./timetable";
+import { convertInTransaction, submissionForDraft } from "./parent-submissions";
 
 type Tx = Prisma.TransactionClient;
 
@@ -81,6 +82,8 @@ export interface StudentFields {
   slots?: StudentSlotInput[];
   /** Admission draft to remove once the student is created (same transaction). */
   draftId?: string | null;
+  /** Parent form submission this admission converts (marked Converted in the same transaction). */
+  submissionId?: string | null;
 }
 
 const MAX_ENROLMENTS = 15;
@@ -207,6 +210,7 @@ export function parseStudentFields(body: Record<string, unknown>, { partial }: {
   }
   if (partial && has("draftData")) f.draftData = typeof body.draftData === "string" ? body.draftData : null;
   if (!partial) f.draftId = optionalId(body.draftId);
+  if (!partial) f.submissionId = optionalId(body.submissionId);
 
   if (has("enrolments") && body.enrolments !== undefined) f.enrolments = parseEnrolments(v, body.enrolments);
 
@@ -442,6 +446,17 @@ async function saveAdmission(fields: StudentFields, user: CurrentUser, idempoten
             booking = { weeklySlots: plan.slots.length, bookedClasses: plan.occurrences.length, notBooked: plan.issues.map((i) => i.message) };
           }
 
+          // A parent submission is converted exactly once, together with the admission.
+          let submissionId = fields.submissionId ?? null;
+          if (fields.draftId) {
+            const linked = await submissionForDraft(tx, fields.draftId);
+            if (linked && submissionId && linked.id !== submissionId) {
+              throw validationError("This draft belongs to a different parent submission. Refresh the page and try again.");
+            }
+            submissionId = linked?.id ?? submissionId;
+          }
+          if (submissionId) await convertInTransaction(tx, submissionId, student.id, user);
+
           if (fields.draftId) await tx.admissionDraft.deleteMany({ where: { id: fields.draftId } });
 
           await tx.auditLog.create({
@@ -461,6 +476,7 @@ async function saveAdmission(fields: StudentFields, user: CurrentUser, idempoten
                 unassignedSubjects: enrolments.filter((e) => !e.teacherId).length,
                 packageNumber: pkg?.packageNumber ?? null,
                 invoiceNumber: pkg?.invoiceNumber ?? null,
+                fromParentSubmission: submissionId,
               }),
             },
           });

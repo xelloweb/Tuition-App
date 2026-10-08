@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertCircle, ArrowRight, CalendarClock, CheckCircle2, ClipboardList, MessageCircle, Plus, Receipt, UserX } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { countUnreadSubmissions } from "@/lib/services/parent-submissions";
 import { canAccessFinancial, canManageStudents, getCurrentUser, isUnlinkedTrainer, UNLINKED_TRAINER_MESSAGE } from "@/lib/auth";
 import { calculateFinancialSummary } from "@/lib/billing";
 import { BUSINESS_TIME_ZONE } from "@/lib/constants";
@@ -94,7 +95,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
   const none = Promise.resolve(null);
 
-  const [todaysSessions, pendingAttendance, activePackages, drafts, noTrainer, noSchedule, absences, overdueCount, unverifiedPayments, finance] = await Promise.all([
+  const [todaysSessions, pendingAttendance, activePackages, drafts, newSubmissions, noTrainer, noSchedule, absences, overdueCount, unverifiedPayments, finance] = await Promise.all([
     academic
       ? prisma.session.findMany({
           where: { scheduledStartTimeUtc: { gte: dayStart, lt: dayEnd } },
@@ -107,6 +108,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       ? prisma.studentPackage.findMany({ where: { status: "ACTIVE" }, select: { id: true, packageNumber: true, totalCredits: true, studentId: true, student: { select: { name: true } } } })
       : none,
     academic ? prisma.admissionDraft.count() : none,
+    academic ? countUnreadSubmissions() : none,
     academic
       ? prisma.subjectEnrollment.findMany({
           where: { status: "ACTIVE", teacherId: null, student: { status: "ACTIVE" } },
@@ -157,6 +159,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   if (noTrainer?.length) attention.push({ href: "#no-trainer", count: noTrainer.length, title: "Subjects without a trainer", detail: "Classes cannot be booked yet" });
   if (noSchedule?.length) attention.push({ href: "#no-schedule", count: noSchedule.length, title: "Subjects without a weekly schedule", detail: "Trainer assigned, no weekly slots" });
   if (absences?.length) attention.push({ href: "#trainer-absences", count: absences.length, title: "Trainer absences (30 days)", detail: "Check replacement classes", tone: "info" });
+  if (newSubmissions) attention.push({ href: "/admissions", count: newSubmissions, title: "New parent submissions", detail: "Parent form answers nobody has opened yet" });
   if (drafts) attention.push({ href: "/students", count: drafts, title: "Admission drafts", detail: "Unfinished admissions to complete", tone: "info" });
   if (unverifiedPayments) attention.push({ href: "/billing", count: unverifiedPayments, title: "Payments to verify", detail: "Recorded, not yet checked against the bank" });
   if (finance?.overdueInvoices) attention.push({ href: "/dues", count: finance.overdueInvoices, title: "Overdue invoices", detail: `${inr(finance.overdue)} past the due date`, tone: "danger" });

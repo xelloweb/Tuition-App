@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { getSessionUser } from "@/lib/auth";
+import { canManageStudents, getSessionUser } from "@/lib/auth";
+import { countUnreadSubmissions } from "@/lib/services/parent-submissions";
 import { AuthSecretMissingError } from "@/lib/auth-options";
 import { isEphemeralDatabase } from "@/lib/prisma";
 import { AppShell } from "@/components/layout/AppShell";
@@ -52,6 +53,16 @@ export default async function RootLayout({
       </html>
     );
   }
+  // Unread parent submissions, shown next to "Admissions" for the roles that handle them.
+  let navBadges: Record<string, number> = {};
+  if (currentUser && canManageStudents(currentUser.role)) {
+    try {
+      navBadges = { "/admissions": await countUnreadSubmissions() };
+    } catch {
+      // The badge is a convenience; a failed count must not break every page.
+    }
+  }
+
   // The whole application uses India Standard Time; today's date is computed here, once, in IST.
   const istToday = new Intl.DateTimeFormat("en-IN", {
     timeZone: "Asia/Kolkata",
@@ -68,7 +79,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans bg-canvas">
         {currentUser ? (
-          <AppShell currentUser={currentUser} istToday={istToday} ephemeralStorage={isEphemeralDatabase}>
+          <AppShell currentUser={currentUser} istToday={istToday} ephemeralStorage={isEphemeralDatabase} navBadges={navBadges}>
             {children}
           </AppShell>
         ) : (

@@ -74,6 +74,7 @@ export function WeeklyScheduleStep({
   clearSlotErrors,
   classMinutes,
   packageInfo,
+  preferences,
 }: {
   rows: SubjectRow[];
   subjectName: (subjectId: string) => string;
@@ -86,6 +87,8 @@ export function WeeklyScheduleStep({
   clearSlotErrors: (index: number) => void;
   classMinutes: number;
   packageInfo?: PackageSummary | null;
+  /** Times a parent suggested on the public form (IST). Shown for reference; never booked by themselves. */
+  preferences?: { subjectId: string; subjectName: string; weekday: number; start: string; end: string }[] | null;
 }) {
   const update = (key: string, patch: Partial<SlotDraft>) => {
     const index = slots.findIndex((s) => s.key === key);
@@ -111,6 +114,14 @@ export function WeeklyScheduleStep({
       const startMin = toMinutes(start) ?? 18 * 60;
       return [...prev, { key: newSlotKey(), subjectId: row.subjectId, teacherId: "", weekday, start, end: last?.end ?? fromMinutes(startMin + classMinutes) }];
     });
+  };
+
+  const addFromPreference = (row: SubjectRow, pref: { weekday: number; start: string }) => {
+    const startMin = toMinutes(pref.start) ?? 18 * 60;
+    setSlots((prev) => [
+      ...prev,
+      { key: newSlotKey(), subjectId: row.subjectId, teacherId: "", weekday: String(pref.weekday), start: fromMinutes(startMin), end: fromMinutes(startMin + classMinutes) },
+    ]);
   };
 
   const subjectRows = rows.filter((r) => r.subjectId);
@@ -159,6 +170,34 @@ export function WeeklyScheduleStep({
             )}
           </div>
         </div>
+      )}
+
+      {preferences && preferences.length > 0 && (
+        <section aria-labelledby="parent-preferences-heading" className="space-y-2 rounded-card border border-info/40 bg-info/10 p-3 sm:p-4">
+          <h4 id="parent-preferences-heading" className="font-semibold text-ink">Parent&apos;s preferred times (not confirmed)</h4>
+          <p className="text-sm text-ink-muted">
+            From the parent form, in IST. Nothing is booked from these: check the trainer&apos;s availability, then add a slot.
+          </p>
+          <ul className="space-y-2">
+            {preferences.map((pref, i) => {
+              const row = subjectRows.find((r) => r.subjectId === pref.subjectId);
+              return (
+                <li key={`${pref.subjectId}-${i}`} className="flex flex-wrap items-center justify-between gap-2 text-sm text-ink">
+                  <span>
+                    {pref.subjectName}: {weekdayLabel(String(pref.weekday))}, {displayTime(pref.start)} to {displayTime(pref.end)} IST
+                  </span>
+                  {row ? (
+                    <Button type="button" variant="secondary" size="sm" icon={Plus} onClick={() => addFromPreference(row, pref)}>
+                      Add as a slot
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-ink-subtle">Subject not in this admission</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
 
       <p className="text-sm text-ink-muted">

@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   Edit2,
   Trash2,
+  Inbox,
 } from "lucide-react";
 import { AddStudentModal } from "@/components/students/AddStudentModal";
 import { EditStudentModal } from "@/components/students/EditStudentModal";
@@ -261,9 +262,18 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, dr
         </div>
 
         {canAddStudent && (
-          <Button onClick={() => { setResumeDraft(null); setAddModalOpen(true); }} icon={Plus} className="w-full sm:w-auto">
-            Admit a student
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Link
+              href="/admissions"
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-control border border-line-strong px-4 py-2.5 text-sm font-semibold text-ink hover:bg-raised"
+            >
+              <Inbox className="h-4 w-4" aria-hidden="true" />
+              Parent submissions
+            </Link>
+            <Button onClick={() => { setResumeDraft(null); setAddModalOpen(true); }} icon={Plus} className="w-full sm:w-auto">
+              Admit a student
+            </Button>
+          </div>
         )}
       </div>
 

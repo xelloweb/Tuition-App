@@ -73,6 +73,10 @@ model Student {
   progressReports   StudentProgress[]
   assessments       Assessment[]
   parentConcerns    ParentConcern[]
+  /// The parent form submission this admission came from (if any).
+  sourceSubmission  ParentSubmission?   @relation("ConvertedSubmission")
+  /// Parent form submissions staff associated with this existing student.
+  linkedSubmissions ParentSubmission[]  @relation("LinkedSubmission")
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 }
@@ -533,6 +537,8 @@ model AdmissionDraft {
   data          String
   createdByName String
   updatedByName String
+  /// Set when the draft was started from a parent form submission.
+  parentSubmission ParentSubmission?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -557,4 +563,63 @@ model AttendanceCorrectionRequest {
 
   @@index([status])
   @@index([attendanceRecordId])
+}
+
+/// A parent's admission enquiry from the public form (/admission/apply). It never
+/// creates a student, guardian, package, invoice, class or reservation: staff
+/// review it and confirm an admission through the normal admission form.
+model ParentSubmission {
+  id                 String                 @id @default(cuid())
+  /// Random reference shown to the parent (e.g. XA-7K3M-9QPD). Never used to look anything up publicly.
+  reference          String                 @unique
+  /// Random key from the parent's browser: a retried submission returns the same reference.
+  submissionKey      String                 @unique
+  /// Exactly what the parent submitted (JSON), kept unchanged.
+  submittedData      String
+  /// Copies of submitted values for the inbox, search and duplicate checks.
+  studentName        String
+  grade              String
+  board              String
+  subjectNames       String
+  guardianName       String
+  whatsappNumber     String
+  /// Digits only (with country code), for duplicate and sibling checks.
+  whatsappKey        String
+  country            String
+  /// NEW, CONTACTED, AWAITING_INFO, READY, CONVERTED (set only by a confirmed admission), CLOSED
+  status             String                 @default("NEW")
+  assignedToUserId   String?
+  assignedToName     String?
+  /// Follow-up date, YYYY-MM-DD in IST.
+  followUpOn         String?
+  /// First opened by staff (drives the unread indicator).
+  seenAt             DateTime?
+  admissionDraftId   String?                @unique
+  admissionDraft     AdmissionDraft?        @relation(fields: [admissionDraftId], references: [id], onDelete: SetNull)
+  convertedStudentId String?                @unique
+  convertedStudent   Student?               @relation("ConvertedSubmission", fields: [convertedStudentId], references: [id], onDelete: SetNull)
+  convertedAt        DateTime?
+  convertedByName    String?
+  linkedStudentId    String?
+  linkedStudent      Student?               @relation("LinkedSubmission", fields: [linkedStudentId], references: [id], onDelete: SetNull)
+  notes              ParentSubmissionNote[]
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@index([status])
+  @@index([whatsappKey])
+  @@index([createdAt])
+}
+
+/// Staff notes on a parent submission (append-only).
+model ParentSubmissionNote {
+  id           String           @id @default(cuid())
+  submissionId String
+  submission   ParentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  body         String
+  authorName   String
+  authorRole   String
+  createdAt    DateTime         @default(now())
+
+  @@index([submissionId])
 }

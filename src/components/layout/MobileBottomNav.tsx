@@ -10,13 +10,17 @@ export function MobileBottomNav({
   currentRole,
   moreOpen,
   onOpenMore,
+  badges = {},
 }: {
   currentRole: string;
   moreOpen: boolean;
   onOpenMore: () => void;
+  badges?: Record<string, number>;
 }) {
   const pathname = usePathname();
   const items = mobilePrimaryFor(currentRole);
+  // Badges for pages inside "More" show as a dot on the More button.
+  const moreCount = Object.entries(badges).filter(([href]) => !items.some((i) => i.href === href)).reduce((sum, [, n]) => sum + n, 0);
 
   return (
     <nav
@@ -50,8 +54,11 @@ export function MobileBottomNav({
             aria-expanded={moreOpen}
             className="flex flex-1 flex-col items-center justify-center gap-0.5 rounded-control text-xs text-ink-muted hover:text-ink"
           >
-            <Menu className="h-5 w-5" aria-hidden="true" />
-            <span>More</span>
+            <span className="relative">
+              <Menu className="h-5 w-5" aria-hidden="true" />
+              {moreCount > 0 && <span className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full bg-brand" aria-hidden="true" />}
+            </span>
+            <span>More{moreCount > 0 && <span className="sr-only"> ({moreCount} new)</span>}</span>
           </button>
         </li>
       </ul>

@@ -4,9 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { GraduationCap } from "lucide-react";
 import { isActivePath, navGroupsFor } from "./navigation";
+import { NavBadge } from "./NavBadge";
 
 /** Desktop navigation (1024px and wider). Phones and tablets use the bottom bar and "More". */
-export function Sidebar({ currentRole }: { currentRole: string }) {
+export function Sidebar({ currentRole, badges = {} }: { currentRole: string; badges?: Record<string, number> }) {
   const pathname = usePathname();
   const groups = navGroupsFor(currentRole);
 
@@ -40,6 +41,7 @@ export function Sidebar({ currentRole }: { currentRole: string }) {
                     >
                       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                       <span>{item.label}</span>
+                      <NavBadge count={badges[item.href]} />
                     </Link>
                   </li>
                 );

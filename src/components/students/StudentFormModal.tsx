@@ -7,7 +7,8 @@ import { BOARD_OPTIONS, COUNTRIES, MEDIUM_OPTIONS, STUDENT_STATUSES, findCountry
 import { checkInternationalPhone, isValidEmail } from "@/lib/validation";
 import { ClientApiError, apiRequest, errorMessage, newIdempotencyKey } from "@/lib/client-api";
 import { formatTimeOnly } from "@/lib/timezones";
-import type { AdmissionDraftItem } from "@/lib/services/admission-drafts";
+import type { AdmissionDraftItem, IntakeContext } from "@/lib/services/admission-drafts";
+import type { AdmissionPrefill } from "@/lib/intake-prefill";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { FormErrorSummary, focusField } from "@/components/ui/FormFeedback";
 import { Field, controlBorder, controlClass } from "@/components/ui/Field";
@@ -85,7 +86,7 @@ type StepId = "details" | "subjects" | "package" | "schedule" | "review";
 type Booking = { weeklySlots: number; bookedClasses: number; notBooked: string[] };
 
 /** What a saved admission draft contains (also reads drafts saved by the old form). */
-interface AdmissionSnapshot {
+export interface AdmissionSnapshot {
   version: 1;
   step: StepId;
   name: string;
@@ -115,6 +116,10 @@ interface StudentFormModalProps {
   student?: StudentFormRecord;
   /** Resume an admission draft (create mode). */
   draft?: AdmissionDraftItem | null;
+  /** Starting values from a parent form submission (create mode, no draft yet). */
+  prefill?: AdmissionPrefill | null;
+  /** The parent submission this admission converts; confirming marks it Converted. */
+  intake?: IntakeContext | null;
   subjects: SubjectOption[];
   teachers: TeacherOption[];
   onClose: () => void;
@@ -185,13 +190,18 @@ function readSnapshot(json: string | null | undefined): Partial<AdmissionSnapsho
   }
 }
 
-export function StudentFormModal({ mode, student, draft, subjects, teachers, onClose, onSuccess, onDraftsChanged }: StudentFormModalProps) {
+export function StudentFormModal({ mode, student, draft, prefill, intake, subjects, teachers, onClose, onSuccess, onDraftsChanged }: StudentFormModalProps) {
   const isEdit = mode === "edit";
   const legacyDraft = isEdit && student?.status === "DRAFT";
   const formRef = useRef<HTMLFormElement>(null);
   const submittingRef = useRef(false);
   const [idempotencyKey] = useState(() => newIdempotencyKey());
-  const initial = useMemo(() => (draft ? readSnapshot(draft.data) : readSnapshot(student?.draftData)), [draft, student]);
+  const initial = useMemo<Partial<AdmissionSnapshot>>(
+    () => (draft ? readSnapshot(draft.data) : prefill ? prefill : readSnapshot(student?.draftData)),
+    [draft, prefill, student]
+  );
+  /** Set when this admission comes from a parent form submission (directly or via its draft). */
+  const intakeInfo = isEdit ? null : intake ?? draft?.submission ?? null;
 
   const steps: (StepDef & { id: StepId })[] = useMemo(
     () => [
@@ -326,7 +336,7 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
     }
 
     const base = Math.floor(targetTotal / validRows.length);
-    let remainder = targetTotal % validRows.length;
+    const remainder = targetTotal % validRows.length;
     let validIndex = 0;
     return currentRows.map((r) => {
       if (!r.subjectId) return r;
@@ -440,6 +450,19 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
       setLookupState("error");
     }
   };
+
+  // Pre-filled from a parent submission: check once for a known parent with this number (siblings).
+  const autoLookup = useRef(false);
+  useEffect(() => {
+    if (autoLookup.current || !intakeInfo || draft || linkedGuardian) return;
+    // The flag is set when the lookup actually runs, so a remount (React strict mode) still looks up once.
+    const timer = window.setTimeout(() => {
+      autoLookup.current = true;
+      void lookupGuardians();
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const linkGuardian = (g: GuardianMatch) => {
     setLinkedGuardian(g);
@@ -586,6 +609,7 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
       initialPackage: pkg,
       slots: slotPayload(),
       ...(draftId ? { draftId } : {}),
+      ...(intakeInfo ? { submissionId: intakeInfo.id } : {}),
     };
   };
 
@@ -678,11 +702,16 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
     try {
       const res = draftId
         ? await apiRequest<{ draft: AdmissionDraftItem }>(`/api/admission-drafts/${draftId}`, { method: "PATCH", body: { data: snap, baseUpdatedAt: draftUpdatedAt } })
-        : await apiRequest<{ draft: AdmissionDraftItem }>("/api/admission-drafts", { method: "POST", body: { data: snap } });
+        : await apiRequest<{ draft: AdmissionDraftItem }>("/api/admission-drafts", { method: "POST", body: { data: snap, ...(intakeInfo ? { submissionId: intakeInfo.id } : {}) } });
       setDraftId(res.draft.id);
       setDraftUpdatedAt(res.draft.updatedAt);
       setSavedSnapshot(comparable);
-      setDraftNotice({ tone: "success", text: `Draft saved at ${formatTimeOnly(res.draft.updatedAt)} IST. Find it under “Admission drafts” on the Students page.` });
+      setDraftNotice({
+        tone: "success",
+        text: intakeInfo
+          ? `Draft saved at ${formatTimeOnly(res.draft.updatedAt)} IST. Continue it from submission ${intakeInfo.reference} or under “Admission drafts” on the Students page.`
+          : `Draft saved at ${formatTimeOnly(res.draft.updatedAt)} IST. Find it under “Admission drafts” on the Students page.`,
+      });
       onDraftsChanged?.();
     } catch (error) {
       setDraftNotice({ tone: "error", text: errorMessage(error, "Could not save the draft.") });
@@ -754,7 +783,7 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
         <div className="flex items-start justify-between gap-3 border-b border-line pb-4">
           <div className="min-w-0">
             <h2 id={titleId} className="text-xl font-bold text-ink">
-              {isEdit ? (legacyDraft ? "Finish admission" : "Edit student") : draft ? "Continue admission" : "Admit a student"}
+              {isEdit ? (legacyDraft ? "Finish admission" : "Edit student") : draft ? "Continue admission" : intakeInfo ? "Start admission from parent form" : "Admit a student"}
               {isEdit && student && <span className="ml-2 align-middle font-mono text-sm font-normal text-ink-subtle">{student.studentCode}</span>}
             </h2>
             <p className="mt-0.5 text-sm text-ink-muted">
@@ -790,6 +819,12 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
         >
           <FormErrorSummary message={formError} fieldErrors={fieldErrors} labels={new Proxy(FIELD_LABELS, { get: (_t, k) => labelFor(String(k)) })} onFocusField={goToField} />
           {draftNotice && <Notice tone={draftNotice.tone} onDismiss={() => setDraftNotice(null)}>{draftNotice.text}</Notice>}
+          {intakeInfo && currentStep.id !== "review" && (
+            <Notice tone="info" title={`From parent form ${intakeInfo.reference}`}>
+              Check every detail with the parent. Assign trainers, choose the package and confirm the weekly slots yourself: nothing
+              is booked or reserved until you confirm the admission.
+            </Notice>
+          )}
 
           <h3 className="text-lg font-semibold text-ink">{currentStep.label}</h3>
 
@@ -1158,6 +1193,7 @@ export function StudentFormModal({ mode, student, draft, subjects, teachers, onC
               slotError={(index, field) => fieldErrors[`slots.${index}.${field}`]}
               clearSlotErrors={(index) => clearFieldError(`slots.${index}.weekday`, `slots.${index}.start`, `slots.${index}.end`, `slots.${index}.teacherId`, `slots.${index}.enrolmentId`)}
               classMinutes={CLASS_MINUTES}
+              preferences={intakeInfo?.preferences}
               packageInfo={{
                 includePackage,
                 packageName,

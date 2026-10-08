@@ -87,3 +87,21 @@ every deploy resets the owner password again) and change the password under My a
 - Personal data remains in the public repository's history until the repository is made private and/or history is rewritten.
 - 79 `no-explicit-any` lint errors remain in older screens (billing, dues, payouts, timetable, progress); npm audit reported 8 high-severity advisories earlier (not re-assessed).
 - Not implemented: instalment schedules, payment-proof upload, trainer availability used for clash checks.
+
+## Parent admission form (added 8 Oct 2026)
+
+Public form at `/admission/apply` (no login) → **Admissions** inbox (owner and coordinators) → “Review & Start Admission”
+opens the normal admission form pre-filled; confirming it marks the submission Converted in the same transaction.
+
+| Area | What it does | Verified |
+|---|---|---|
+| Public form | Student, parent, learning needs, optional preferred times (IST only, several per subject), required unticked agreement, review before “Submit Student Details”, reference shown only after the server saved it | Browser (360 px, Dubai time zone): 20 checks |
+| Safety | Same-site check, signed form token (min. 3 s, 24 h), hidden spam field, 32 KB limit, 5 forms per connection per 10 min (proxy address), retries return the same reference, answers never reveal existing records | HTTP tests (6) and unit tests (16) |
+| Inbox | Search, status/assignee filters, IST times, unread badge (navigation and dashboard), notes, follow-up date, assignment, duplicate and sibling hints, link to an existing student | Browser + database tests |
+| Conversion | Pre-fills the admission form; parent times shown as “not confirmed” and added as slots only by staff; one draft per submission; one admission per submission (simultaneous confirmations: exactly one succeeds) | Database tests (9), browser (19 staff checks) |
+| No side effects | A submission creates no student, guardian, package, invoice, class, attendance or credit reservation | Database test |
+
+**Launch blocker:** there is no approved privacy notice. In production the form shows “not open yet” and refuses
+submissions until `PRIVACY_NOTICE_URL` (an https address or a page on this site) is set; copy/share are switched off.
+Not implemented: grade-specific subject rules (the app has none, so every listed subject is offered for every grade),
+and notifications outside the app (no email or WhatsApp is sent).

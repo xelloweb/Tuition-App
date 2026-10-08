@@ -7,16 +7,19 @@ import { X } from "lucide-react";
 import { CurrentUser } from "@/lib/types";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { isActivePath, mobileMoreFor } from "./navigation";
+import { NavBadge } from "./NavBadge";
 
 /** The rest of the navigation on phones and tablets, plus the account actions. */
 export function MobileMoreDrawer({
   currentUser,
   isOpen,
   onClose,
+  badges = {},
 }: {
   currentUser: CurrentUser;
   isOpen: boolean;
   onClose: () => void;
+  badges?: Record<string, number>;
 }) {
   const pathname = usePathname();
   if (!isOpen) return null;
@@ -61,6 +64,7 @@ export function MobileMoreDrawer({
                         <span className="block text-sm font-semibold">{item.label}</span>
                         <span className="block text-xs text-ink-subtle">{item.description}</span>
                       </span>
+                      <NavBadge count={badges[item.href]} />
                     </Link>
                   </li>
                 );
