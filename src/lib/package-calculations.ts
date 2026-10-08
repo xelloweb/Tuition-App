@@ -97,6 +97,7 @@ export async function calculatePackageBalances(
     packageId: pkg.id,
     packageNumber: pkg.packageNumber,
     packageName: pkg.name,
+    studentId: pkg.studentId,
     price: pkg.price,
     paidAmount,
     balanceDue,
@@ -112,5 +113,6 @@ export async function calculatePackageBalances(
     status: pkg.status as PackageStatus,
     startDate: pkg.startDate.toISOString(),
     expiryDate: pkg.expiryDate ? pkg.expiryDate.toISOString() : null,
+    notes: pkg.notes ?? null,
   };
 }

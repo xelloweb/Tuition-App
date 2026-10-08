@@ -148,6 +148,11 @@ export function canReallocatePackages(role: UserRole): boolean {
   return role === "OWNER" || role === "COORDINATOR";
 }
 
+/** Admins (Owner) and Academic Coordinators can edit existing student packages. */
+export function canEditPackages(role: UserRole): boolean {
+  return role === "OWNER" || role === "COORDINATOR";
+}
+
 export function canVerifyPayments(role: UserRole): boolean {
   return role === "OWNER" || role === "ACCOUNTS";
 }

@@ -13,10 +13,12 @@ import {
   ArrowRight,
   Plus,
   AlertCircle,
+  Edit2,
 } from "lucide-react";
 import { PackageBalanceBreakdown } from "@/lib/types";
 import { ReallocateModal } from "@/components/packages/ReallocateModal";
 import { CreditLedgerModal } from "@/components/packages/CreditLedgerModal";
+import { EditPackageModal } from "@/components/packages/EditPackageModal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 
 interface PackagesClientProps {
@@ -31,10 +33,12 @@ interface PackagesClientProps {
   templates: any[];
   /** Owner only: paid money not yet set up as a working package. */
   needsSetup?: { id: string; name: string; studentCode: string; reasons: string[] }[];
+  canEdit?: boolean;
 }
 
-export function PackagesClient({ packages, templates, needsSetup = [] }: PackagesClientProps) {
+export function PackagesClient({ packages, templates, needsSetup = [], canEdit = false }: PackagesClientProps) {
   const router = useRouter();
+  const [selectedForEdit, setSelectedForEdit] = useState<any | null>(null);
   const [selectedForRealloc, setSelectedForRealloc] = useState<PackageBalanceBreakdown | null>(null);
   const [selectedForLedger, setSelectedForLedger] = useState<{
     id: string;
@@ -158,6 +162,15 @@ export function PackagesClient({ packages, templates, needsSetup = [] }: Package
                       <History className="h-3.5 w-3.5 text-slate-400" />
                       Credit Ledger
                     </button>
+                    {canEdit && (
+                      <button
+                        onClick={() => setSelectedForEdit(pkg)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-teal-500/30 bg-teal-500/10 px-3.5 py-2 text-xs font-bold text-teal-300 hover:bg-teal-500/20 hover:text-teal-200 shadow-xs transition-all active:scale-95"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                        Edit Package
+                      </button>
+                    )}
                     <button
                       onClick={() => setSelectedForRealloc(pkg)}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-teal-500 px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-teal-400 shadow-xs transition-all active:scale-95"
@@ -326,6 +339,19 @@ export function PackagesClient({ packages, templates, needsSetup = [] }: Package
       </div>
 
       {/* Reallocate Modal */}
+      {selectedForEdit && (
+        <EditPackageModal
+          pkg={selectedForEdit}
+          studentName={selectedForEdit.studentName}
+          studentCode={selectedForEdit.studentCode}
+          onClose={() => setSelectedForEdit(null)}
+          onSuccess={() => {
+            setSelectedForEdit(null);
+            router.refresh();
+          }}
+        />
+      )}
+
       {selectedForRealloc && (
         <ReallocateModal
           pkg={selectedForRealloc}

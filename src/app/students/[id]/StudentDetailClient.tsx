@@ -30,6 +30,7 @@ import { formatInTimeZone, formatDateOnly } from "@/lib/timezones";
 import { apiRequest, ClientApiError, errorMessage } from "@/lib/client-api";
 import { ReallocateModal } from "@/components/packages/ReallocateModal";
 import { CreditLedgerModal } from "@/components/packages/CreditLedgerModal";
+import { EditPackageModal } from "@/components/packages/EditPackageModal";
 import { EditStudentModal } from "@/components/students/EditStudentModal";
 import { AssignExistingPaymentDialog } from "@/components/packages/AssignExistingPaymentDialog";
 import type { ExistingPaymentOptions } from "@/lib/services/existing-payment-packages";
@@ -56,7 +57,7 @@ interface StudentDetailClientProps {
   activity?: { id: string; action: string; actorName: string; createdAt: string; details: string }[];
   ledger?: { id: string; eventType: string; creditsDelta: number; reason: string; actorName: string; createdAt: string }[];
   viewerTimeZone?: string;
-  permissions?: { canManage: boolean; canSchedule: boolean; canReallocate: boolean; showFinancial: boolean; showFollowUps: boolean };
+  permissions?: { canManage: boolean; canSchedule: boolean; canReallocate: boolean; canEditPackage?: boolean; showFinancial: boolean; showFollowUps: boolean };
   /** Owner only, and only when money already paid is not yet a working package. */
   existingPayment?: ExistingPaymentOptions | null;
   /** Tab to open first (e.g. ?tab=packages). */
@@ -85,7 +86,7 @@ export function StudentDetailClient({
   activity = [],
   ledger = [],
   viewerTimeZone = "Asia/Kolkata",
-  permissions = { canManage: false, canSchedule: false, canReallocate: false, showFinancial: false, showFollowUps: false },
+  permissions = { canManage: false, canSchedule: false, canReallocate: false, canEditPackage: false, showFinancial: false, showFollowUps: false },
   existingPayment = null,
   initialTab,
 }: StudentDetailClientProps) {
@@ -93,6 +94,7 @@ export function StudentDetailClient({
   const [activeTab, setActiveTab] = useState(initialTab ?? "overview");
   const [assignOpen, setAssignOpen] = useState(false);
   const [editStartStep, setEditStartStep] = useState<"package" | undefined>(undefined);
+  const [selectedForEdit, setSelectedForEdit] = useState<PackageBalanceBreakdown | null>(null);
   const [selectedForRealloc, setSelectedForRealloc] = useState<PackageBalanceBreakdown | null>(null);
   const [selectedForLedger, setSelectedForLedger] = useState<{ id: string; number: string; name: string } | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -384,13 +386,25 @@ export function StudentDetailClient({
                   </span>
                   <StatusBadge status={activePackage.status} size="sm" />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("packages")}
-                  className="text-xs font-bold text-teal-400 hover:text-teal-300 hover:underline transition-colors text-left sm:text-right"
-                >
-                  View Full Breakdown & Ledger →
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {permissions.canEditPackage && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedForEdit(activePackage)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-700 transition-colors"
+                    >
+                      <Edit2 className="h-3 w-3 text-teal-400" />
+                      Edit Package
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("packages")}
+                    className="text-xs font-bold text-teal-400 hover:text-teal-300 hover:underline transition-colors text-left sm:text-right"
+                  >
+                    View Full Breakdown & Ledger →
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 rounded-2xl bg-slate-900/90 p-4 border border-slate-800 text-center">
@@ -694,6 +708,15 @@ export function StudentDetailClient({
                   >
                     View Credit Ledger
                   </button>
+                  {permissions.canEditPackage && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedForEdit(pkg)}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-teal-500/30 bg-teal-500/10 px-3.5 py-2 min-h-[40px] text-xs font-bold text-teal-300 hover:bg-teal-500/20 hover:text-teal-200 transition-all"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" /> Edit Package
+                    </button>
+                  )}
                   {permissions.canReallocate && (
                     <button
                       onClick={() => setSelectedForRealloc(pkg)}
@@ -963,6 +986,20 @@ export function StudentDetailClient({
             )}
           </div>
         </div>
+      )}
+
+      {selectedForEdit && (
+        <EditPackageModal
+          pkg={selectedForEdit}
+          studentName={student.name}
+          studentCode={student.studentCode}
+          onClose={() => setSelectedForEdit(null)}
+          onSuccess={() => {
+            setSelectedForEdit(null);
+            showSuccess("Package updated successfully. Balances and records recalculated.");
+            router.refresh();
+          }}
+        />
       )}
 
       {selectedForRealloc && (

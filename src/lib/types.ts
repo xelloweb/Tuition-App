@@ -56,6 +56,7 @@ export interface PackageBalanceBreakdown {
   packageId: string;
   packageNumber: string;
   packageName: string;
+  studentId?: string;
   price?: number;
   paidAmount?: number;
   balanceDue?: number;
@@ -71,6 +72,7 @@ export interface PackageBalanceBreakdown {
   status: PackageStatus;
   startDate: string;
   expiryDate?: string | null;
+  notes?: string | null;
 }
 
 export interface ReallocationProposal {

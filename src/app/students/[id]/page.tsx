@@ -7,6 +7,7 @@ import {
   canScheduleSessions,
   canViewStudent,
   canAssignExistingPayments,
+  canEditPackages,
 } from "@/lib/auth";
 import { calculatePackageBalances } from "@/lib/package-calculations";
 import { calculateStudentFinancialSummary } from "@/lib/billing";
@@ -106,6 +107,7 @@ export default async function StudentDetailPage(props: { params: Promise<{ id: s
         canManage,
         canSchedule: canScheduleSessions(user.role),
         canReallocate: canReallocatePackages(user.role),
+        canEditPackage: canEditPackages(user.role),
         showFinancial,
         showFollowUps: !isTeacher,
       }}
