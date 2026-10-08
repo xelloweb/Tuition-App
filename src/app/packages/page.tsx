@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, canReallocatePackages } from "@/lib/auth";
+import { getCurrentUser, canReallocatePackages, canAssignExistingPayments } from "@/lib/auth";
+import { studentsNeedingPackageSetup } from "@/lib/services/existing-payment-packages";
 import { calculatePackageBalances } from "@/lib/package-calculations";
 import { AccessDenied } from "@/components/ui/AccessDenied";
 import { PackagesClient } from "./PackagesClient";
@@ -40,5 +41,8 @@ export default async function PackagesPage() {
     }
   }
 
-  return <PackagesClient packages={detailedPackages} templates={templates} />;
+  // Owner only: students whose money already paid is not yet a working package.
+  const needsSetup = canAssignExistingPayments(user.role) ? await studentsNeedingPackageSetup() : [];
+
+  return <PackagesClient packages={detailedPackages} templates={templates} needsSetup={needsSetup} />;
 }

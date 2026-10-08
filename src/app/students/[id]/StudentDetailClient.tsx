@@ -24,12 +24,17 @@ import {
   Plus,
   UserCog,
   X,
+  Link2,
 } from "lucide-react";
 import { formatInTimeZone, formatDateOnly } from "@/lib/timezones";
 import { apiRequest, ClientApiError, errorMessage } from "@/lib/client-api";
 import { ReallocateModal } from "@/components/packages/ReallocateModal";
 import { CreditLedgerModal } from "@/components/packages/CreditLedgerModal";
 import { EditStudentModal } from "@/components/students/EditStudentModal";
+import { AssignExistingPaymentDialog } from "@/components/packages/AssignExistingPaymentDialog";
+import type { ExistingPaymentOptions } from "@/lib/services/existing-payment-packages";
+import { Notice } from "@/components/ui/Notice";
+import { Button } from "@/components/ui/Button";
 import { EnrollSubjectModal } from "@/components/students/EnrollSubjectModal";
 import { WeeklyTimetable } from "@/components/students/WeeklyTimetable";
 import { SubjectOption, TeacherOption } from "@/components/students/StudentFormModal";
@@ -52,6 +57,10 @@ interface StudentDetailClientProps {
   ledger?: { id: string; eventType: string; creditsDelta: number; reason: string; actorName: string; createdAt: string }[];
   viewerTimeZone?: string;
   permissions?: { canManage: boolean; canSchedule: boolean; canReallocate: boolean; showFinancial: boolean; showFollowUps: boolean };
+  /** Owner only, and only when money already paid is not yet a working package. */
+  existingPayment?: ExistingPaymentOptions | null;
+  /** Tab to open first (e.g. ?tab=packages). */
+  initialTab?: string;
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -77,9 +86,13 @@ export function StudentDetailClient({
   ledger = [],
   viewerTimeZone = "Asia/Kolkata",
   permissions = { canManage: false, canSchedule: false, canReallocate: false, showFinancial: false, showFollowUps: false },
+  existingPayment = null,
+  initialTab,
 }: StudentDetailClientProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState(initialTab ?? "overview");
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [editStartStep, setEditStartStep] = useState<"package" | undefined>(undefined);
   const [selectedForRealloc, setSelectedForRealloc] = useState<PackageBalanceBreakdown | null>(null);
   const [selectedForLedger, setSelectedForLedger] = useState<{ id: string; number: string; name: string } | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -432,9 +445,42 @@ export function StudentDetailClient({
 
       {activeTab === "packages" && (
         <div className="space-y-6">
+          {existingPayment && (
+            <Notice tone="warning" title="Already paid, but the package is not set up">
+              Money this student has already paid is not yet a working package. Use “Assign package using existing payment”: it links
+              that payment to a package and creates no new payment or fee.
+            </Notice>
+          )}
+          {(existingPayment || permissions.canManage) && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {existingPayment && (
+                  <Button type="button" icon={Link2} onClick={() => setAssignOpen(true)}>
+                    Assign package using existing payment
+                  </Button>
+                )}
+                {permissions.canManage && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    icon={Plus}
+                    onClick={() => {
+                      setEditStartStep("package");
+                      setEditModalOpen(true);
+                    }}
+                  >
+                    Purchase new package
+                  </Button>
+                )}
+              </div>
+              {permissions.canManage && (
+                <p className="text-xs text-ink-subtle">“Purchase new package” is a new purchase: it creates a new invoice for the parent to pay.</p>
+              )}
+            </div>
+          )}
           {balances.length === 0 && (
             <div className="rounded-2xl border border-dashed border-slate-800 p-8 text-center text-xs text-slate-400">
-              No packages yet.{permissions.canManage ? " Use Edit Student → “Issue a New Package” to add one." : ""}
+              No packages yet.
             </div>
           )}
           {balances.map((pkg) => (
@@ -724,9 +770,26 @@ export function StudentDetailClient({
           student={student}
           subjects={availableSubjects}
           teachers={availableTeachers}
-          onClose={() => setEditModalOpen(false)}
+          startStep={editStartStep}
+          onClose={() => {
+            setEditModalOpen(false);
+            setEditStartStep(undefined);
+          }}
           onSuccess={(_updated, message) => {
             setEditModalOpen(false);
+            setEditStartStep(undefined);
+            showSuccess(message);
+          }}
+        />
+      )}
+
+      {assignOpen && existingPayment && (
+        <AssignExistingPaymentDialog
+          studentId={student.id}
+          options={existingPayment}
+          onClose={() => setAssignOpen(false)}
+          onAssigned={(message) => {
+            setAssignOpen(false);
             showSuccess(message);
           }}
         />

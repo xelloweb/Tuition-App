@@ -114,6 +114,14 @@ export function canManageUsers(role: UserRole): boolean {
   return role === "OWNER";
 }
 
+/**
+ * Linking money already paid to a package touches both packages and accounts,
+ * so only the owner (admin) may do it.
+ */
+export function canAssignExistingPayments(role: UserRole): boolean {
+  return role === "OWNER";
+}
+
 /** Pay rates are financial data: only the owner may set them. */
 export function canManageTeacherRates(role: UserRole): boolean {
   return role === "OWNER";

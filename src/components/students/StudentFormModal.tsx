@@ -9,6 +9,7 @@ import { ClientApiError, apiRequest, errorMessage, newIdempotencyKey } from "@/l
 import { formatTimeOnly } from "@/lib/timezones";
 import type { AdmissionDraftItem, IntakeContext } from "@/lib/services/admission-drafts";
 import type { AdmissionPrefill } from "@/lib/intake-prefill";
+import { PACKAGE_PRESETS } from "@/lib/package-presets";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { FormErrorSummary, focusField } from "@/components/ui/FormFeedback";
 import { Field, controlBorder, controlClass } from "@/components/ui/Field";
@@ -120,6 +121,8 @@ interface StudentFormModalProps {
   prefill?: AdmissionPrefill | null;
   /** The parent submission this admission converts; confirming marks it Converted. */
   intake?: IntakeContext | null;
+  /** Step to open first (e.g. "package" from the profile's "Purchase new package"). */
+  startStep?: StepId;
   subjects: SubjectOption[];
   teachers: TeacherOption[];
   onClose: () => void;
@@ -132,13 +135,7 @@ interface StudentFormModalProps {
 /** Packages created during admission use 60-minute classes. */
 const CLASS_MINUTES = 60;
 
-export const PACKAGE_PRESETS = [
-  { label: "Weekly 3 Classes (12/mo)", name: "Monthly Package (3 Classes/week)", totalCredits: "12", price: "3000", weekly: 3 },
-  { label: "Weekly 5 Classes (20/mo)", name: "Monthly Package (5 Classes/week)", totalCredits: "20", price: "5000", weekly: 5 },
-  { label: "Weekly 2 Classes (8/mo)", name: "Monthly Package (2 Classes/week)", totalCredits: "8", price: "2000", weekly: 2 },
-  { label: "Weekly 4 Classes (16/mo)", name: "Monthly Package (4 Classes/week)", totalCredits: "16", price: "4000", weekly: 4 },
-  { label: "Weekly 1 Class (4/mo)", name: "Monthly Package (1 Class/week)", totalCredits: "4", price: "1000", weekly: 1 },
-];
+export { PACKAGE_PRESETS };
 
 const FIELD_LABELS: Record<string, string> = {
   name: "Student name",
@@ -190,7 +187,7 @@ function readSnapshot(json: string | null | undefined): Partial<AdmissionSnapsho
   }
 }
 
-export function StudentFormModal({ mode, student, draft, prefill, intake, subjects, teachers, onClose, onSuccess, onDraftsChanged }: StudentFormModalProps) {
+export function StudentFormModal({ mode, student, draft, prefill, intake, startStep, subjects, teachers, onClose, onSuccess, onDraftsChanged }: StudentFormModalProps) {
   const isEdit = mode === "edit";
   const legacyDraft = isEdit && student?.status === "DRAFT";
   const formRef = useRef<HTMLFormElement>(null);
@@ -207,13 +204,13 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, subjec
     () => [
       { id: "details", label: "Student details" },
       { id: "subjects", label: "Subjects & trainers" },
-      { id: "package", label: isEdit ? "Add a package" : "Package & fees" },
+      { id: "package", label: isEdit ? "Purchase new package" : "Package & fees" },
       { id: "schedule", label: "Weekly timetable" },
       { id: "review", label: isEdit && !legacyDraft ? "Review & save" : "Review & confirm" },
     ],
     [isEdit, legacyDraft]
   );
-  const [stepIndex, setStepIndex] = useState(() => Math.max(0, steps.findIndex((s) => s.id === initial.step)));
+  const [stepIndex, setStepIndex] = useState(() => Math.max(0, steps.findIndex((s) => s.id === (startStep ?? initial.step))));
   const currentStep = steps[stepIndex];
   const hasSchedule = steps.some((s) => s.id === "schedule");
 
@@ -1049,9 +1046,15 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, subjec
 
           {currentStep.id === "package" && (
             <div className="space-y-4">
+              {isEdit && (
+                <Notice tone="info" title="A new purchase">
+                  This creates a new package with a new invoice for the parent to pay. If the parent has already paid and the package is
+                  not set up, close this and use “Assign package using existing payment” on the Packages tab instead.
+                </Notice>
+              )}
               <label className="flex min-h-[44px] cursor-pointer items-center gap-3 text-sm font-semibold text-ink">
                 <input type="checkbox" checked={includePackage} onChange={(e) => setIncludePackage(e.target.checked)} className="h-5 w-5 accent-teal-400" />
-                {isEdit ? "Create a new package now" : "Create the first package now"}
+                {isEdit ? "Purchase a new package (creates a new invoice to collect)" : "Create the first package now"}
               </label>
               {!includePackage && (
                 <p className="text-sm text-ink-subtle">

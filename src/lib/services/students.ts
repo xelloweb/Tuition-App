@@ -276,8 +276,45 @@ async function assertTeachersAssignable(tx: Tx, enrolments: EnrolmentInput[], ex
   }
 }
 
-/** Creates a package with subject allocations, opening ledger entries and (if priced) an invoice. */
-export async function createPackageForStudent(tx: Tx, studentId: string, input: PackageInput, user: CurrentUser) {
+/** Gives a package its classes per subject, with one opening ledger entry per subject. */
+export async function addPackageAllocations(
+  tx: Tx,
+  packageId: string,
+  allocations: PackageInput["allocations"],
+  user: CurrentUser,
+  reason = "Initial package purchase allocation"
+) {
+  for (const alloc of allocations) {
+    await tx.subjectAllocation.create({
+      data: { packageId, subjectId: alloc.subjectId, allocatedCredits: alloc.allocatedCredits },
+    });
+    await tx.creditLedger.create({
+      data: {
+        packageId,
+        subjectId: alloc.subjectId,
+        eventType: "PURCHASE_INITIAL",
+        creditsDelta: alloc.allocatedCredits,
+        resultingRemaining: alloc.allocatedCredits,
+        reason,
+        actorRole: user.role,
+        actorName: user.name,
+      },
+    });
+  }
+}
+
+/**
+ * Creates a package with subject allocations, opening ledger entries and (if
+ * priced) an unpaid invoice: a new purchase. `createInvoice: false` is for
+ * packages paid with money already received (no new fee).
+ */
+export async function createPackageForStudent(
+  tx: Tx,
+  studentId: string,
+  input: PackageInput,
+  user: CurrentUser,
+  { createInvoice = true, ledgerReason }: { createInvoice?: boolean; ledgerReason?: string } = {}
+) {
   const packageNumber = await nextCode(tx, "package");
   const pkg = await tx.studentPackage.create({
     data: {
@@ -296,26 +333,10 @@ export async function createPackageForStudent(tx: Tx, studentId: string, input: 
     },
   });
 
-  for (const alloc of input.allocations) {
-    await tx.subjectAllocation.create({
-      data: { packageId: pkg.id, subjectId: alloc.subjectId, allocatedCredits: alloc.allocatedCredits },
-    });
-    await tx.creditLedger.create({
-      data: {
-        packageId: pkg.id,
-        subjectId: alloc.subjectId,
-        eventType: "PURCHASE_INITIAL",
-        creditsDelta: alloc.allocatedCredits,
-        resultingRemaining: alloc.allocatedCredits,
-        reason: "Initial package purchase allocation",
-        actorRole: user.role,
-        actorName: user.name,
-      },
-    });
-  }
+  await addPackageAllocations(tx, pkg.id, input.allocations, user, ledgerReason);
 
   let invoiceNumber: string | null = null;
-  if (input.price > 0) {
+  if (createInvoice && input.price > 0) {
     invoiceNumber = await nextCode(tx, "invoice");
     await tx.invoice.create({
       data: {

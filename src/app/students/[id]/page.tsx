@@ -6,18 +6,24 @@ import {
   canReallocatePackages,
   canScheduleSessions,
   canViewStudent,
+  canAssignExistingPayments,
 } from "@/lib/auth";
 import { calculatePackageBalances } from "@/lib/package-calculations";
 import { calculateStudentFinancialSummary } from "@/lib/billing";
 import { getTimetableView } from "@/lib/services/timetable";
 import { teacherPublicSelect } from "@/lib/services/students";
+import { existingPaymentOptions, hasExistingPaymentToUse } from "@/lib/services/existing-payment-packages";
 import { AccessDenied } from "@/components/ui/AccessDenied";
 import { StudentDetailClient } from "./StudentDetailClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function StudentDetailPage(props: { params: Promise<{ id: string }> }) {
+const TABS = new Set(["overview", "subjects", "timetable", "packages", "attendance", "billing", "progress", "followups", "activity"]);
+
+export default async function StudentDetailPage(props: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { id } = await props.params;
+  const tab = (await props.searchParams).tab;
+  const initialTab = typeof tab === "string" && TABS.has(tab) ? tab : undefined;
   const user = await getCurrentUser();
 
   const exists = await prisma.student.findUnique({ where: { id }, select: { id: true } });
@@ -81,6 +87,10 @@ export default async function StudentDetailPage(props: { params: Promise<{ id: s
   ]);
 
 
+  // Owner only: money already paid that is not yet a working package.
+  const paymentOptions = canAssignExistingPayments(user.role) ? await existingPaymentOptions(id) : null;
+  const existingPayment = hasExistingPaymentToUse(paymentOptions) ? paymentOptions : null;
+
   // Teachers see the profile academically: no billing, follow-ups or package prices.
   return (
     <StudentDetailClient
@@ -99,6 +109,8 @@ export default async function StudentDetailPage(props: { params: Promise<{ id: s
         showFinancial,
         showFollowUps: !isTeacher,
       }}
+      existingPayment={existingPayment}
+      initialTab={initialTab}
     />
   );
 }

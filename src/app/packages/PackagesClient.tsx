@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Layers,
@@ -28,9 +29,11 @@ interface PackagesClientProps {
     currency: string;
   })[];
   templates: any[];
+  /** Owner only: paid money not yet set up as a working package. */
+  needsSetup?: { id: string; name: string; studentCode: string; reasons: string[] }[];
 }
 
-export function PackagesClient({ packages, templates }: PackagesClientProps) {
+export function PackagesClient({ packages, templates, needsSetup = [] }: PackagesClientProps) {
   const router = useRouter();
   const [selectedForRealloc, setSelectedForRealloc] = useState<PackageBalanceBreakdown | null>(null);
   const [selectedForLedger, setSelectedForLedger] = useState<{
@@ -61,6 +64,29 @@ export function PackagesClient({ packages, templates }: PackagesClientProps) {
           </p>
         </div>
       </div>
+
+      {needsSetup.length > 0 && (
+        <section id="paid-not-set-up" aria-labelledby="paid-not-set-up-heading" className="space-y-3 rounded-card border border-warning/50 bg-surface p-4 sm:p-5">
+          <h2 id="paid-not-set-up-heading" className="text-lg font-semibold text-ink">Paid, package not set up ({needsSetup.length})</h2>
+          <p className="text-sm text-ink-muted">
+            These students already paid, but that money is not yet a working package. Open each one and use “Assign package using
+            existing payment”: no new payment or fee is created.
+          </p>
+          <ul className="divide-y divide-line">
+            {needsSetup.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                <span className="text-sm text-ink">
+                  <span className="font-semibold">{s.name}</span> <span className="font-mono text-ink-subtle">({s.studentCode})</span>
+                  <span className="block text-ink-muted">{s.reasons.join(" · ")}</span>
+                </span>
+                <Link href={`/students/${s.id}?tab=packages`} className="inline-flex min-h-[44px] items-center rounded-control border border-line-strong px-3 text-sm font-semibold text-ink hover:bg-raised">
+                  Set up package
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Concept Explainer Banner */}
       <div className="rounded-2xl border border-teal-500/20 bg-teal-500/5 p-5 text-xs text-teal-200">

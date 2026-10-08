@@ -445,3 +445,20 @@ describe("parent admission form (public) over HTTP", { skip: !BASE }, () => {
     assert.deepEqual(statuses, [201, 201, 201, 201, 201, 429]);
   });
 });
+
+describe("assign package using existing payment (owner only) over HTTP", { skip: !BASE }, () => {
+  test("only the owner can see or use a student's existing payments", async () => {
+    const students = await call("admin", "GET", "/api/students");
+    const id = (students.json!.students as { id: string }[])[0].id;
+    assert.equal((await call(null, "GET", `/api/students/${id}/existing-payment`)).status, 401);
+    assert.equal((await call("coordinator", "GET", `/api/students/${id}/existing-payment`)).status, 403);
+    assert.equal((await call("accounts", "POST", `/api/students/${id}/existing-payment`, {})).status, 403);
+    assert.equal((await call("teacher_rahul", "GET", `/api/students/${id}/existing-payment`)).status, 403);
+    const own = await call("admin", "GET", `/api/students/${id}/existing-payment`);
+    assert.equal(own.status, 200);
+    assert.ok(own.json!.options);
+    const invalid = await call("admin", "POST", `/api/students/${id}/existing-payment`, { source: { type: "PAYMENTS" } });
+    assert.equal(invalid.status, 400);
+    assert.doesNotMatch(JSON.stringify(invalid.json), /prisma|stack/i);
+  });
+});
