@@ -604,11 +604,34 @@ export async function updateStudent(id: string, f: StudentFields, user: CurrentU
           const existing = existingBySubject.get(enr.subjectId);
           if (existing) {
             if (existing.teacherId !== enr.teacherId || existing.status !== "ACTIVE") {
+              const previousTeacherId = existing.teacherId;
               await tx.subjectEnrollment.update({
                 where: { id: existing.id },
                 data: { teacherId: enr.teacherId, status: "ACTIVE" },
               });
               enrolmentChanges.push(`reassigned ${enr.subjectId}`);
+
+              if (previousTeacherId !== enr.teacherId) {
+                const now = new Date();
+                const slots = await tx.timetableSlot.findMany({
+                  where: { enrolmentId: existing.id, active: true },
+                });
+                if (slots.length > 0) {
+                  await tx.timetableSlot.updateMany({
+                    where: { enrolmentId: existing.id, active: true },
+                    data: { teacherId: enr.teacherId, updatedByName: user.name },
+                  });
+                  await tx.session.deleteMany({
+                    where: {
+                      timetableSlotId: { in: slots.map((s) => s.id) },
+                      status: "SCHEDULED",
+                      isCreditConsumed: false,
+                      attendance: { is: null },
+                      scheduledStartTimeUtc: { gte: now },
+                    },
+                  });
+                }
+              }
             }
           } else {
             await tx.subjectEnrollment.create({
@@ -711,12 +734,12 @@ export async function updateStudent(id: string, f: StudentFields, user: CurrentU
     }, { timeout: 20000, maxWait: 10000 })
   );
 
-  if (f.newPackage) {
+  if (f.newPackage || f.enrolments) {
     try {
       const { generateTimetableOccurrences } = await import("./timetable");
       await generateTimetableOccurrences(id, user);
     } catch (e) {
-      console.error("Auto booking timetable classes after package update failed:", e);
+      console.error("Auto booking timetable classes after update failed:", e);
     }
   }
 

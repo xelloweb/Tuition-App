@@ -224,6 +224,7 @@ export async function buildTimetablePlan(
   if (rawSlots.length > MAX_SLOTS) errors.slots = `A timetable can have up to ${MAX_SLOTS} weekly slots.`;
 
   const teacherIds = new Set<string>();
+  for (const enr of enrolments) if (enr.teacherId) teacherIds.add(enr.teacherId);
   for (const raw of rawSlots) if (raw && typeof raw.teacherId === "string" && raw.teacherId) teacherIds.add(raw.teacherId);
   for (const slot of currentSlots) if (slot.teacherId) teacherIds.add(slot.teacherId);
   const teachers = new Map(
@@ -273,26 +274,17 @@ export async function buildTimetablePlan(
       }
     }
 
-    // Trainer: explicit choice, otherwise the subject's assigned trainer.
-    let teacherId: string | null = input
-      ? typeof raw.teacherId === "string" && raw.teacherId
-        ? raw.teacherId
-        : enrolment.teacherId
-      : existing!.teacherId;
+    // Trainer: automatically fetched from the subject's assigned trainer in "Subjects & Trainers".
+    let teacherId: string | null = enrolment.teacherId;
     let teacherName: string | null = null;
     let teacherActive = false;
     if (teacherId) {
       const t = teachers.get(teacherId) ?? (enrolment.teacher?.id === teacherId ? enrolment.teacher : undefined);
       if (!t) {
-        if (input) errors[key("teacherId")] = "This trainer no longer exists. Choose another trainer.";
         teacherId = null;
       } else {
         teacherName = t.name;
         teacherActive = t.active;
-        const unchangedTrainer = existing?.teacherId === teacherId;
-        if (!t.active && input && !unchangedTrainer && teacherId !== enrolment.teacherId) {
-          errors[key("teacherId")] = `${t.name} is inactive. Choose an active trainer.`;
-        }
       }
     }
 
@@ -831,15 +823,18 @@ export async function getTimetableView(studentId: string) {
       teacherName: e.teacher?.name ?? null,
       teacherActive: e.teacher?.active ?? false,
     })),
-    slots: currentSlots.map((s) => ({
-      id: s.id,
-      enrolmentId: s.enrolmentId,
-      teacherId: s.teacherId,
-      weekday: s.weekday,
-      startMinutes: s.startMinutes,
-      endMinutes: s.endMinutes,
-      timeZone: s.timeZone,
-    })),
+    slots: currentSlots.map((s) => {
+      const enr = enrolments.find((e) => e.id === s.enrolmentId);
+      return {
+        id: s.id,
+        enrolmentId: s.enrolmentId,
+        teacherId: enr?.teacherId ?? s.teacherId,
+        weekday: s.weekday,
+        startMinutes: s.startMinutes,
+        endMinutes: s.endMinutes,
+        timeZone: s.timeZone,
+      };
+    }),
     issues,
     pendingBookings,
     upcoming: upcoming.map((u) => ({

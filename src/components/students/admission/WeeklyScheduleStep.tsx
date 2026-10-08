@@ -15,13 +15,13 @@ export interface SlotDraft {
 }
 
 export const WEEKDAY_OPTIONS = [
+  { value: "0", label: "Sunday" },
   { value: "1", label: "Monday" },
   { value: "2", label: "Tuesday" },
   { value: "3", label: "Wednesday" },
   { value: "4", label: "Thursday" },
   { value: "5", label: "Friday" },
   { value: "6", label: "Saturday" },
-  { value: "0", label: "Sunday" },
 ];
 
 export const weekdayLabel = (value: string) => WEEKDAY_OPTIONS.find((d) => d.value === value)?.label ?? "Day";
@@ -79,7 +79,7 @@ export function WeeklyScheduleStep({
   rows: SubjectRow[];
   subjectName: (subjectId: string) => string;
   teacherName: (teacherId: string) => string | null;
-  teachers: { id: string; name: string }[];
+  teachers?: { id: string; name: string }[];
   slots: SlotDraft[];
   setSlots: (update: (prev: SlotDraft[]) => SlotDraft[]) => void;
   /** Server error for a slot field, by the slot's position in the saved list. */
@@ -112,7 +112,7 @@ export function WeeklyScheduleStep({
       const weekday = last ? String((Number(last.weekday) + 2) % 7) : "1";
       const start = last?.start ?? "18:00";
       const startMin = toMinutes(start) ?? 18 * 60;
-      return [...prev, { key: newSlotKey(), subjectId: row.subjectId, teacherId: "", weekday, start, end: last?.end ?? fromMinutes(startMin + classMinutes) }];
+      return [...prev, { key: newSlotKey(), subjectId: row.subjectId, teacherId: row.teacherId || "", weekday, start, end: last?.end ?? fromMinutes(startMin + classMinutes) }];
     });
   };
 
@@ -120,7 +120,7 @@ export function WeeklyScheduleStep({
     const startMin = toMinutes(pref.start) ?? 18 * 60;
     setSlots((prev) => [
       ...prev,
-      { key: newSlotKey(), subjectId: row.subjectId, teacherId: "", weekday: String(pref.weekday), start: fromMinutes(startMin), end: fromMinutes(startMin + classMinutes) },
+      { key: newSlotKey(), subjectId: row.subjectId, teacherId: row.teacherId || "", weekday: String(pref.weekday), start: fromMinutes(startMin), end: fromMinutes(startMin + classMinutes) },
     ]);
   };
 
@@ -217,9 +217,16 @@ export function WeeklyScheduleStep({
                     {entries.length} weekly slot{entries.length === 1 ? "" : "s"}
                   </span>
                 </div>
-                <p className="text-sm text-ink-subtle">
-                  {assigned ? `Trainer: ${assigned}` : "No trainer assigned yet: classes are booked once a trainer is set."}
-                </p>
+                <div className="mt-1 flex items-center gap-2 text-xs">
+                  <span className="text-ink-muted">Assigned Trainer:</span>
+                  {assigned ? (
+                    <span className="font-medium text-ink">{assigned}</span>
+                  ) : (
+                    <span className="rounded bg-amber-500/10 px-1.5 py-0.5 font-medium text-amber-500 border border-amber-500/20">
+                      Trainer Not Assigned
+                    </span>
+                  )}
+                </div>
               </div>
               <Button type="button" variant="secondary" size="sm" icon={Plus} onClick={() => addSlot(row)}>
                 {entries.length ? "Add another slot" : "Add a slot"}
@@ -241,7 +248,7 @@ export function WeeklyScheduleStep({
                         </span>
                         <span className="text-ink-muted">Repeats weekly</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1.1fr_1fr_1fr_1.5fr_auto] sm:items-start">
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1.5fr_1.2fr_1.2fr_auto] sm:items-start">
                         <Field label="Day" error={slotError(index, "weekday")}>
                           {(p) => (
                             <select {...p} value={slot.weekday} onChange={(e) => update(slot.key, { weekday: e.target.value })} className={`${controlClass} ${controlBorder(!!slotError(index, "weekday"))}`}>
@@ -268,16 +275,6 @@ export function WeeklyScheduleStep({
                         <Field label="Ends (IST)" error={slotError(index, "end")}>
                           {(p) => (
                             <input {...p} type="time" step={300} value={slot.end} onChange={(e) => update(slot.key, { end: e.target.value })} className={`${controlClass} ${controlBorder(!!slotError(index, "end"))}`} />
-                          )}
-                        </Field>
-                        <Field label="Trainer" error={slotError(index, "teacherId")}>
-                          {(p) => (
-                            <select {...p} value={slot.teacherId} onChange={(e) => update(slot.key, { teacherId: e.target.value })} className={`${controlClass} ${controlBorder(!!slotError(index, "teacherId"))}`}>
-                              <option value="">{assigned ? "Subject's trainer" : "Subject's trainer (not set yet)"}</option>
-                              {teachers.map((t) => (
-                                <option key={t.id} value={t.id}>{t.name}</option>
-                              ))}
-                            </select>
                           )}
                         </Field>
                         <div className="col-span-2 flex justify-end sm:col-span-1 sm:pt-6">

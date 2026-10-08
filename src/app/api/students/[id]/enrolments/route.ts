@@ -10,7 +10,7 @@ import {
 } from "@/lib/api-errors";
 import { FieldCollector } from "@/lib/validation";
 import { teacherPublicSelect } from "@/lib/services/students";
-import { retireEnrolmentSlots } from "@/lib/services/timetable";
+import { generateTimetableOccurrences, retireEnrolmentSlots } from "@/lib/services/timetable";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -43,6 +43,8 @@ export const POST = withErrorHandling<Ctx>("POST /api/students/[id]/enrolments",
     });
   }
 
+  let trainerReassigned = false;
+
   const enrollment = await prisma.$transaction(async (tx) => {
     const existing = await tx.subjectEnrollment.findUnique({
       where: { studentId_subjectId: { studentId, subjectId } },
@@ -57,6 +59,29 @@ export const POST = withErrorHandling<Ctx>("POST /api/students/[id]/enrolments",
           data: { studentId, subjectId, teacherId, status: "ACTIVE", notes },
           include: { subject: true, teacher: { select: teacherPublicSelect } },
         });
+
+    if (existing && existing.teacherId !== teacherId) {
+      trainerReassigned = true;
+      const now = new Date();
+      const slots = await tx.timetableSlot.findMany({
+        where: { enrolmentId: existing.id, active: true },
+      });
+      if (slots.length > 0) {
+        await tx.timetableSlot.updateMany({
+          where: { enrolmentId: existing.id, active: true },
+          data: { teacherId, updatedByName: user.name },
+        });
+        await tx.session.deleteMany({
+          where: {
+            timetableSlotId: { in: slots.map((s) => s.id) },
+            status: "SCHEDULED",
+            isCreditConsumed: false,
+            attendance: { is: null },
+            scheduledStartTimeUtc: { gte: now },
+          },
+        });
+      }
+    }
 
     await tx.auditLog.create({
       data: {
@@ -76,12 +101,20 @@ export const POST = withErrorHandling<Ctx>("POST /api/students/[id]/enrolments",
     return enr;
   });
 
+  if (trainerReassigned) {
+    try {
+      await generateTimetableOccurrences(studentId, user);
+    } catch (e) {
+      console.error("Failed to re-generate timetable occurrences after trainer update", e);
+    }
+  }
+
   return NextResponse.json({
     success: true,
     enrollment,
     message: teacher
       ? `${subject.name} assigned to ${teacher.name}.`
-      : `Enrolled in ${subject.name}. No trainer assigned yet.`,
+      : `Enrolled in ${subject.name}. Trainer Not Assigned.`,
   });
 });
 

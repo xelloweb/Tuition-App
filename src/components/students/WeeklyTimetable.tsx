@@ -119,7 +119,6 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
   };
 
   const trainerName = (draft: SlotDraft) => {
-    if (draft.teacherId) return teacherById.get(draft.teacherId)?.name ?? "Selected trainer";
     return enrolmentById.get(draft.enrolmentId)?.teacherName ?? null;
   };
 
@@ -137,7 +136,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
         key: newKey(),
         id: null,
         enrolmentId,
-        teacherId: last?.teacherId ?? "",
+        teacherId: enrolmentById.get(enrolmentId)?.teacherId ?? "",
         weekday: last ? String((Number(last.weekday) + 1) % 7) : "1",
         start: last?.start ?? "18:00",
         end: last?.end ?? "19:00",
@@ -197,7 +196,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
     slots: liveDrafts.map((d) => ({
       id: d.id ?? undefined,
       enrolmentId: d.enrolmentId,
-      teacherId: d.teacherId || null,
+      teacherId: enrolmentById.get(d.enrolmentId)?.teacherId ?? null,
       weekday: Number(d.weekday),
       start: d.start,
       end: d.end,
@@ -347,16 +346,18 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
                       <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: enr.subjectColor || "#14b8a6" }} />
                       <h4 className="font-bold text-sm text-white truncate">{enr.subjectName}</h4>
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Trainer:{" "}
+                    <div className="mt-1 flex items-center gap-1.5 text-xs">
+                      <span className="text-slate-400">Assigned Trainer:</span>
                       {enr.teacherName ? (
-                        <span className={enr.teacherActive ? "text-teal-300 font-semibold" : "text-amber-300 font-semibold"}>
+                        <span className={`font-semibold ${enr.teacherActive ? "text-teal-300" : "text-amber-300"}`}>
                           {enr.teacherName}{enr.teacherActive ? "" : " (inactive)"}
                         </span>
                       ) : (
-                        <span className="text-amber-300 font-semibold">Not assigned yet</span>
+                        <span className="rounded bg-amber-500/10 px-1.5 py-0.5 font-semibold text-amber-300 border border-amber-500/20">
+                          Trainer Not Assigned
+                        </span>
                       )}
-                    </p>
+                    </div>
                   </div>
                   <span className="text-xs text-slate-400 shrink-0">{subjectDrafts.filter((d) => !d.removed).length} slot(s)</span>
                 </div>
@@ -366,7 +367,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
                   {subjectDrafts.map((d) => {
                     const start = parseTimeOfDay(d.start);
                     const end = parseTimeOfDay(d.end);
-                    const slotErrors = ["enrolmentId", "weekday", "start", "end", "teacherId", "id"]
+                    const slotErrors = ["enrolmentId", "weekday", "start", "end", "id"]
                       .map((f) => errorFor(d, f))
                       .filter(Boolean) as string[];
                     const isNew = !d.id;
@@ -392,9 +393,6 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
                               {WEEKDAYS[Number(d.weekday)]?.long ?? "Choose a day"} ·{" "}
                               {start !== null ? formatMinutes(start) : "--"}–{end !== null ? formatMinutes(end) : "--"}
                               {isNew && <span className="ml-1.5 rounded bg-teal-500/20 px-1.5 py-0.5 text-xs text-teal-200">new</span>}
-                            </div>
-                            <div className="text-xs text-slate-400">
-                              {trainerName(d) ?? <span className="text-amber-300">No trainer — classes can&apos;t be booked</span>}
                             </div>
                           </div>
                           {canEdit && (
@@ -423,19 +421,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
                         {canEdit && d.editing && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                             <label className="block text-xs text-slate-400 sm:col-span-2">
-                              Subject
-                              <select
-                                value={d.enrolmentId}
-                                onChange={(e) => update(d.key, { enrolmentId: e.target.value })}
-                                className={`${fieldBase} mt-1 ${errorFor(d, "enrolmentId") ? "border-rose-500/70" : "border-slate-700"}`}
-                              >
-                                {view.enrolments.map((e) => (
-                                  <option key={e.id} value={e.id} className="bg-slate-900">{e.subjectName}</option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="block text-xs text-slate-400 sm:col-span-2">
-                              Day of the week
+                              Day (Sunday to Saturday)
                               <select
                                 value={d.weekday}
                                 onChange={(e) => update(d.key, { weekday: e.target.value })}
@@ -447,7 +433,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
                               </select>
                             </label>
                             <label className="block text-xs text-slate-400">
-                              Start time
+                              Start Time (IST)
                               <input
                                 type="time"
                                 value={d.start}
@@ -457,7 +443,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
                               />
                             </label>
                             <label className="block text-xs text-slate-400">
-                              End time
+                              End Time (IST)
                               <input
                                 type="time"
                                 value={d.end}
@@ -465,21 +451,6 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
                                 onChange={(e) => update(d.key, { end: e.target.value })}
                                 className={`${fieldBase} mt-1 ${errorFor(d, "end") ? "border-rose-500/70" : "border-slate-700"}`}
                               />
-                            </label>
-                            <label className="block text-xs text-slate-400 sm:col-span-2">
-                              Trainer for this slot
-                              <select
-                                value={d.teacherId}
-                                onChange={(e) => update(d.key, { teacherId: e.target.value })}
-                                className={`${fieldBase} mt-1 ${errorFor(d, "teacherId") ? "border-rose-500/70" : "border-slate-700"}`}
-                              >
-                                <option value="" className="bg-slate-900">
-                                  Subject trainer ({enrolmentById.get(d.enrolmentId)?.teacherName ?? "not assigned"})
-                                </option>
-                                {teachers.filter((t) => t.active).map((t) => (
-                                  <option key={t.id} value={t.id} className="bg-slate-900">{t.name}</option>
-                                ))}
-                              </select>
                             </label>
                           </div>
                         )}

@@ -16,6 +16,7 @@ import {
   saveTimetable,
   TIMETABLE_WINDOW_DAYS,
 } from "../src/lib/services/timetable";
+import { parseStudentFields, updateStudent } from "../src/lib/services/students";
 import { calculatePackageBalances } from "../src/lib/package-calculations";
 import { submitSessionAttendance } from "../src/lib/attendance-ledger";
 import { convertSlotForDisplay, describeInZone, minutesToTimeInput, zonedTimeToUtc } from "../src/lib/zoned-time";
@@ -395,5 +396,72 @@ describe("weekly timetable", () => {
     assert.equal(conv.weekdayShort, "Sun");
     assert.equal(conv.dayShift, 1);
     assert.equal(describeInZone(zonedTimeToUtc("2026-10-11", 20 * 60, "Asia/Riyadh"), "Asia/Kolkata").time, "10:30 PM");
+  });
+
+  test("timetable slots automatically inherit trainer from subject enrolment without requiring trainer selection", async () => {
+    const { student, em, tm } = await studentWithSubjects();
+    // Pass slot without teacherId
+    await saveTimetable(
+      student.id,
+      {
+        timeZone: "Asia/Kolkata",
+        slots: [
+          { enrolmentId: em.id, weekday: SUN, start: "10:00", end: "11:00" },
+        ],
+      },
+      coordinator
+    );
+    const saved = await currentSlots(student.id);
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].teacherId, tm.id, "slot inherited subject enrolment's assigned trainer");
+  });
+
+  test("subject without assigned trainer creates timetable slots without requiring trainer selection and flags NO_TRAINER", async () => {
+    const student = await makeStudent({ timeZone: "Asia/Dubai" });
+    const noTrainerEnrol = await enrol(student.id, maths.id, null); // no trainer assigned
+    await makePackage(student.id, [{ subjectId: maths.id, credits: 10 }]);
+
+    const plan = await buildTimetablePlan(prisma, student.id, {
+      timeZone: "Asia/Kolkata",
+      slots: [{ enrolmentId: noTrainerEnrol.id, weekday: MON, start: "16:00", end: "17:00" }],
+    });
+    assert.equal(plan.slots.length, 1);
+    assert.equal(plan.slots[0].teacherId, null);
+    const noTrainerIssue = plan.issues.find((i) => i.reason === "NO_TRAINER");
+    assert.ok(noTrainerIssue, "flags NO_TRAINER issue during occurrence generation");
+
+    // Can be saved successfully
+    await saveTimetable(student.id, {
+      timeZone: "Asia/Kolkata",
+      slots: [{ enrolmentId: noTrainerEnrol.id, weekday: MON, start: "16:00", end: "17:00" }],
+    }, coordinator);
+    const saved = await currentSlots(student.id);
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].teacherId, null);
+  });
+
+  test("reassigning a subject trainer in Subjects & Trainers automatically updates active timetable slots", async () => {
+    const { student, em, tm } = await studentWithSubjects();
+    await saveTimetable(
+      student.id,
+      {
+        timeZone: "Asia/Kolkata",
+        slots: [{ enrolmentId: em.id, weekday: SUN, start: "10:00", end: "11:00" }],
+      },
+      coordinator
+    );
+    const beforeSlots = await currentSlots(student.id);
+    assert.equal(beforeSlots[0].teacherId, tm.id);
+
+    // Reassign Maths to a new trainer
+    const newTrainer = await makeTeacher("New Maths Trainer");
+    await updateStudent(
+      student.id,
+      parseStudentFields({ enrolments: [{ subjectId: maths.id, teacherId: newTrainer.id }] }, { partial: true }),
+      coordinator
+    );
+
+    const afterSlots = await currentSlots(student.id);
+    assert.equal(afterSlots[0].teacherId, newTrainer.id, "active slot teacherId updated to new trainer");
   });
 });

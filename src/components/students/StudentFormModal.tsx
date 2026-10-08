@@ -626,7 +626,13 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
   };
 
   const slotPayload = () =>
-    slots.map((s) => ({ subjectId: s.subjectId, teacherId: s.teacherId || null, weekday: Number(s.weekday), start: s.start, end: s.end }));
+    slots.map((s) => ({
+      subjectId: s.subjectId,
+      teacherId: rows.find((r) => r.subjectId === s.subjectId)?.teacherId || null,
+      weekday: Number(s.weekday),
+      start: s.start,
+      end: s.end,
+    }));
 
   const buildPayload = () => {
     const enrolments = rows.map((r) => ({ subjectId: r.subjectId, teacherId: r.teacherId || null }));
@@ -842,12 +848,12 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
             subject: subjectName(r.subjectId),
             items: slots
               .filter((s) => s.subjectId === r.subjectId)
-              .map((s) => ({ day: weekdayLabel(s.weekday), start: s.start, end: s.end, trainer: teacherName(s.teacherId || r.teacherId) })),
+              .map((s) => ({ day: weekdayLabel(s.weekday), start: s.start, end: s.end, trainer: teacherName(r.teacherId) || "Trainer Not Assigned" })),
           }))
       : null,
     booking: hasSchedule ? booking : null,
     warnings: [
-      ...rows.filter((r) => r.subjectId && !r.teacherId).map((r) => `${subjectName(r.subjectId)} has no trainer yet, so its classes cannot be booked.`),
+      ...rows.filter((r) => r.subjectId && !r.teacherId).map((r) => `${subjectName(r.subjectId)}: Trainer Not Assigned. Classes cannot be booked until a trainer is assigned.`),
       ...(hasSchedule ? rows.filter((r) => r.subjectId && !slots.some((s) => s.subjectId === r.subjectId)).map((r) => `${subjectName(r.subjectId)} has no weekly slots.`) : []),
       ...(!isEdit && !includePackage ? ["No package: no classes will be booked until one is added."] : []),
     ],
@@ -1323,7 +1329,7 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
               slots={slots}
               setSlots={(update) => setSlots(update)}
               slotError={(index, field) => fieldErrors[`slots.${index}.${field}`]}
-              clearSlotErrors={(index) => clearFieldError(`slots.${index}.weekday`, `slots.${index}.start`, `slots.${index}.end`, `slots.${index}.teacherId`, `slots.${index}.enrolmentId`)}
+              clearSlotErrors={(index) => clearFieldError(`slots.${index}.weekday`, `slots.${index}.start`, `slots.${index}.end`, `slots.${index}.enrolmentId`)}
               classMinutes={CLASS_MINUTES}
               preferences={intakeInfo?.preferences}
               packageInfo={{
