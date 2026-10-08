@@ -273,9 +273,18 @@ export function AssignExistingPaymentDialog({
           <fieldset className="space-y-2" data-field="allocations">
             <legend className="flex w-full flex-wrap items-center justify-between gap-2 text-sm font-semibold text-ink-muted">
               <span>Classes per subject</span>
-              <span className={`tabular-nums ${allocatedTotal === Number(totalCredits) ? "text-success" : "text-warning"}`}>
-                {allocatedTotal} of {Number(totalCredits) || 0} shared
-              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAllocations(split(Number(totalCredits) || 0, subjectIds))}
+                  className="text-xs text-brand hover:underline font-semibold"
+                >
+                  Split evenly
+                </button>
+                <span className={`tabular-nums ${allocatedTotal === Number(totalCredits) ? "text-success" : "text-warning"}`}>
+                  {allocatedTotal} of {Number(totalCredits) || 0} shared
+                </span>
+              </div>
             </legend>
             <div className="grid gap-3 sm:grid-cols-2">
               {options.subjects.map((s) => (
@@ -298,10 +307,12 @@ export function AssignExistingPaymentDialog({
           </fieldset>
         )}
 
-        <dl className="grid grid-cols-2 gap-3 rounded-card border border-line bg-canvas p-3 text-sm sm:grid-cols-4" aria-label="Summary">
+        <dl className="grid grid-cols-2 gap-3 rounded-card border border-line bg-canvas p-3 text-sm sm:grid-cols-3" aria-label="Summary">
           <div><dt className="text-ink-muted">Package value</dt><dd className="font-bold text-ink tabular-nums">{inr(value)}</dd></div>
           <div><dt className="text-ink-muted">Paid already</dt><dd className="font-bold text-success tabular-nums">{inr(paidFromExisting)}</dd></div>
           <div><dt className="text-ink-muted">New payment created</dt><dd className="font-bold text-ink tabular-nums">₹0</dd></div>
+          <div><dt className="text-ink-muted">Total classes</dt><dd className="font-bold text-ink tabular-nums">{Number(totalCredits) || 0}</dd></div>
+          <div><dt className="text-ink-muted">Balance classes</dt><dd className="font-bold text-teal-400 tabular-nums">{Number(totalCredits) || 0}</dd></div>
           <div><dt className="text-ink-muted">Still to pay</dt><dd className={`font-bold tabular-nums ${stillToPay ? "text-warning" : "text-ink"}`}>{inr(stillToPay)}</dd></div>
         </dl>
         {source.type === "PAYMENTS" && options.unusedTotal > value && value > 0 && (

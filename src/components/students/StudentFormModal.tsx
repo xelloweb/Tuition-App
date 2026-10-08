@@ -9,6 +9,7 @@ import { ClientApiError, apiRequest, errorMessage, newIdempotencyKey } from "@/l
 import { formatTimeOnly } from "@/lib/timezones";
 import type { AdmissionDraftItem, IntakeContext } from "@/lib/services/admission-drafts";
 import type { AdmissionPrefill } from "@/lib/intake-prefill";
+import type { ExistingPaymentOptions } from "@/lib/services/existing-payment-packages";
 import { PACKAGE_PRESETS } from "@/lib/package-presets";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { FormErrorSummary, focusField } from "@/components/ui/FormFeedback";
@@ -125,6 +126,7 @@ interface StudentFormModalProps {
   startStep?: StepId;
   subjects: SubjectOption[];
   teachers: TeacherOption[];
+  existingPayment?: ExistingPaymentOptions | null;
   onClose: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSuccess: (student: any, message: string) => void;
@@ -187,7 +189,7 @@ function readSnapshot(json: string | null | undefined): Partial<AdmissionSnapsho
   }
 }
 
-export function StudentFormModal({ mode, student, draft, prefill, intake, startStep, subjects, teachers, onClose, onSuccess, onDraftsChanged }: StudentFormModalProps) {
+export function StudentFormModal({ mode, student, draft, prefill, intake, startStep, subjects, teachers, existingPayment, onClose, onSuccess, onDraftsChanged }: StudentFormModalProps) {
   const isEdit = mode === "edit";
   const legacyDraft = isEdit && student?.status === "DRAFT";
   const formRef = useRef<HTMLFormElement>(null);
@@ -200,15 +202,62 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
   /** Set when this admission comes from a parent form submission (directly or via its draft). */
   const intakeInfo = isEdit ? null : intake ?? draft?.submission ?? null;
 
+  const [currentExistingPayment, setCurrentExistingPayment] = useState<ExistingPaymentOptions | null>(existingPayment ?? null);
+
+  useEffect(() => {
+    if (existingPayment !== undefined) {
+      setCurrentExistingPayment(existingPayment);
+      return;
+    }
+    if (isEdit && student?.id) {
+      apiRequest<{ options: ExistingPaymentOptions }>(`/api/students/${student.id}/existing-payment`)
+        .then((res) => {
+          if (res?.options) {
+            setCurrentExistingPayment(res.options);
+            const usable = Boolean(
+              res.options.unsetPackages.length > 0 ||
+              res.options.unlinkedInvoices.length > 0 ||
+              res.options.unusedTotal > 0
+            );
+            if (usable && !res.options.hasActiveWorkingPackage) {
+              setPackageMode("EXISTING_PAYMENT");
+              setIncludePackage(true);
+              if (res.options.unsetPackages[0]?.name) setPackageName(res.options.unsetPackages[0].name);
+              if (res.options.unsetPackages[0]?.totalCredits) setTotalCredits(String(res.options.unsetPackages[0].totalCredits));
+              if (res.options.unsetPackages[0]?.price) setPackagePrice(String(res.options.unsetPackages[0].price));
+              else if (res.options.availablePaidAmount) setPackagePrice(String(res.options.availablePaidAmount));
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isEdit, student?.id, existingPayment]);
+
+  const activeExistingPayment = currentExistingPayment ?? existingPayment;
+
+  const hasUsableExistingPayment = Boolean(
+    activeExistingPayment &&
+    (activeExistingPayment.unsetPackages.length > 0 ||
+     activeExistingPayment.unlinkedInvoices.length > 0 ||
+     activeExistingPayment.unusedTotal > 0)
+  );
+
+  const [packageMode, setPackageMode] = useState<"EXISTING_PAYMENT" | "NEW_PURCHASE">(() => {
+    if (isEdit && hasUsableExistingPayment && !activeExistingPayment?.hasActiveWorkingPackage) {
+      return "EXISTING_PAYMENT";
+    }
+    return "NEW_PURCHASE";
+  });
+
   const steps: (StepDef & { id: StepId })[] = useMemo(
     () => [
       { id: "details", label: "Student details" },
       { id: "subjects", label: "Subjects & trainers" },
-      { id: "package", label: isEdit ? "Purchase new package" : "Package & fees" },
+      { id: "package", label: isEdit ? (hasUsableExistingPayment && packageMode === "EXISTING_PAYMENT" ? "Assign package" : "Package & fees") : "Package & fees" },
       { id: "schedule", label: "Weekly timetable" },
       { id: "review", label: isEdit && !legacyDraft ? "Review & save" : "Review & confirm" },
     ],
-    [isEdit, legacyDraft]
+    [isEdit, legacyDraft, hasUsableExistingPayment, packageMode]
   );
   const [stepIndex, setStepIndex] = useState(() => Math.max(0, steps.findIndex((s) => s.id === (startStep ?? initial.step))));
   const currentStep = steps[stepIndex];
@@ -247,12 +296,37 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
   const [quickSubjectOpen, setQuickSubjectOpen] = useState(false);
 
   // 3. Package & fees
-  const [includePackage, setIncludePackage] = useState(initial.includePackage ?? !isEdit);
-  const [packageName, setPackageName] = useState(initial.packageName ?? (isEdit ? "Monthly Package (3 Classes/week)" : "Monthly Package (3 Classes/week)"));
-  const [totalCredits, setTotalCredits] = useState(initial.totalCredits ?? (isEdit ? "12" : "12"));
-  const [packagePrice, setPackagePrice] = useState(initial.packagePrice ?? (isEdit ? "3000" : "3000"));
-  const [startDate, setStartDate] = useState(initial.startDate ?? today());
-  const [expiryDate, setExpiryDate] = useState(initial.expiryDate ?? "");
+  const [includePackage, setIncludePackage] = useState(() => {
+    if (initial.includePackage !== undefined) return initial.includePackage;
+    if (isEdit && hasUsableExistingPayment && !activeExistingPayment?.hasActiveWorkingPackage) return true;
+    return !isEdit;
+  });
+  const [packageName, setPackageName] = useState(() => {
+    if (initial.packageName) return initial.packageName;
+    if (isEdit && activeExistingPayment?.unsetPackages[0]?.name) return activeExistingPayment.unsetPackages[0].name;
+    return "Monthly Package (3 Classes/week)";
+  });
+  const [totalCredits, setTotalCredits] = useState(() => {
+    if (initial.totalCredits) return initial.totalCredits;
+    if (isEdit && activeExistingPayment?.unsetPackages[0]?.totalCredits) return String(activeExistingPayment.unsetPackages[0].totalCredits);
+    return "12";
+  });
+  const [packagePrice, setPackagePrice] = useState(() => {
+    if (initial.packagePrice) return initial.packagePrice;
+    if (isEdit && activeExistingPayment?.unsetPackages[0]?.price) return String(activeExistingPayment.unsetPackages[0].price);
+    if (isEdit && activeExistingPayment?.availablePaidAmount) return String(activeExistingPayment.availablePaidAmount);
+    return "3000";
+  });
+  const [startDate, setStartDate] = useState(() => {
+    if (initial.startDate) return initial.startDate;
+    if (isEdit && activeExistingPayment?.unsetPackages[0]?.startDate) return activeExistingPayment.unsetPackages[0].startDate.slice(0, 10);
+    return today();
+  });
+  const [expiryDate, setExpiryDate] = useState(() => {
+    if (initial.expiryDate) return initial.expiryDate;
+    if (isEdit && activeExistingPayment?.unsetPackages[0]?.expiryDate) return activeExistingPayment.unsetPackages[0].expiryDate.slice(0, 10);
+    return "";
+  });
 
   // 4. Weekly schedule
   const [slots, setSlots] = useState<SlotDraft[]>(() => {
@@ -589,17 +663,27 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
       coordinatorNotes: coordinatorNotes.trim() || null,
       enrolments,
     };
-    if (isEdit) {
-      return {
-        ...common,
-        status,
-        guardianName: guardianName.trim(),
-        whatsappNumber: whatsappNumber.trim(),
-        newPackage: pkg,
-        slots: slotPayload(),
-        ...(legacyDraft ? { draftData: null } : {}),
-      };
-    }
+      if (isEdit) {
+        return {
+          ...common,
+          status,
+          guardianName: guardianName.trim(),
+          whatsappNumber: whatsappNumber.trim(),
+          newPackage: pkg
+            ? {
+                ...pkg,
+                assignFromExistingPayment: hasUsableExistingPayment && packageMode === "EXISTING_PAYMENT",
+                source: activeExistingPayment?.unsetPackages[0]
+                  ? { type: "PACKAGE", id: activeExistingPayment.unsetPackages[0].id }
+                  : activeExistingPayment?.unlinkedInvoices[0]
+                  ? { type: "INVOICE", id: activeExistingPayment.unlinkedInvoices[0].id }
+                  : { type: "PAYMENTS" },
+              }
+            : null,
+          slots: slotPayload(),
+          ...(legacyDraft ? { draftData: null } : {}),
+        };
+      }
     return {
       ...common,
       ...(linkedGuardian ? { guardianId: linkedGuardian.id } : { guardianName: guardianName.trim(), whatsappNumber: whatsappNumber.trim() }),
@@ -1046,16 +1130,57 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
 
           {currentStep.id === "package" && (
             <div className="space-y-4">
-              {isEdit && (
-                <Notice tone="info" title="A new purchase">
-                  This creates a new package with a new invoice for the parent to pay. If the parent has already paid and the package is
-                  not set up, close this and use “Assign package using existing payment” on the Packages tab instead.
-                </Notice>
+              {isEdit && hasUsableExistingPayment && (
+                <div className="space-y-3 rounded-card border border-teal-500/30 bg-teal-500/10 p-3 sm:p-4">
+                  <div className="flex items-start gap-2.5">
+                    <Link2 className="h-5 w-5 text-teal-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-white">Payment Already Received</p>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        This student has already paid ₹{Number(activeExistingPayment?.availablePaidAmount || activeExistingPayment?.unusedTotal || 0).toLocaleString("en-IN")}.
+                        You can convert/map this payment to an active package without generating a new payment or extra fee.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid gap-2.5 sm:grid-cols-2 pt-1">
+                    <label className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-xs transition-all ${packageMode === "EXISTING_PAYMENT" ? "border-teal-400 bg-teal-500/20 text-white" : "border-slate-800 bg-slate-900/60 text-slate-400"}`}>
+                      <input
+                        type="radio"
+                        name="packageMode"
+                        checked={packageMode === "EXISTING_PAYMENT"}
+                        onChange={() => {
+                          setPackageMode("EXISTING_PAYMENT");
+                          setIncludePackage(true);
+                        }}
+                        className="mt-0.5 accent-teal-400"
+                      />
+                      <div>
+                        <span className="block font-bold text-white">Assign using existing payment</span>
+                        <span className="block text-slate-300 mt-0.5">Links existing payment. New payment created: ₹0.</span>
+                      </div>
+                    </label>
+                    <label className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-xs transition-all ${packageMode === "NEW_PURCHASE" ? "border-teal-400 bg-teal-500/20 text-white" : "border-slate-800 bg-slate-900/60 text-slate-400"}`}>
+                      <input
+                        type="radio"
+                        name="packageMode"
+                        checked={packageMode === "NEW_PURCHASE"}
+                        onChange={() => setPackageMode("NEW_PURCHASE")}
+                        className="mt-0.5 accent-teal-400"
+                      />
+                      <div>
+                        <span className="block font-bold text-white">Purchase / Add new package</span>
+                        <span className="block text-slate-300 mt-0.5">Creates a new invoice for parent to pay.</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
               )}
-              <label className="flex min-h-[44px] cursor-pointer items-center gap-3 text-sm font-semibold text-ink">
-                <input type="checkbox" checked={includePackage} onChange={(e) => setIncludePackage(e.target.checked)} className="h-5 w-5 accent-teal-400" />
-                {isEdit ? "Purchase a new package (creates a new invoice to collect)" : "Create the first package now"}
-              </label>
+              {(!isEdit || !hasUsableExistingPayment) && (
+                <label className="flex min-h-[44px] cursor-pointer items-center gap-3 text-sm font-semibold text-ink">
+                  <input type="checkbox" checked={includePackage} onChange={(e) => setIncludePackage(e.target.checked)} className="h-5 w-5 accent-teal-400" />
+                  {isEdit ? "Purchase a new package (creates a new invoice to collect)" : "Create the first package now"}
+                </label>
+              )}
               {!includePackage && (
                 <p className="text-sm text-ink-subtle">
                   No package or invoice will be created{!isEdit ? ", so no classes can be booked yet" : ""}. You can add a package later from the student profile.
@@ -1120,9 +1245,13 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
                       {(p) => <input {...p} type="date" value={expiryDate} min={startDate || undefined} onChange={(e) => { setExpiryDate(e.target.value); clearFieldError("package.expiryDate"); }} className={ctl(!!err("package.expiryDate"))} />}
                     </Field>
                   </div>
-                  {Number(packagePrice) > 0 && (
+                  {isEdit && hasUsableExistingPayment && packageMode === "EXISTING_PAYMENT" ? (
+                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300">
+                      ✅ <strong>No new invoice or payment created:</strong> The existing payment of ₹{Number(packagePrice).toLocaleString("en-IN")} will be linked directly to this package. Total collected remains unchanged.
+                    </div>
+                  ) : Number(packagePrice) > 0 ? (
                     <p className="text-sm text-ink-muted">An unpaid invoice for ₹{Number(packagePrice).toLocaleString("en-IN")} (due in 14 days) will be created.</p>
-                  )}
+                  ) : null}
                   <div className="space-y-2 border-t border-line pt-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>

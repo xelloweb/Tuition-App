@@ -119,7 +119,7 @@ export function canManageUsers(role: UserRole): boolean {
  * so only the owner (admin) may do it.
  */
 export function canAssignExistingPayments(role: UserRole): boolean {
-  return role === "OWNER";
+  return role === "OWNER" || role === "COORDINATOR" || role === "ACCOUNTS";
 }
 
 /** Pay rates are financial data: only the owner may set them. */

@@ -56,6 +56,10 @@ export interface PackageBalanceBreakdown {
   packageId: string;
   packageNumber: string;
   packageName: string;
+  price?: number;
+  paidAmount?: number;
+  balanceDue?: number;
+  currency?: string;
   totalEntitlement: number;
   unallocatedCredits: number;
   totalAllocated: number;

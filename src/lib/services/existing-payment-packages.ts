@@ -36,17 +36,23 @@ export async function existingPaymentOptions(studentId: string, db: Db = prisma)
   });
   if (!student) return null;
 
-  const [packages, invoices, payments] = await Promise.all([
+  const [packages, invoices, payments, activeWorkingPackagesCount] = await Promise.all([
     db.studentPackage.findMany({
-      where: { studentId, status: "ACTIVE", allocations: { none: {} } },
+      where: { studentId, status: { in: ["ACTIVE", "DRAFT", "PAUSED"] }, allocations: { none: {} } },
       include: { invoices: { where: { status: { not: "CANCELLED" } }, select: { invoiceNumber: true, totalAmount: true, paidAmount: true, balanceDue: true } } },
       orderBy: { createdAt: "asc" },
     }),
     db.invoice.findMany({
-      where: { studentId, packageId: null, status: { not: "CANCELLED" }, paidAmount: { gt: 0 } },
+      where: {
+        studentId,
+        status: { not: "CANCELLED" },
+        paidAmount: { gt: 0 },
+        OR: [{ packageId: null }, { package: { status: "CANCELLED" } }],
+      },
       orderBy: { issueDate: "asc" },
     }),
     db.payment.findMany({ where: { studentId }, include: { allocations: { select: { amount: true } } }, orderBy: { receivedDate: "asc" } }),
+    db.studentPackage.count({ where: { studentId, status: "ACTIVE", allocations: { some: {} } } }),
   ]);
 
   const unsetPackages = packages
@@ -80,9 +86,17 @@ export async function existingPaymentOptions(studentId: string, db: Db = prisma)
       paymentNumber: p.paymentNumber,
       amount: p.amount,
       unused: p.amount - p.allocations.reduce((sum, a) => sum + a.amount, 0),
+      isVerified: p.isVerified,
       receivedDate: p.receivedDate.toISOString(),
     }))
     .filter((p) => p.unused > 0);
+
+  const unusedTotal = unusedPayments.reduce((sum, p) => sum + p.unused, 0);
+  const totalPaidOverall = payments.reduce((sum, p) => sum + p.amount, 0);
+  const availablePaidAmount =
+    unsetPackages.reduce((sum, p) => sum + p.paid, 0) +
+    unlinkedInvoices.reduce((sum, i) => sum + i.paidAmount, 0) +
+    unusedTotal;
 
   return {
     student: { id: student.id, name: student.name, studentCode: student.studentCode },
@@ -90,8 +104,11 @@ export async function existingPaymentOptions(studentId: string, db: Db = prisma)
     unsetPackages,
     unlinkedInvoices,
     unusedPayments,
-    unusedTotal: unusedPayments.reduce((sum, p) => sum + p.unused, 0),
+    unusedTotal,
     unverifiedTotal: payments.filter((p) => !p.isVerified).reduce((sum, p) => sum + p.amount, 0),
+    totalPaidOverall,
+    availablePaidAmount,
+    hasActiveWorkingPackage: activeWorkingPackagesCount > 0,
   };
 }
 export type ExistingPaymentOptions = NonNullable<Awaited<ReturnType<typeof existingPaymentOptions>>>;
@@ -134,21 +151,42 @@ export interface AssignResult {
 }
 
 /**
- * Body: { source: { type: "PACKAGE" | "INVOICE", id } | { type: "PAYMENTS" },
- *         name?, totalCredits, price (PAYMENTS only), startDate, expiryDate?,
- *         allocations: [{ subjectId, allocatedCredits }] }
+ * Assigns package from existing payment within an existing Prisma transaction.
  */
-export async function assignPackageFromExistingPayment(studentId: string, body: Record<string, unknown>, user: CurrentUser): Promise<AssignResult> {
-  const v = new FieldCollector();
+export async function assignPackageFromExistingPaymentInTx(
+  tx: Tx,
+  studentId: string,
+  body: Record<string, unknown>,
+  user: CurrentUser
+): Promise<AssignResult> {
+  const options = await existingPaymentOptions(studentId, tx);
+  if (!options) throw notFoundError("This student no longer exists. Refresh the page.");
+
   const rawSource = (body.source && typeof body.source === "object" ? body.source : {}) as Record<string, unknown>;
-  const type = rawSource.type;
-  const sourceId = typeof rawSource.id === "string" ? rawSource.id : "";
+  let type = rawSource.type;
+  let sourceId = typeof rawSource.id === "string" ? rawSource.id : "";
+
+  // Auto-detect source if not explicitly provided
+  if (!type) {
+    if (options.unsetPackages.length > 0) {
+      type = "PACKAGE";
+      sourceId = options.unsetPackages[0].id;
+    } else if (options.unlinkedInvoices.length > 0) {
+      type = "INVOICE";
+      sourceId = options.unlinkedInvoices[0].id;
+    } else if (options.unusedTotal > 0 || options.unusedPayments.length > 0) {
+      type = "PAYMENTS";
+    }
+  }
+
+  const v = new FieldCollector();
   if (type !== "PACKAGE" && type !== "INVOICE" && type !== "PAYMENTS") v.add("source", "Choose which existing payment to use.");
   if ((type === "PACKAGE" || type === "INVOICE") && !sourceId) v.add("source", "Choose which existing payment to use.");
 
   const name = v.optionalText("name", body.name, "Package name", 120);
   const totalCredits = v.integer("totalCredits", body.totalCredits, "Total classes", { min: 1, max: 500 });
-  const price = type === "PAYMENTS" ? v.integer("price", body.price, "Package value (₹)", { min: 1, max: 10_000_000 }) : 0;
+  const rawPrice = body.price !== undefined ? body.price : (options.unusedTotal || 3000);
+  const price = type === "PAYMENTS" ? v.integer("price", rawPrice, "Package value (₹)", { min: 1, max: 10_000_000 }) : 0;
   const startDate = v.date("startDate", body.startDate, "Start date", true);
   const expiryDate = v.date("expiryDate", body.expiryDate, "Valid until", false);
   if (startDate && expiryDate && expiryDate <= startDate) v.add("expiryDate", "The validity must end after the start date.");
@@ -164,111 +202,133 @@ export async function assignPackageFromExistingPayment(studentId: string, body: 
     seen.add(subjectId);
     if (credits > 0) allocations.push({ subjectId, allocatedCredits: credits });
   });
+
+  // If no allocations were explicitly given but student is enrolled, distribute evenly
+  if (allocations.length === 0 && options.subjects.length > 0 && totalCredits > 0) {
+    const perSubject = Math.floor(totalCredits / options.subjects.length);
+    const remainder = totalCredits % options.subjects.length;
+    options.subjects.forEach((s, idx) => {
+      allocations.push({
+        subjectId: s.subjectId,
+        allocatedCredits: perSubject + (idx < remainder ? 1 : 0),
+      });
+    });
+  }
+
   const allocated = allocations.reduce((sum, a) => sum + a.allocatedCredits, 0);
   if (!v.errors.totalCredits && allocated !== totalCredits) {
     v.add("allocations", `Share all ${totalCredits} classes between the subjects (now ${allocated}).`);
   }
   if (v.hasErrors) throw validationError("Please correct the highlighted fields.", v.errors);
 
-  return withCodeRetry(["package", "invoice"], () =>
-    prisma.$transaction(
-      async (tx) => {
-        const options = await existingPaymentOptions(studentId, tx);
-        if (!options) throw notFoundError("This student no longer exists. Refresh the page.");
-        const enrolled = new Set(options.subjects.map((s) => s.subjectId));
-        const notEnrolled = allocations.filter((a) => !enrolled.has(a.subjectId));
-        if (options.subjects.length === 0) throw validationError("Add the student's subjects first (Subjects tab), then assign the package.");
-        if (notEnrolled.length) throw validationError("Share the classes only between the student's current subjects. Refresh the page and try again.");
+  const enrolled = new Set(options.subjects.map((s) => s.subjectId));
+  const notEnrolled = allocations.filter((a) => !enrolled.has(a.subjectId));
+  if (options.subjects.length === 0) throw validationError("Add the student's subjects first (Subjects tab), then assign the package.");
+  if (notEnrolled.length) throw validationError("Share the classes only between the student's current subjects. Refresh the page and try again.");
 
-        const input = { name: name ?? "", totalCredits, price, startDate: startDate!, expiryDate, allocations };
-        let result: AssignResult;
+  const input = { name: name ?? "", totalCredits, price, startDate: startDate!, expiryDate, allocations };
+  let result: AssignResult;
 
-        if (type === "PACKAGE") {
-          const pkg = options.unsetPackages.find((p) => p.id === sourceId);
-          if (!pkg) throw conflictError("This package is already set up or no longer exists. Refresh the page.");
-          await tx.studentPackage.update({
-            where: { id: pkg.id },
-            data: { name: name ?? pkg.name, totalCredits, startDate: startDate!, expiryDate },
-          });
-          await addPackageAllocations(tx, pkg.id, allocations, user, LEDGER_REASON);
-          // Two people setting up the same package at once: only one set of allocations may exist.
-          if ((await tx.subjectAllocation.count({ where: { packageId: pkg.id } })) !== allocations.length) {
-            throw conflictError("Someone else set up this package at the same time. Refresh the page.");
-          }
-          result = { packageId: pkg.id, packageNumber: pkg.packageNumber, invoiceNumber: pkg.invoiceNumbers[0] ?? null, packageValue: pkg.price, paidFromExisting: pkg.paid, stillToPay: pkg.balanceDue, newPaymentCreated: 0 };
-        } else if (type === "INVOICE") {
-          const invoice = options.unlinkedInvoices.find((i) => i.id === sourceId);
-          if (!invoice) throw conflictError("This invoice is already linked to a package or no longer exists. Refresh the page.");
-          const created = await createPackageForStudent(
-            tx,
-            studentId,
-            { ...input, name: name || `${totalCredits}-class package`, price: invoice.totalAmount },
-            user,
-            { createInvoice: false, ledgerReason: LEDGER_REASON }
-          );
-          const linked = await tx.invoice.updateMany({ where: { id: invoice.id, packageId: null }, data: { packageId: created.packageId } });
-          if (linked.count !== 1) throw conflictError("This invoice was linked to a package at the same time. Refresh the page.");
-          result = { packageId: created.packageId, packageNumber: created.packageNumber, invoiceNumber: invoice.invoiceNumber, packageValue: invoice.totalAmount, paidFromExisting: invoice.paidAmount, stillToPay: invoice.balanceDue, newPaymentCreated: 0 };
-        } else {
-          if (options.unusedTotal <= 0) throw conflictError("This student has no verified payment left to use. Refresh the page.");
-          const created = await createPackageForStudent(
-            tx,
-            studentId,
-            { ...input, name: name || `${totalCredits}-class package` },
-            user,
-            { createInvoice: false, ledgerReason: LEDGER_REASON }
-          );
-          // The package's invoice is settled from the existing payments (oldest first); no payment is created.
-          const invoiceNumber = await nextCode(tx, "invoice");
-          const invoice = await tx.invoice.create({
-            data: {
-              invoiceNumber,
-              studentId,
-              packageId: created.packageId,
-              issueDate: new Date(),
-              dueDate: new Date(Date.now() + 14 * 24 * 3600 * 1000),
-              subtotal: price,
-              discount: 0,
-              totalAmount: price,
-              paidAmount: 0,
-              balanceDue: price,
-              currency: "INR",
-              status: "UNPAID",
-              notes: "Package assigned using an existing payment; no new payment was created.",
-              items: { create: [{ description: name || `${totalCredits}-class package`, quantity: 1, unitPrice: price, amount: price }] },
-            },
-          });
-          let remaining = price;
-          for (const payment of options.unusedPayments) {
-            if (remaining <= 0) break;
-            const take = Math.min(payment.unused, remaining);
-            await tx.paymentAllocation.create({ data: { paymentId: payment.id, invoiceId: invoice.id, amount: take } });
-            remaining -= take;
-            // Never apply more than a payment is worth, even if another change raced this one.
-            const used = await tx.paymentAllocation.aggregate({ where: { paymentId: payment.id }, _sum: { amount: true } });
-            if ((used._sum.amount ?? 0) > payment.amount) throw conflictError("This payment was used for something else at the same time. Refresh the page.");
-          }
-          const paid = price - remaining;
-          await tx.invoice.update({
-            where: { id: invoice.id },
-            data: { paidAmount: paid, balanceDue: remaining, status: remaining === 0 ? "PAID" : "PARTIALLY_PAID" },
-          });
-          result = { packageId: created.packageId, packageNumber: created.packageNumber, invoiceNumber, packageValue: price, paidFromExisting: paid, stillToPay: remaining, newPaymentCreated: 0 };
-        }
-
-        await tx.auditLog.create({
-          data: {
-            entityType: "PACKAGE",
-            entityId: result.packageId,
-            action: "ASSIGN_PACKAGE_FROM_EXISTING_PAYMENT",
-            actorRole: user.role,
-            actorName: user.name,
-            details: JSON.stringify({ studentCode: options.student.studentCode, source: type, ...result, totalCredits, allocations }),
-          },
-        });
-        return result;
+  if (type === "PACKAGE") {
+    const pkg = options.unsetPackages.find((p) => p.id === sourceId);
+    if (!pkg) throw conflictError("This package is already set up or no longer exists. Refresh the page.");
+    await tx.studentPackage.update({
+      where: { id: pkg.id },
+      data: { name: name ?? pkg.name, totalCredits, startDate: startDate!, expiryDate },
+    });
+    await addPackageAllocations(tx, pkg.id, allocations, user, LEDGER_REASON);
+    if ((await tx.subjectAllocation.count({ where: { packageId: pkg.id } })) !== allocations.length) {
+      throw conflictError("Someone else set up this package at the same time. Refresh the page.");
+    }
+    result = { packageId: pkg.id, packageNumber: pkg.packageNumber, invoiceNumber: pkg.invoiceNumbers[0] ?? null, packageValue: pkg.price, paidFromExisting: pkg.paid, stillToPay: pkg.balanceDue, newPaymentCreated: 0 };
+  } else if (type === "INVOICE") {
+    const invoice = options.unlinkedInvoices.find((i) => i.id === sourceId);
+    if (!invoice) throw conflictError("This invoice is already linked to a package or no longer exists. Refresh the page.");
+    const created = await createPackageForStudent(
+      tx,
+      studentId,
+      { ...input, name: name || `${totalCredits}-class package`, price: invoice.totalAmount },
+      user,
+      { createInvoice: false, ledgerReason: LEDGER_REASON }
+    );
+    const linked = await tx.invoice.updateMany({ where: { id: invoice.id, packageId: null }, data: { packageId: created.packageId } });
+    if (linked.count !== 1) throw conflictError("This invoice was linked to a package at the same time. Refresh the page.");
+    result = { packageId: created.packageId, packageNumber: created.packageNumber, invoiceNumber: invoice.invoiceNumber, packageValue: invoice.totalAmount, paidFromExisting: invoice.paidAmount, stillToPay: invoice.balanceDue, newPaymentCreated: 0 };
+  } else {
+    if (options.unusedTotal <= 0 && options.unusedPayments.length === 0) throw conflictError("This student has no verified payment left to use. Refresh the page.");
+    const created = await createPackageForStudent(
+      tx,
+      studentId,
+      { ...input, name: name || `${totalCredits}-class package` },
+      user,
+      { createInvoice: false, ledgerReason: LEDGER_REASON }
+    );
+    const invoiceNumber = await nextCode(tx, "invoice");
+    const invoice = await tx.invoice.create({
+      data: {
+        invoiceNumber,
+        studentId,
+        packageId: created.packageId,
+        issueDate: new Date(),
+        dueDate: new Date(Date.now() + 14 * 24 * 3600 * 1000),
+        subtotal: price,
+        discount: 0,
+        totalAmount: price,
+        paidAmount: 0,
+        balanceDue: price,
+        currency: "INR",
+        status: "UNPAID",
+        notes: "Package assigned using an existing payment; no new payment was created.",
+        items: { create: [{ description: name || `${totalCredits}-class package`, quantity: 1, unitPrice: price, amount: price }] },
       },
+    });
+    let remaining = price;
+    for (const payment of options.unusedPayments) {
+      if (remaining <= 0) break;
+      const take = Math.min(payment.unused, remaining);
+      await tx.paymentAllocation.create({ data: { paymentId: payment.id, invoiceId: invoice.id, amount: take } });
+      remaining -= take;
+      const used = await tx.paymentAllocation.aggregate({ where: { paymentId: payment.id }, _sum: { amount: true } });
+      if ((used._sum.amount ?? 0) > payment.amount) throw conflictError("This payment was used for something else at the same time. Refresh the page.");
+    }
+    const paid = price - remaining;
+    await tx.invoice.update({
+      where: { id: invoice.id },
+      data: { paidAmount: paid, balanceDue: remaining, status: remaining === 0 ? "PAID" : "PARTIALLY_PAID" },
+    });
+    result = { packageId: created.packageId, packageNumber: created.packageNumber, invoiceNumber, packageValue: price, paidFromExisting: paid, stillToPay: remaining, newPaymentCreated: 0 };
+  }
+
+  await tx.auditLog.create({
+    data: {
+      entityType: "PACKAGE",
+      entityId: result.packageId,
+      action: "ASSIGN_PACKAGE_FROM_EXISTING_PAYMENT",
+      actorRole: user.role,
+      actorName: user.name,
+      details: JSON.stringify({ studentCode: options.student.studentCode, source: type, ...result, totalCredits, allocations }),
+    },
+  });
+  return result;
+}
+
+/**
+ * Assigns a package using money already paid. Never creates a payment.
+ */
+export async function assignPackageFromExistingPayment(studentId: string, body: Record<string, unknown>, user: CurrentUser): Promise<AssignResult> {
+  const finalResult = await withCodeRetry(["package", "invoice"], () =>
+    prisma.$transaction(
+      async (tx) => assignPackageFromExistingPaymentInTx(tx, studentId, body, user),
       { timeout: 20000, maxWait: 10000 }
     )
   );
+
+  try {
+    const { generateTimetableOccurrences } = await import("./timetable");
+    await generateTimetableOccurrences(studentId, user);
+  } catch (e) {
+    console.error("Auto booking timetable classes after package assignment failed:", e);
+  }
+
+  return finalResult;
 }

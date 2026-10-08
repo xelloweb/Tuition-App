@@ -136,6 +136,19 @@ export function StudentDetailClient({
   const progressReports: any[] = student.progressReports || [];
   const balances = packages.filter(Boolean) as PackageBalanceBreakdown[];
 
+  const activePackage =
+    balances.find((p) => p.status === "ACTIVE" && p.subjects.length > 0) ||
+    balances.find((p) => p.status === "ACTIVE") ||
+    balances[0] ||
+    null;
+
+  const hasUnassignedPayment = Boolean(
+    existingPayment &&
+      (existingPayment.unsetPackages.length > 0 ||
+        existingPayment.unlinkedInvoices.length > 0 ||
+        existingPayment.unusedTotal > 0)
+  );
+
   const showSuccess = (text: string) => {
     setBanner({ tone: "success", text });
     router.refresh();
@@ -279,43 +292,206 @@ export function StudentDetailClient({
       </div>
 
       {activeTab === "overview" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-5 sm:p-6 shadow-xl space-y-4">
-            <h3 className="text-sm font-bold text-white border-b border-slate-800 pb-2">Academic & Contact Profile</h3>
-            <dl className="space-y-2.5 text-xs">
-              {[
-                ["Student Code", <span key="c" className="font-mono font-bold text-white">{student.studentCode}</span>],
-                ["Parent / Guardian", <span key="g" className="font-bold text-white">{student.guardianName}</span>],
-                ["WhatsApp Contact", <span key="w" className="font-mono text-white">{student.whatsappNumber}</span>],
-                ["Email Address", <span key="e" className="text-slate-200 break-all">{student.email || "Not provided"}</span>],
-                ["Country", <span key="t" className="font-semibold text-white">{student.country}</span>],
-                ["Joining Date", <span key="j" className="font-semibold text-white">{formatDateOnly(student.joiningDate)}</span>],
-              ].map(([label, value]) => (
-                <div key={label as string} className="flex justify-between gap-3 py-1 border-b border-slate-800/60 last:border-0">
-                  <dt className="text-slate-400 shrink-0">{label}</dt>
-                  <dd className="text-right min-w-0">{value}</dd>
+        <div className="space-y-6">
+          {hasUnassignedPayment && existingPayment && (
+            <div className="rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-amber-950/20 to-slate-900/90 p-5 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse" />
+                    <h3 className="text-base font-bold text-white">Payment Received · Package Not Assigned</h3>
+                    <span className="rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 text-xs font-semibold">
+                      Action Needed
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300">
+                    Payment has already been collected for this student, but no working package is assigned yet.
+                    Assigning a package links this existing payment and creates <strong className="text-white">₹0 new payment or fee</strong>.
+                  </p>
                 </div>
-              ))}
-            </dl>
-          </div>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setAssignOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-teal-400 px-4 py-2.5 min-h-[44px] text-xs font-bold text-slate-950 hover:brightness-110 shadow-lg shadow-teal-500/20 transition-all"
+                  >
+                    <Link2 className="h-4 w-4" /> Assign Package Using Existing Payment
+                  </button>
+                  {permissions.canManage && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditStartStep("package");
+                        setEditModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/90 px-3.5 py-2.5 min-h-[44px] text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+                    >
+                      <Plus className="h-4 w-4" /> Purchase / Add New Package
+                    </button>
+                  )}
+                </div>
+              </div>
 
-          <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-5 sm:p-6 shadow-xl space-y-4">
-            <h3 className="text-sm font-bold text-white border-b border-slate-800 pb-2">Learning Goals & Timings</h3>
-            <div className="space-y-3 text-xs">
-              <div>
-                <span className="font-bold text-slate-300">Preferred Class Timings:</span>
-                <p className="mt-1 text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-slate-800">{student.preferredTimings || "Not recorded"}</p>
-              </div>
-              <div>
-                <span className="font-bold text-slate-300">Learning Goals:</span>
-                <p className="mt-1 text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-slate-800">{student.learningGoals || "Not recorded"}</p>
-              </div>
-              {student.coordinatorNotes && (
-                <div>
-                  <span className="font-bold text-teal-400">Coordinator Notes:</span>
-                  <p className="mt-1 text-teal-300 bg-teal-500/10 p-3 rounded-xl border border-teal-500/20">{student.coordinatorNotes}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-amber-500/20 text-center">
+                <div className="rounded-xl bg-slate-900/80 p-3 border border-slate-800">
+                  <span className="text-xs text-slate-400 font-medium">Payment Received</span>
+                  <div className="text-lg font-bold text-emerald-400">
+                    ₹{existingPayment.availablePaidAmount.toLocaleString("en-IN")}
+                  </div>
                 </div>
-              )}
+                <div className="rounded-xl bg-slate-900/80 p-3 border border-slate-800">
+                  <span className="text-xs text-slate-400 font-medium">Current Package</span>
+                  <div className="text-lg font-bold text-amber-300">
+                    {balances.length > 0 ? "Setup Pending" : "Not Assigned"}
+                  </div>
+                </div>
+                <div className="rounded-xl bg-slate-900/80 p-3 border border-slate-800">
+                  <span className="text-xs text-slate-400 font-medium">New Payment Created</span>
+                  <div className="text-lg font-bold text-teal-300">₹0</div>
+                </div>
+                <div className="rounded-xl bg-slate-900/80 p-3 border border-slate-800">
+                  <span className="text-xs text-slate-400 font-medium">Payment Source</span>
+                  <div className="text-xs font-bold text-slate-200 mt-1 truncate">
+                    {existingPayment.unsetPackages.length > 0
+                      ? `Package ${existingPayment.unsetPackages[0].packageNumber}`
+                      : existingPayment.unlinkedInvoices.length > 0
+                      ? `Invoice ${existingPayment.unlinkedInvoices[0].invoiceNumber}`
+                      : `${existingPayment.unusedPayments.length} Payment(s)`}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 pt-1">
+                <span>
+                  🟢 <strong>Assign Package Using Existing Payment:</strong> Maps existing payment to class credits. Student total collected remains unchanged.
+                </span>
+                <span>
+                  ⚪ <strong>Purchase / Add New Package:</strong> Generates a fresh invoice for parent to pay.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {activePackage && (
+            <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-5 sm:p-6 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Layers className="h-4 w-4 text-teal-400" />
+                  <h3 className="text-sm font-bold text-white">Current Package & Classes</h3>
+                  <span className="text-xs font-semibold text-slate-300">({activePackage.packageName})</span>
+                  <span className="rounded-lg bg-slate-800 border border-slate-700 px-2 py-0.5 text-xs font-mono font-bold text-slate-300">
+                    {activePackage.packageNumber}
+                  </span>
+                  <StatusBadge status={activePackage.status} size="sm" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("packages")}
+                  className="text-xs font-bold text-teal-400 hover:text-teal-300 hover:underline transition-colors text-left sm:text-right"
+                >
+                  View Full Breakdown & Ledger →
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 rounded-2xl bg-slate-900/90 p-4 border border-slate-800 text-center">
+                <div>
+                  <span className="text-xs text-slate-400 font-medium">Package Value</span>
+                  <div className="text-base font-bold text-white">
+                    ₹{(activePackage.price ?? 0).toLocaleString("en-IN")}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 font-medium">Amount Paid</span>
+                  <div className="text-base font-bold text-emerald-400">
+                    ₹{(activePackage.paidAmount ?? (activePackage.price ?? 0)).toLocaleString("en-IN")}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 font-medium">Total Classes</span>
+                  <div className="text-base font-bold text-white">{activePackage.totalEntitlement}</div>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 font-medium">Attended</span>
+                  <div className="text-base font-bold text-slate-300">{activePackage.totalConsumed}</div>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 font-medium">Balance Classes</span>
+                  <div className="text-base font-bold text-teal-400">{activePackage.totalRemaining}</div>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 font-medium">Available</span>
+                  <div className="text-base font-bold text-emerald-400">{activePackage.totalAvailable}</div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 pt-1">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-3.5 w-3.5 text-teal-400" />
+                  <span>Started: <strong className="text-slate-200">{formatDateOnly(activePackage.startDate)}</strong></span>
+                  <span>•</span>
+                  <span>Valid until: <strong className="text-slate-200">{activePackage.expiryDate ? formatDateOnly(activePackage.expiryDate) : "No expiry"}</strong></span>
+                </div>
+                {activePackage.unallocatedCredits > 0 ? (
+                  <div className="flex items-center gap-2 text-amber-300 font-medium">
+                    <span>⚠️ {activePackage.unallocatedCredits} class(es) unallocated</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (existingPayment) setAssignOpen(true);
+                        else setSelectedForRealloc(activePackage);
+                      }}
+                      className="text-xs underline hover:text-white font-bold"
+                    >
+                      Allocate now
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-slate-400 truncate max-w-md">
+                    Enrolled subjects: {activePackage.subjects.map((s) => `${s.subjectName} (${s.remainingCredits} left)`).join(", ")}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-5 sm:p-6 shadow-xl space-y-4">
+              <h3 className="text-sm font-bold text-white border-b border-slate-800 pb-2">Academic & Contact Profile</h3>
+              <dl className="space-y-2.5 text-xs">
+                {[
+                  ["Student Code", <span key="c" className="font-mono font-bold text-white">{student.studentCode}</span>],
+                  ["Parent / Guardian", <span key="g" className="font-bold text-white">{student.guardianName}</span>],
+                  ["WhatsApp Contact", <span key="w" className="font-mono text-white">{student.whatsappNumber}</span>],
+                  ["Email Address", <span key="e" className="text-slate-200 break-all">{student.email || "Not provided"}</span>],
+                  ["Country", <span key="t" className="font-semibold text-white">{student.country}</span>],
+                  ["Joining Date", <span key="j" className="font-semibold text-white">{formatDateOnly(student.joiningDate)}</span>],
+                ].map(([label, value]) => (
+                  <div key={label as string} className="flex justify-between gap-3 py-1 border-b border-slate-800/60 last:border-0">
+                    <dt className="text-slate-400 shrink-0">{label}</dt>
+                    <dd className="text-right min-w-0">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-5 sm:p-6 shadow-xl space-y-4">
+              <h3 className="text-sm font-bold text-white border-b border-slate-800 pb-2">Learning Goals & Timings</h3>
+              <div className="space-y-3 text-xs">
+                <div>
+                  <span className="font-bold text-slate-300">Preferred Class Timings:</span>
+                  <p className="mt-1 text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-slate-800">{student.preferredTimings || "Not recorded"}</p>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-300">Learning Goals:</span>
+                  <p className="mt-1 text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-slate-800">{student.learningGoals || "Not recorded"}</p>
+                </div>
+                {student.coordinatorNotes && (
+                  <div>
+                    <span className="font-bold text-teal-400">Coordinator Notes:</span>
+                    <p className="mt-1 text-teal-300 bg-teal-500/10 p-3 rounded-xl border border-teal-500/20">{student.coordinatorNotes}</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -446,36 +622,56 @@ export function StudentDetailClient({
       {activeTab === "packages" && (
         <div className="space-y-6">
           {existingPayment && (
-            <Notice tone="warning" title="Already paid, but the package is not set up">
-              Money this student has already paid is not yet a working package. Use “Assign package using existing payment”: it links
-              that payment to a package and creates no new payment or fee.
-            </Notice>
-          )}
-          {(existingPayment || permissions.canManage) && (
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-2">
-                {existingPayment && (
+            <div className="rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-amber-950/20 to-slate-900/90 p-5 shadow-xl space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-amber-400" />
+                    Payment Received · Package Not Assigned
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-1">
+                    Student has paid <strong className="text-white">₹{existingPayment.availablePaidAmount.toLocaleString("en-IN")}</strong>.
+                    Assigning a package links this payment to class credits without creating any new payment or invoice fee.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
                   <Button type="button" icon={Link2} onClick={() => setAssignOpen(true)}>
                     Assign package using existing payment
                   </Button>
-                )}
-                {permissions.canManage && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    icon={Plus}
-                    onClick={() => {
-                      setEditStartStep("package");
-                      setEditModalOpen(true);
-                    }}
-                  >
-                    Purchase new package
-                  </Button>
-                )}
+                  {permissions.canManage && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      icon={Plus}
+                      onClick={() => {
+                        setEditStartStep("package");
+                        setEditModalOpen(true);
+                      }}
+                    >
+                      Purchase new package
+                    </Button>
+                  )}
+                </div>
               </div>
-              {permissions.canManage && (
-                <p className="text-xs text-ink-subtle">“Purchase new package” is a new purchase: it creates a new invoice for the parent to pay.</p>
-              )}
+              <div className="text-[11px] text-slate-400 pt-2 border-t border-amber-500/20 flex flex-wrap justify-between gap-2">
+                <span>🟢 <strong>Assign package using existing payment:</strong> Links existing payment. New payment created: ₹0. Total collected unchanged.</span>
+                <span>⚪ <strong>Purchase new package:</strong> New purchase: creates a new invoice for the parent to pay.</span>
+              </div>
+            </div>
+          )}
+          {!existingPayment && permissions.canManage && (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                icon={Plus}
+                onClick={() => {
+                  setEditStartStep("package");
+                  setEditModalOpen(true);
+                }}
+              >
+                Purchase new package
+              </Button>
             </div>
           )}
           {balances.length === 0 && (
@@ -509,6 +705,18 @@ export function StudentDetailClient({
                 </div>
               </div>
 
+              {(pkg.price !== undefined || permissions.showFinancial) && (
+                <div className="flex flex-wrap items-center gap-3 text-xs bg-slate-950/50 p-3 rounded-xl border border-slate-800/80">
+                  <span className="text-slate-400">Package Value: <strong className="text-white">₹{(pkg.price ?? 0).toLocaleString("en-IN")}</strong></span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-slate-400">Amount Paid: <strong className="text-emerald-400">₹{(pkg.paidAmount ?? (pkg.price ?? 0)).toLocaleString("en-IN")}</strong></span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-slate-400">Balance Due: <strong className={pkg.balanceDue && pkg.balanceDue > 0 ? "text-amber-400" : "text-slate-300"}>₹{(pkg.balanceDue ?? 0).toLocaleString("en-IN")}</strong></span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-slate-400">Validity: <strong className="text-slate-200">{formatDateOnly(pkg.startDate)} to {pkg.expiryDate ? formatDateOnly(pkg.expiryDate) : "No expiry"}</strong></span>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 rounded-2xl bg-slate-900/90 p-4 border border-slate-800 text-center">
                 {[
                   ["Entitled", pkg.totalEntitlement, "text-white"],
@@ -524,7 +732,19 @@ export function StudentDetailClient({
                 ))}
               </div>
               {pkg.unallocatedCredits > 0 && (
-                <p className="text-xs text-amber-300">{pkg.unallocatedCredits} class(es) are not yet allocated to a subject.</p>
+                <div className="flex items-center justify-between rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-200">
+                  <span>⚠️ {pkg.unallocatedCredits} class(es) are not yet allocated to a subject.</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (existingPayment) setAssignOpen(true);
+                      else setSelectedForRealloc(pkg);
+                    }}
+                    className="rounded-lg bg-amber-400 px-3 py-1 font-bold text-slate-950 hover:brightness-110 transition-all"
+                  >
+                    Allocate to subjects
+                  </button>
+                </div>
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -771,6 +991,7 @@ export function StudentDetailClient({
           subjects={availableSubjects}
           teachers={availableTeachers}
           startStep={editStartStep}
+          existingPayment={existingPayment}
           onClose={() => {
             setEditModalOpen(false);
             setEditStartStep(undefined);

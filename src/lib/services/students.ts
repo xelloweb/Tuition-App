@@ -8,6 +8,7 @@ import { nextCode, withCodeRetry } from "../codes";
 import { rememberIdempotentEntity, runIdempotent } from "../idempotency";
 import { applyTimetableInTransaction, retireEnrolmentSlots, SlotInput } from "./timetable";
 import { convertInTransaction, submissionForDraft } from "./parent-submissions";
+import { assignPackageFromExistingPaymentInTx } from "./existing-payment-packages";
 
 type Tx = Prisma.TransactionClient;
 
@@ -51,6 +52,8 @@ export interface PackageInput {
   startDate: Date;
   expiryDate: Date | null;
   allocations: { subjectId: string; allocatedCredits: number }[];
+  assignFromExistingPayment?: boolean;
+  source?: Record<string, unknown>;
 }
 
 export interface StudentSlotInput {
@@ -166,7 +169,9 @@ function parsePackage(v: FieldCollector, value: unknown, enrolledSubjectIds: str
       allocations.push({ subjectId: sid, allocatedCredits: baseCredits + extra });
     }
   }
-  return { name, totalCredits, price, startDate, expiryDate, allocations };
+  const assignFromExistingPayment = Boolean((raw as Record<string, unknown>).assignFromExistingPayment);
+  const source = (raw as Record<string, unknown>).source as Record<string, unknown> | undefined;
+  return { name, totalCredits, price, startDate, expiryDate, allocations, assignFromExistingPayment, source };
 }
 
 /**
@@ -539,7 +544,7 @@ export async function checkAdmission(fields: StudentFields, user: CurrentUser) {
 }
 
 export async function updateStudent(id: string, f: StudentFields, user: CurrentUser) {
-  return withCodeRetry(["package", "invoice"], () =>
+  const result = await withCodeRetry(["package", "invoice"], () =>
     prisma.$transaction(async (tx) => {
       const student = await tx.student.findUnique({ where: { id }, include: { enrolments: true } });
       if (!student) throw notFoundError("This student no longer exists. Refresh the page.");
@@ -634,18 +639,37 @@ export async function updateStudent(id: string, f: StudentFields, user: CurrentU
 
       let pkg = null;
       if (f.newPackage) {
-        const enrolled = new Set(
-          (await tx.subjectEnrollment.findMany({ where: { studentId: id }, select: { subjectId: true } })).map((e) => e.subjectId)
-        );
-        const fieldErrors: Record<string, string> = {};
-        f.newPackage.allocations.forEach((a, i) => {
-          if (!enrolled.has(a.subjectId)) {
-            fieldErrors[`package.allocations.${i}.subjectId`] = "Allocate classes only to subjects the student is enrolled in.";
-          }
-        });
-        if (Object.keys(fieldErrors).length) throw validationError("Please correct the package allocations.", fieldErrors);
-        pkg = await createPackageForStudent(tx, id, f.newPackage, user);
-        changes.newPackage = { from: null, to: pkg };
+        if (f.newPackage.assignFromExistingPayment) {
+          const assignRes = await assignPackageFromExistingPaymentInTx(
+            tx,
+            id,
+            {
+              source: f.newPackage.source,
+              name: f.newPackage.name,
+              totalCredits: f.newPackage.totalCredits,
+              price: f.newPackage.price,
+              startDate: f.newPackage.startDate ? f.newPackage.startDate.toISOString().slice(0, 10) : undefined,
+              expiryDate: f.newPackage.expiryDate ? f.newPackage.expiryDate.toISOString().slice(0, 10) : undefined,
+              allocations: f.newPackage.allocations,
+            },
+            user
+          );
+          pkg = { packageId: assignRes.packageId, packageNumber: assignRes.packageNumber, invoiceNumber: assignRes.invoiceNumber };
+          changes.newPackage = { from: null, to: pkg };
+        } else {
+          const enrolled = new Set(
+            (await tx.subjectEnrollment.findMany({ where: { studentId: id }, select: { subjectId: true } })).map((e) => e.subjectId)
+          );
+          const fieldErrors: Record<string, string> = {};
+          f.newPackage.allocations.forEach((a, i) => {
+            if (!enrolled.has(a.subjectId)) {
+              fieldErrors[`package.allocations.${i}.subjectId`] = "Allocate classes only to subjects the student is enrolled in.";
+            }
+          });
+          if (Object.keys(fieldErrors).length) throw validationError("Please correct the package allocations.", fieldErrors);
+          pkg = await createPackageForStudent(tx, id, f.newPackage, user);
+          changes.newPackage = { from: null, to: pkg };
+        }
       }
 
       const shouldApplySlots = confirmingLegacyDraft ? Boolean(f.slots?.length) : f.slots !== undefined;
@@ -686,6 +710,17 @@ export async function updateStudent(id: string, f: StudentFields, user: CurrentU
       return { student: updated, siblingsUpdated, packageNumber: pkg?.packageNumber ?? null, booking: legacyBooking };
     }, { timeout: 20000, maxWait: 10000 })
   );
+
+  if (f.newPackage) {
+    try {
+      const { generateTimetableOccurrences } = await import("./timetable");
+      await generateTimetableOccurrences(id, user);
+    } catch (e) {
+      console.error("Auto booking timetable classes after package update failed:", e);
+    }
+  }
+
+  return result;
 }
 
 export async function deleteStudent(id: string, user: CurrentUser) {

@@ -24,6 +24,16 @@ export async function calculatePackageBalances(
           subject: true,
         },
       },
+      invoices: {
+        where: {
+          status: { not: "CANCELLED" },
+        },
+        select: {
+          paidAmount: true,
+          balanceDue: true,
+          totalAmount: true,
+        },
+      },
     },
   });
 
@@ -80,11 +90,17 @@ export async function calculatePackageBalances(
   const unallocatedCredits = Math.max(0, pkg.totalCredits - totalAllocated);
   const totalRemaining = pkg.totalCredits - totalConsumed;
   const totalAvailable = totalRemaining - totalReserved;
+  const paidAmount = (pkg.invoices ?? []).reduce((sum, inv) => sum + inv.paidAmount, 0);
+  const balanceDue = (pkg.invoices ?? []).reduce((sum, inv) => sum + inv.balanceDue, 0);
 
   return {
     packageId: pkg.id,
     packageNumber: pkg.packageNumber,
     packageName: pkg.name,
+    price: pkg.price,
+    paidAmount,
+    balanceDue,
+    currency: pkg.currency,
     totalEntitlement: pkg.totalCredits,
     unallocatedCredits,
     totalAllocated,

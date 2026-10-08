@@ -4,9 +4,9 @@
  */
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { prisma, owner, makeSubject, uid } from "./helpers";
+import { prisma, owner, coordinator, accounts, makeSubject, uid } from "./helpers";
 import { assignPackageFromExistingPayment, existingPaymentOptions, studentsNeedingPackageSetup } from "../src/lib/services/existing-payment-packages";
-import { createPackageForStudent } from "../src/lib/services/students";
+import { createPackageForStudent, updateStudent } from "../src/lib/services/students";
 import { calculateFinancialSummary, calculateStudentFinancialSummary } from "../src/lib/billing";
 import { calculatePackageBalances } from "../src/lib/package-calculations";
 import { ApiError } from "../src/lib/api-errors";
@@ -227,5 +227,82 @@ describe("assign package using an existing payment", () => {
     const invoice = await prisma.invoice.findFirstOrThrow({ where: { packageId: created.packageId } });
     assert.equal(invoice.status, "UNPAID");
     assert.equal(invoice.balanceDue, 1000);
+  });
+
+  test("coordinator and accounts can assign packages from existing payment", async () => {
+    const { student: s1, subjects: sub1 } = await legacyStudent();
+    await payment(s1.id, 3000);
+    const resCoord = await assignPackageFromExistingPayment(s1.id, twelveClasses(sub1[0].id), coordinator);
+    assert.equal(resCoord.paidFromExisting, 3000);
+    assert.equal(resCoord.newPaymentCreated, 0);
+
+    const { student: s2, subjects: sub2 } = await legacyStudent();
+    await payment(s2.id, 3000);
+    const resAccounts = await assignPackageFromExistingPayment(s2.id, twelveClasses(sub2[0].id), accounts);
+    assert.equal(resAccounts.paidFromExisting, 3000);
+    assert.equal(resAccounts.newPaymentCreated, 0);
+  });
+
+  test("updateStudent with assignFromExistingPayment links existing payment, creates ₹0 new payment and tracks package normally", async () => {
+    const { student, subjects } = await legacyStudent();
+    // Existing record: Payment Received = ₹3,000, Package = Not Assigned
+    await payment(student.id, 3000);
+
+    const beforeMoney = await moneyCounts(student.id);
+    assert.equal(beforeMoney.payments, 1);
+    assert.equal(beforeMoney.paid, 3000);
+
+    // Admin selects Assign Package Using Existing Payment
+    const res = await updateStudent(
+      student.id,
+      {
+        name: student.name,
+        newPackage: {
+          assignFromExistingPayment: true,
+          name: "Monthly 12 Classes Package",
+          totalCredits: 12,
+          price: 3000,
+          startDate: new Date(),
+          expiryDate: null,
+          allocations: [{ subjectId: subjects[0].id, allocatedCredits: 12 }],
+        },
+      },
+      coordinator
+    );
+
+    assert.ok(res.packageNumber);
+
+    // After assignment:
+    // 1. Total payments unchanged (0 new payments created)
+    const afterMoney = await moneyCounts(student.id);
+    assert.equal(afterMoney.payments, 1);
+    assert.equal(afterMoney.paid, 3000);
+
+    // 2. Package appears in student profile as an active package
+    const pkg = await prisma.studentPackage.findFirstOrThrow({
+      where: { studentId: student.id, status: "ACTIVE" },
+      include: { allocations: true },
+    });
+    assert.equal(pkg.totalCredits, 12);
+    assert.equal(pkg.allocations.length, 1);
+    assert.equal(pkg.allocations[0].allocatedCredits, 12);
+
+    // 3. Package details tracked normally
+    const balance = await calculatePackageBalances(pkg.id);
+    assert.ok(balance);
+    assert.equal(balance!.totalEntitlement, 12);
+    assert.equal(balance!.totalConsumed, 0);
+    assert.equal(balance!.totalRemaining, 12);
+    assert.equal(balance!.price, 3000);
+    assert.equal(balance!.paidAmount, 3000);
+    assert.equal(balance!.balanceDue, 0);
+
+    // 4. Financial summary: total collected remains unchanged (no duplicate payment)
+    const fin = await calculateStudentFinancialSummary(student.id);
+    assert.equal(fin.verifiedPayments, 3000);
+    assert.equal(fin.netBilled, 3000);
+    assert.equal(fin.outstanding, 0);
+    assert.equal(fin.unallocatedAdvances, 0);
+    assert.equal(fin.paymentsCount, 1);
   });
 });

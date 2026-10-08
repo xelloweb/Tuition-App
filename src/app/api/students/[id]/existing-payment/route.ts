@@ -4,7 +4,7 @@ import { notFoundError, readJsonObject, withErrorHandling } from "@/lib/api-erro
 import { assignPackageFromExistingPayment, existingPaymentOptions } from "@/lib/services/existing-payment-packages";
 
 type Ctx = { params: Promise<{ id: string }> };
-const DENIED = "Only the owner can assign a package using an existing payment.";
+const DENIED = "Only the owner, coordinators or accounts can assign a package using an existing payment.";
 
 /** Paid money that is not yet a working package (paid package without subjects, unlinked paid invoice, unused payment). */
 export const GET = withErrorHandling<Ctx>("GET /api/students/[id]/existing-payment", async (_req, { params }) => {
