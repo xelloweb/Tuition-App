@@ -10,6 +10,7 @@ import { IntakeData } from "../src/lib/intake";
 import {
   addSubmissionNote,
   createParentSubmission,
+  deleteSubmission,
   getSubmissionDetail,
   listSubmissions,
   updateSubmission,
@@ -238,5 +239,28 @@ describe("parent submissions", () => {
     assert.equal(linked!.linkedStudent?.id, existing.id);
     assert.equal(linked!.status, "NEW", "linking is not a conversion");
     await expectApiError(updateSubmission(submission.id, { linkedStudentId: "no-such-student" }, coordinator), 400);
+  });
+
+  test("the owner can delete a submission at the parent's request; converted ones are kept", async () => {
+    const subject = await makeSubject("Sanskrit");
+    const trainer = await makeTeacher("Intake Sanskrit");
+    const { reference } = await createParentSubmission(intake([subject.id], { studentName: "Delete Me Pupil" }), uid("delete-jjjjjjjjjjjj"));
+    const submission = await prisma.parentSubmission.findUniqueOrThrow({ where: { reference } });
+    await addSubmissionNote(submission.id, { body: "Parent asked us to delete their details." }, coordinator);
+    const draft = await createDraft({ data: { name: "Delete Me Pupil" }, submissionId: submission.id }, coordinator);
+
+    await deleteSubmission(submission.id, owner);
+    assert.equal(await prisma.parentSubmission.count({ where: { id: submission.id } }), 0);
+    assert.equal(await prisma.parentSubmissionNote.count({ where: { submissionId: submission.id } }), 0, "notes removed");
+    assert.equal(await prisma.admissionDraft.count({ where: { id: draft.id } }), 0, "the unfinished draft with the same details is removed");
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { entityId: submission.id, action: "DELETE_PARENT_SUBMISSION" } });
+    assert.doesNotMatch(audit.details, /Delete Me Pupil|Fictional Parent|971/, "the audit trail keeps only the reference");
+    assert.match(audit.details, new RegExp(reference));
+    await expectApiError(deleteSubmission(submission.id, owner), 404);
+
+    const kept = await createParentSubmission(intake([subject.id]), uid("delete-kkkkkkkkkkk"));
+    const keptRow = await prisma.parentSubmission.findUniqueOrThrow({ where: { reference: kept.reference } });
+    await createStudent(parseStudentFields(admissionBody(uid("Kept Pupil"), subject.id, trainer.id, { submissionId: keptRow.id }), { partial: false }), coordinator, uid("idem-kept"));
+    await expectApiError(deleteSubmission(keptRow.id, owner), 409, /became an admission/);
   });
 });

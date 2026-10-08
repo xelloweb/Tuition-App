@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, Link2, MessageSquarePlus, Save, Unlink, UserPlus } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Link2, MessageSquarePlus, Save, Trash2, Unlink, UserPlus } from "lucide-react";
 import { ALL_GRADES } from "@/lib/grades";
 import { MANUAL_STATUSES, statusLabel, weekdayName } from "@/lib/intake";
 import { admissionPrefill } from "@/lib/intake-prefill";
@@ -17,6 +17,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Notice } from "@/components/ui/Notice";
 import { Button } from "@/components/ui/Button";
 import { Field, controlBorder, controlClass } from "@/components/ui/Field";
+import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import { StatusChip } from "../AdmissionsClient";
 
 const gradeLabel = (value: string) => ALL_GRADES.find((g) => g.value === value)?.label ?? value;
@@ -27,12 +28,15 @@ export function SubmissionDetailClient({
   teachers,
   staff,
   draft,
+  canDelete = false,
 }: {
   initialDetail: SubmissionDetail;
   subjects: SubjectOption[];
   teachers: TeacherOption[];
   staff: { id: string; name: string }[];
   draft: AdmissionDraftItem | null;
+  /** Owner only: delete at the parent's request. */
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const [detail, setDetail] = useState(initialDetail);
@@ -45,6 +49,9 @@ export function SubmissionDetailClient({
   const [noteText, setNoteText] = useState("");
   const [noteError, setNoteError] = useState("");
   const [addingNote, setAddingNote] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Fresh server data after router.refresh() (e.g. a draft was just saved) replaces the local copy
   // without closing an open admission form.
@@ -109,6 +116,19 @@ export function SubmissionDetailClient({
       setNoteError(errorMessage(error, "Could not add the note."));
     } finally {
       setAddingNote(false);
+    }
+  };
+
+  const removeSubmission = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await apiRequest(`/api/parent-submissions/${detail.id}`, { method: "DELETE" });
+      router.push("/admissions");
+      router.refresh();
+    } catch (error) {
+      setDeleteError(errorMessage(error, "Could not delete the submission."));
+      setDeleting(false);
     }
   };
 
@@ -287,6 +307,16 @@ export function SubmissionDetailClient({
             )}
           </section>
 
+          {canDelete && !converted && (
+            <section aria-labelledby="delete-heading" className="space-y-2 rounded-card border border-line bg-surface p-4 sm:p-5">
+              <h2 id="delete-heading" className="text-lg font-semibold text-ink">Delete at the parent&apos;s request</h2>
+              <p className="text-sm text-ink-muted">Removes this submission, its notes and any unfinished admission draft for it. This cannot be undone.</p>
+              <Button type="button" variant="danger" size="sm" icon={Trash2} onClick={() => setConfirmDelete(true)}>
+                Delete this submission
+              </Button>
+            </section>
+          )}
+
           <section aria-labelledby="notes-heading" className="space-y-3 rounded-card border border-line bg-surface p-4 sm:p-5">
             <h2 id="notes-heading" className="text-lg font-semibold text-ink">Notes</h2>
             <form onSubmit={addNote} className="space-y-2">
@@ -310,6 +340,23 @@ export function SubmissionDetailClient({
           </section>
         </div>
       </div>
+
+      {confirmDelete && (
+        <DeleteConfirmModal
+          title="Delete this parent submission?"
+          message="Only do this when the parent asked for their details to be deleted. The submission, its notes and any unfinished admission draft are removed permanently; the audit log keeps only the reference."
+          itemName={detail.submitted?.studentName ?? detail.reference}
+          itemDetails={detail.reference}
+          confirmLabel="Delete submission"
+          loading={deleting}
+          errorMessage={deleteError}
+          onConfirm={removeSubmission}
+          onCancel={() => {
+            setConfirmDelete(false);
+            setDeleteError(null);
+          }}
+        />
+      )}
 
       {formOpen && s && (
         <StudentFormModal

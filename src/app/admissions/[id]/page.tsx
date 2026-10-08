@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { canManageStudents, getCurrentUser } from "@/lib/auth";
+import { canManageStudents, canManageUsers, getCurrentUser } from "@/lib/auth";
 import { getSubmissionDetail, markSubmissionSeen } from "@/lib/services/parent-submissions";
 import { presentDraft } from "@/lib/services/admission-drafts";
 import { AccessDenied } from "@/components/ui/AccessDenied";
@@ -34,6 +34,7 @@ export default async function SubmissionPage({ params }: { params: Promise<{ id:
       teachers={teachers}
       staff={staff}
       draft={draft ? presentDraft(draft) : null}
+      canDelete={canManageUsers(user.role)}
     />
   );
 }

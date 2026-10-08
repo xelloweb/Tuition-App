@@ -4,7 +4,7 @@ import { withAuth } from "next-auth/middleware";
 // visits are sent to /login. API routes are excluded on purpose: each handler
 // calls requireUser() and answers 401 JSON, which the screens show as
 // "session expired" instead of receiving an HTML login page. The parent
-// admission form (/admission/apply) is public by design.
+// admission form (/admission/apply) and its privacy notice (/privacy) are public by design.
 export default withAuth({
   pages: {
     signIn: "/login",
@@ -12,5 +12,5 @@ export default withAuth({
 });
 
 export const config = {
-  matcher: ["/((?!api/|login|forgot-password|setup-password|admission/apply|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api/|login|forgot-password|setup-password|admission/apply|privacy|_next/static|_next/image|favicon.ico).*)"],
 };

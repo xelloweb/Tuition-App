@@ -24,7 +24,7 @@ interface AppShellProps {
 const LEGACY_STORAGE_KEYS = ["xello_registered_students_v1", "xello_registered_teachers_v1"];
 
 /** Public pages render exactly as parents see them, even for signed-in staff (no menus or staff data). */
-const PUBLIC_PATHS = ["/admission/apply"];
+const PUBLIC_PATHS = ["/admission/apply", "/privacy"];
 
 export function AppShell({ currentUser, istToday, ephemeralStorage = false, navBadges = {}, children }: AppShellProps) {
   const [moreOpen, setMoreOpen] = useState(false);

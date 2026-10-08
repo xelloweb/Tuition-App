@@ -428,6 +428,17 @@ describe("parent admission form (public) over HTTP", { skip: !BASE }, () => {
     assert.equal(notJson.status, 400);
   });
 
+  test("the privacy notice is public; only the owner can delete a submission", async () => {
+    const res = await fetch(`${BASE}/privacy`, { redirect: "manual" });
+    assert.equal(res.status, 200);
+    const html = await res.text();
+    assert.match(html, /<h1[^>]*>Privacy notice<\/h1>/);
+    assert.doesNotMatch(html, /Sign out|Students Directory/);
+    assert.equal((await call(null, "DELETE", "/api/parent-submissions/any-id")).status, 401);
+    assert.equal((await call("coordinator", "DELETE", "/api/parent-submissions/any-id")).status, 403);
+    assert.equal((await call("admin", "DELETE", "/api/parent-submissions/no-such-id")).status, 404);
+  });
+
   test("too many forms from one connection are slowed down", async () => {
     const statuses: number[] = [];
     for (let i = 0; i < 6; i++) statuses.push((await send({ ...form({ studentName: `Rate ${i} ${run}` }), formToken: token, submissionKey: key() }, fromAddress(3))).status);

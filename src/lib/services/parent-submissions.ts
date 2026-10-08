@@ -362,6 +362,35 @@ export async function convertInTransaction(tx: Tx, submissionId: string, student
   });
 }
 
+/**
+ * Deletes a submission at the parent's request (owner only). A converted
+ * submission belongs to a student record and is not deleted here. Its notes and
+ * any unfinished admission draft (which holds the same details) go with it; the
+ * audit trail keeps only the reference.
+ */
+export async function deleteSubmission(id: string, user: CurrentUser) {
+  const current = await prisma.parentSubmission.findUnique({ where: { id }, select: { reference: true, status: true, admissionDraftId: true } });
+  if (!current) throw notFoundError("This submission no longer exists. Refresh the page.");
+  if (current.status === "CONVERTED") {
+    throw conflictError("This submission became an admission. Its details now belong to the student record, so it cannot be deleted here.");
+  }
+  await prisma.$transaction(async (tx) => {
+    await tx.parentSubmission.delete({ where: { id } });
+    if (current.admissionDraftId) await tx.admissionDraft.deleteMany({ where: { id: current.admissionDraftId } });
+    await tx.auditLog.create({
+      data: {
+        entityType: "PARENT_SUBMISSION",
+        entityId: id,
+        action: "DELETE_PARENT_SUBMISSION",
+        actorRole: user.role,
+        actorName: user.name,
+        details: JSON.stringify({ reference: current.reference, draftDeleted: Boolean(current.admissionDraftId) }),
+      },
+    });
+  });
+  return { reference: current.reference };
+}
+
 /** The submission an admission draft belongs to, if any. */
 export async function submissionForDraft(tx: Tx, draftId: string) {
   return tx.parentSubmission.findUnique({ where: { admissionDraftId: draftId }, select: { id: true } });
