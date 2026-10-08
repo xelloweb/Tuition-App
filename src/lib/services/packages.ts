@@ -333,6 +333,27 @@ export async function editStudentPackage(packageId: string, input: EditPackageIn
       },
     });
 
+    await tx.auditLog.create({
+      data: {
+        entityType: "STUDENT",
+        entityId: pkg.studentId,
+        action: "EDIT_PACKAGE",
+        actorRole: user.role,
+        actorName: user.name,
+        details: JSON.stringify({
+          packageId,
+          packageNumber: pkg.packageNumber,
+          packageName: updatedDetails.name,
+          previous: previousDetails,
+          updated: updatedDetails,
+          classesAttended,
+          remainingClasses,
+          totalPaymentsReceived,
+          outstandingBalance,
+        }),
+      },
+    });
+
     return { studentId: pkg.studentId };
   });
 

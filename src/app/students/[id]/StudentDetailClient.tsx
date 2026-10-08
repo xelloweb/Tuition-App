@@ -73,6 +73,7 @@ const ACTION_LABELS: Record<string, string> = {
   UNENROLL_SUBJECT: "Subject unenrolled",
   UPDATE_TIMETABLE: "Weekly timetable changed",
   GENERATE_TIMETABLE_CLASSES: "Classes booked from timetable",
+  EDIT_PACKAGE: "Package updated",
 };
 
 export function StudentDetailClient({
