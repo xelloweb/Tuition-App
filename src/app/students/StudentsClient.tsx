@@ -18,9 +18,11 @@ import {
   Edit2,
   Trash2,
   Inbox,
+  ClipboardList,
 } from "lucide-react";
 import { AddStudentModal } from "@/components/students/AddStudentModal";
 import { EditStudentModal } from "@/components/students/EditStudentModal";
+import { MarkAttendanceModal } from "@/components/attendance/MarkAttendanceModal";
 import { SubjectOption, TeacherOption } from "@/components/students/StudentFormModal";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -70,6 +72,7 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, dr
   const [deletingStudent, setDeletingStudent] = useState<StudentRow | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [markingStudent, setMarkingStudent] = useState<StudentRow | null>(null);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [banner, setBanner] = useState<{ tone: "success" | "error"; text: string; href?: string } | null>(null);
 
@@ -497,6 +500,18 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, dr
                   </Link>
 
                   {/* Actions sit outside the link so taps never trigger navigation. */}
+                  {isTeacherView && (
+                    <div className="absolute right-4 sm:right-6 bottom-4 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setMarkingStudent(student)}
+                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-teal-400 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
+                      >
+                        <ClipboardList className="h-4 w-4" />
+                        Mark Attendance
+                      </button>
+                    </div>
+                  )}
                   {canAddStudent && (
                     <div className="absolute right-4 sm:right-12 bottom-4 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 flex items-center gap-1">
                       <button
@@ -634,6 +649,30 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, dr
           }
           onConfirm={handleDeleteStudent}
           onCancel={() => setDeletingStudent(null)}
+        />
+      )}
+
+      {markingStudent && (
+        <MarkAttendanceModal
+          isOpen={true}
+          onClose={() => setMarkingStudent(null)}
+          onSuccess={(msg) => {
+            setMarkingStudent(null);
+            setBanner({ tone: "success", text: msg });
+            router.refresh();
+          }}
+          preSelectedStudent={{
+            id: markingStudent.id,
+            name: markingStudent.name,
+            grade: markingStudent.grade,
+            assignedSubjects: markingStudent.enrolments?.map((e: any) => ({
+              id: e.subject?.id || e.subjectId,
+              name: e.subject?.name || "Subject",
+              teacherId: e.teacher?.id ?? e.teacherId ?? null,
+              teacherName: e.teacher?.name ?? null,
+            })) || [],
+          }}
+          isTrainer={isTeacherView}
         />
       )}
     </div>

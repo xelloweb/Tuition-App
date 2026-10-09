@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ClipboardList, MessageSquareWarning, X } from "lucide-react";
+import { CheckCircle2, ClipboardList, MessageSquareWarning, X, Plus, Edit2, Trash2 } from "lucide-react";
 import { apiRequest, ClientApiError, errorMessage } from "@/lib/client-api";
 import { formatInTimeZone } from "@/lib/timezones";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -10,6 +10,9 @@ import { Notice } from "@/components/ui/Notice";
 import { Button } from "@/components/ui/Button";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Field, controlBorder, controlClass } from "@/components/ui/Field";
+import { MarkAttendanceModal, StudentOption, TrainerOption } from "@/components/attendance/MarkAttendanceModal";
+import { EditAttendanceModal, AttendanceRecordForEdit } from "@/components/attendance/EditAttendanceModal";
+import { DeleteAttendanceModal } from "@/components/attendance/DeleteAttendanceModal";
 
 type Outcome = "COMPLETED" | "STUDENT_NO_SHOW" | "TEACHER_NO_SHOW" | "CANCELLED";
 type Attendance = "PRESENT" | "LATE" | "ABSENT";
@@ -385,6 +388,10 @@ export function AttendanceClient({
   isTrainer,
   canCorrect,
   focusSessionId,
+  allStudents = [],
+  allTrainers = [],
+  currentTrainerId,
+  currentTrainerName,
 }: {
   pending: PendingClass[];
   records: SubmittedRecord[];
@@ -393,6 +400,10 @@ export function AttendanceClient({
   isTrainer: boolean;
   canCorrect: boolean;
   focusSessionId: string | null;
+  allStudents?: StudentOption[];
+  allTrainers?: TrainerOption[];
+  currentTrainerId?: string;
+  currentTrainerName?: string;
 }) {
   const router = useRouter();
   const openRequests = requests.filter((r) => r.status === "OPEN");
@@ -406,6 +417,11 @@ export function AttendanceClient({
   const [declining, setDeclining] = useState<CorrectionRequestItem | null>(null);
   const [banner, setBanner] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
+  // Manual attendance modals state
+  const [manualMarkOpen, setManualMarkOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<AttendanceRecordForEdit | null>(null);
+  const [deletingRecord, setDeletingRecord] = useState<any | null>(null);
+
   useEffect(() => {
     if (focusSessionId && tab === "submitted") {
       document.getElementById(`record-${focusSessionId}`)?.scrollIntoView({ block: "center" });
@@ -418,6 +434,9 @@ export function AttendanceClient({
     setCorrecting(null);
     setRequesting(null);
     setDeclining(null);
+    setManualMarkOpen(false);
+    setEditingRecord(null);
+    setDeletingRecord(null);
     setBanner({ tone: "success", text });
     router.refresh();
   };
@@ -430,15 +449,20 @@ export function AttendanceClient({
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title="Attendance"
-        context="Times in IST"
-        description={
-          isTrainer
-            ? "Mark attendance for your classes once they have started. Submitted attendance is locked; ask for a correction if something is wrong."
-            : "Classes waiting for attendance, submitted records and trainers' correction requests."
-        }
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <PageHeader
+          title="Attendance"
+          context="Times in IST"
+          description={
+            isTrainer
+              ? "Mark attendance for your classes. Package credits and working hours update automatically."
+              : "Mark manual attendance, review submitted class records, and manage requests."
+          }
+        />
+        <Button icon={Plus} onClick={() => setManualMarkOpen(true)}>
+          Mark Attendance
+        </Button>
+      </div>
       {banner && <Notice tone={banner.tone} onDismiss={() => setBanner(null)}>{banner.text}</Notice>}
 
       <div className="flex flex-wrap gap-2" role="group" aria-label="Show">
@@ -492,22 +516,66 @@ export function AttendanceClient({
             <ul className="divide-y divide-line">
               {records.map((r) => (
                 <li key={r.id} id={`record-${r.sessionId}`} className={`flex flex-col gap-3 p-4 md:flex-row md:items-start md:justify-between ${r.sessionId === focusSessionId ? "bg-brand/5" : ""}`}>
-                  <div className="min-w-0 space-y-0.5 text-sm">
-                    <p className="text-base font-semibold text-ink break-words">
-                      {r.student} <span className="font-normal text-ink-muted">· {r.subject}</span>
+                  <div className="min-w-0 space-y-1 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-base font-semibold text-ink break-words">
+                        {r.student} <span className="font-normal text-ink-muted">· {r.subject}</span>
+                      </p>
+                      <span className="rounded-full bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-xs font-bold text-teal-300">
+                        {(r.minutes / 60).toFixed(1)}h Completed ({Math.max(1, Math.round(r.minutes / 60))} Credit{Math.max(1, Math.round(r.minutes / 60)) > 1 ? "s" : ""})
+                      </span>
+                      {r.reversed && <span className="ml-2 rounded-full border border-amber-300/50 px-2 text-warning text-xs">Corrected</span>}
+                    </div>
+                    <p className="text-ink-muted">
+                      {formatInTimeZone(r.start)} IST · Trainer: <strong className="text-ink">{r.trainer}</strong>
                     </p>
-                    <p className="text-ink-muted">{formatInTimeZone(r.start)} IST{isTrainer ? "" : ` · ${r.trainer}`}</p>
-                    <p className="text-ink">
+                    <p className="text-ink text-xs">
                       <strong>{OUTCOME_LABEL[r.outcome] ?? r.outcome}</strong> · student {r.attendance.toLowerCase()} · {r.minutes} min
-                      {r.reversed && <span className="ml-2 rounded-full border border-amber-300/50 px-2 text-warning">Corrected</span>}
                     </p>
-                    <p className="text-ink-muted break-words">Topic: {r.topic}{r.homework ? ` · Homework: ${r.homework}` : ""}</p>
-                    <p className="text-ink-subtle">Submitted by {r.markedBy}, {formatInTimeZone(r.markedAt)} IST</p>
+                    <p className="text-ink-muted break-words text-xs">Topic: {r.topic}{r.homework ? ` · Homework: ${r.homework}` : ""}</p>
+                    <p className="text-ink-subtle text-xs">Submitted by <strong>{r.markedBy}</strong>, {formatInTimeZone(r.markedAt)} IST</p>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={Edit2}
+                      onClick={() =>
+                        setEditingRecord({
+                          id: r.id,
+                          studentName: r.student,
+                          subjectName: r.subject,
+                          teacherName: r.trainer,
+                          classDate: r.start,
+                          durationMinutes: r.minutes,
+                          topicCovered: r.topic,
+                          homework: r.homework || undefined,
+                        })
+                      }
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={Trash2}
+                      className="text-rose-400 hover:text-rose-300 border-rose-500/30"
+                      onClick={() =>
+                        setDeletingRecord({
+                          id: r.id,
+                          studentName: r.student,
+                          subjectName: r.subject,
+                          teacherName: r.trainer,
+                          durationMinutes: r.minutes,
+                          hoursCompleted: r.minutes / 60,
+                        })
+                      }
+                    >
+                      Delete
+                    </Button>
                     {canCorrect && (
-                      <Button variant="secondary" size="sm" onClick={() => setCorrecting({ record: r })}>
-                        Correct<span className="sr-only"> attendance for {r.student}</span>
+                      <Button variant="ghost" size="sm" onClick={() => setCorrecting({ record: r })}>
+                        Change outcome
                       </Button>
                     )}
                     {isTrainer &&
@@ -572,6 +640,34 @@ export function AttendanceClient({
         </section>
       )}
 
+      {manualMarkOpen && (
+        <MarkAttendanceModal
+          isOpen={true}
+          onClose={() => setManualMarkOpen(false)}
+          onSuccess={done}
+          allStudents={allStudents}
+          allTrainers={allTrainers}
+          isTrainer={isTrainer}
+          currentTrainerId={currentTrainerId}
+          currentTrainerName={currentTrainerName}
+        />
+      )}
+      {editingRecord && (
+        <EditAttendanceModal
+          isOpen={true}
+          onClose={() => setEditingRecord(null)}
+          onSuccess={done}
+          record={editingRecord}
+        />
+      )}
+      {deletingRecord && (
+        <DeleteAttendanceModal
+          isOpen={true}
+          onClose={() => setDeletingRecord(null)}
+          onSuccess={done}
+          record={deletingRecord}
+        />
+      )}
       {marking && <MarkAttendanceDialog c={marking} onClose={() => setMarking(null)} onDone={done} />}
       {correcting && <CorrectDialog record={correcting.record} prefill={correcting.prefill} onClose={() => setCorrecting(null)} onDone={done} />}
       {requesting && <RequestDialog record={requesting} onClose={() => setRequesting(null)} onDone={done} />}

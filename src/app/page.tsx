@@ -9,6 +9,7 @@ import { BUSINESS_TIME_ZONE } from "@/lib/constants";
 import { formatDateOnly, formatTimeOnly } from "@/lib/timezones";
 import { addDaysToLocalDate, localDateInZone, zonedTimeToUtc } from "@/lib/zoned-time";
 import { TeacherPortal } from "@/components/teachers/TeacherPortal";
+import { getTrainerWorkingHours } from "@/lib/services/manual-attendance";
 import { AccessDenied } from "@/components/ui/AccessDenied";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -77,15 +78,51 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayIst;
     const from = zonedTimeToUtc(date, 0, BUSINESS_TIME_ZONE);
     const to = zonedTimeToUtc(addDaysToLocalDate(date, 1), 0, BUSINESS_TIME_ZONE);
-    const [sessions, pendingCount] = await Promise.all([
+    const [sessions, pendingCount, enrolments, workingHoursSummary] = await Promise.all([
       prisma.session.findMany({
         where: { teacherId: user.teacherId!, scheduledStartTimeUtc: { gte: from, lt: to } },
         include: { student: true, subject: true, attendance: true },
         orderBy: { scheduledStartTimeUtc: "asc" },
       }),
       prisma.session.count({ where: { teacherId: user.teacherId!, status: "SCHEDULED", scheduledStartTimeUtc: { lt: now } } }),
+      prisma.subjectEnrollment.findMany({
+        where: { teacherId: user.teacherId!, status: "ACTIVE" },
+        include: {
+          student: { select: { id: true, name: true, grade: true, whatsappNumber: true } },
+          subject: { select: { id: true, name: true, code: true } },
+        },
+        orderBy: { student: { name: "asc" } },
+      }),
+      getTrainerWorkingHours(user.teacherId!),
     ]);
-    return <TeacherPortal teacherName={user.name} sessions={sessions} currentDate={date} todayDate={todayIst} pendingCount={pendingCount} />;
+
+    const studentMap = new Map<string, { id: string; name: string; grade: string; whatsappNumber: string | null; assignedSubjects: { id: string; name: string }[] }>();
+    for (const enr of enrolments) {
+      if (!studentMap.has(enr.student.id)) {
+        studentMap.set(enr.student.id, {
+          id: enr.student.id,
+          name: enr.student.name,
+          grade: enr.student.grade,
+          whatsappNumber: enr.student.whatsappNumber,
+          assignedSubjects: [],
+        });
+      }
+      studentMap.get(enr.student.id)!.assignedSubjects.push({ id: enr.subject.id, name: enr.subject.name });
+    }
+    const myStudents = Array.from(studentMap.values());
+
+    return (
+      <TeacherPortal
+        teacherName={user.name}
+        teacherId={user.teacherId!}
+        sessions={sessions}
+        currentDate={date}
+        todayDate={todayIst}
+        pendingCount={pendingCount}
+        myStudents={myStudents}
+        workingHoursSummary={workingHoursSummary}
+      />
+    );
   }
 
   // ---- Staff workspaces ----

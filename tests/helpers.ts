@@ -45,7 +45,7 @@ export async function makeTeacher(name: string, opts: { timeZone?: string; activ
   });
 }
 
-export async function makeStudent(opts: { timeZone?: string; country?: string; status?: string } = {}) {
+export async function makeStudent(opts: { timeZone?: string; country?: string; status?: string; grade?: string } = {}) {
   const guardian = await prisma.guardian.create({
     data: { name: `Test Guardian ${runId}`, whatsappNumber: "+971 50 000 0000", country: opts.country ?? "UAE", timeZone: opts.timeZone ?? "Asia/Dubai" },
   });
@@ -53,7 +53,7 @@ export async function makeStudent(opts: { timeZone?: string; country?: string; s
     data: {
       studentCode: uid("TST"),
       name: `Test Student ${uid("s")}`,
-      grade: "10th Grade",
+      grade: opts.grade ?? "10th Grade",
       guardianId: guardian.id,
       guardianName: guardian.name,
       whatsappNumber: guardian.whatsappNumber,

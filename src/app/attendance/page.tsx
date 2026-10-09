@@ -20,7 +20,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
   const now = new Date();
   const own = user.role === "TEACHER" ? { teacherId: user.teacherId! } : {};
 
-  const [pending, records, requests] = await Promise.all([
+  const [pending, records, requests, allStudentsRaw, allTrainers] = await Promise.all([
     prisma.session.findMany({
       where: { ...own, status: "SCHEDULED", scheduledStartTimeUtc: { lt: now } } satisfies Prisma.SessionWhereInput,
       include: { student: true, teacher: true, subject: true, package: { select: { packageNumber: true, noShowDeductCredit: true, cancellationNoticeHours: true } } },
@@ -36,7 +36,44 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
       take: HISTORY_LIMIT,
     }),
     listCorrectionRequests(user),
+    prisma.student.findMany({
+      where: user.role === "TEACHER"
+        ? { enrolments: { some: { teacherId: user.teacherId!, status: "ACTIVE" } } }
+        : { status: "ACTIVE" },
+      select: {
+        id: true,
+        name: true,
+        grade: true,
+        enrolments: {
+          where: user.role === "TEACHER"
+            ? { teacherId: user.teacherId!, status: "ACTIVE" }
+            : { status: "ACTIVE" },
+          select: {
+            subject: { select: { id: true, name: true } },
+            teacher: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { name: "asc" },
+    }),
+    prisma.teacher.findMany({
+      where: { active: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
+
+  const allStudents = allStudentsRaw.map((s) => ({
+    id: s.id,
+    name: s.name,
+    grade: s.grade,
+    assignedSubjects: s.enrolments.map((e) => ({
+      id: e.subject.id,
+      name: e.subject.name,
+      teacherId: e.teacher?.id ?? null,
+      teacherName: e.teacher?.name ?? null,
+    })),
+  }));
 
   // Pay rates leave the server only for roles allowed to see that trainer's rate.
   const rateFor = (teacher: { id: string; defaultRate: number; gradeRates: string | null }, grade: string) =>
@@ -96,6 +133,10 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
       isTrainer={user.role === "TEACHER"}
       canCorrect={canCorrectAttendance(user.role)}
       focusSessionId={focusSessionId ?? null}
+      allStudents={allStudents}
+      allTrainers={allTrainers}
+      currentTrainerId={user.teacherId ?? undefined}
+      currentTrainerName={user.name}
     />
   );
 }

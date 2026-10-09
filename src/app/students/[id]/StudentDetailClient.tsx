@@ -38,6 +38,9 @@ import { Notice } from "@/components/ui/Notice";
 import { Button } from "@/components/ui/Button";
 import { EnrollSubjectModal } from "@/components/students/EnrollSubjectModal";
 import { WeeklyTimetable } from "@/components/students/WeeklyTimetable";
+import { MarkAttendanceModal } from "@/components/attendance/MarkAttendanceModal";
+import { EditAttendanceModal, AttendanceRecordForEdit } from "@/components/attendance/EditAttendanceModal";
+import { DeleteAttendanceModal } from "@/components/attendance/DeleteAttendanceModal";
 import { SubjectOption, TeacherOption } from "@/components/students/StudentFormModal";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import { MobileTabs } from "@/components/ui/MobileTabs";
@@ -105,6 +108,11 @@ export function StudentDetailClient({
   const [enrollModal, setEnrollModal] = useState<null | { reassign?: { subjectId: string; subjectName: string; teacherId: string | null } }>(null);
   const [unenrollLoadingId, setUnenrollLoadingId] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+
+  // Manual Attendance modal states
+  const [markAttendanceOpen, setMarkAttendanceOpen] = useState(false);
+  const [editingAttendance, setEditingAttendance] = useState<AttendanceRecordForEdit | null>(null);
+  const [deletingAttendance, setDeletingAttendance] = useState<any | null>(null);
 
   if (notFound || !student) {
     return (
@@ -803,35 +811,165 @@ export function StudentDetailClient({
       )}
 
       {activeTab === "attendance" && (
-        <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
-          <h3 className="text-sm font-bold text-white">Attendance & Class Delivery Records</h3>
-          <div className="divide-y divide-slate-800/80">
-            {sessions.filter((s) => s.attendance).length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-400">No attendance records yet.</div>
-            ) : (
-              sessions
-                .filter((s) => s.attendance)
-                .map((ses) => (
-                  <div key={ses.id} className="py-3.5 space-y-1.5 text-xs">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-bold text-white">{ses.subject?.name}</span>
-                        <StatusBadge status={ses.attendance.sessionOutcome} size="sm" />
-                        <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300 border border-slate-700">{ses.attendance.studentAttendance}</span>
-                        {ses.attendance.isReversed && <StatusBadge status="REVERSED" size="sm" />}
+        <div className="space-y-4">
+          {/* Package attendance metrics summary */}
+          {activePackage && (
+            <div className="rounded-2xl border border-teal-500/30 bg-gradient-to-r from-teal-500/10 via-slate-900 to-slate-900/90 p-4 sm:p-5 shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 border-b border-slate-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-teal-400" />
+                  <span className="font-bold text-white text-sm">Package Attendance & Credit Tracking</span>
+                  <span className="rounded-lg bg-slate-800 border border-slate-700 px-2 py-0.5 text-xs font-mono font-bold text-slate-300">
+                    {activePackage.packageNumber}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMarkAttendanceOpen(true)}
+                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-teal-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  Mark Attendance
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                <div className="rounded-xl bg-slate-900/80 p-3 border border-slate-800">
+                  <span className="text-xs text-slate-400 font-medium">Active Package</span>
+                  <div className="text-sm font-bold text-white truncate mt-0.5">{activePackage.packageName}</div>
+                </div>
+                <div className="rounded-xl bg-slate-900/80 p-3 border border-slate-800">
+                  <span className="text-xs text-slate-400 font-medium">Total Package Classes</span>
+                  <div className="text-lg font-bold text-white mt-0.5">{activePackage.totalEntitlement} Classes</div>
+                </div>
+                <div className="rounded-xl bg-slate-900/80 p-3 border border-slate-800">
+                  <span className="text-xs text-slate-400 font-medium">Completed Class Hours</span>
+                  <div className="text-lg font-bold text-slate-300 mt-0.5">{activePackage.totalConsumed} Hours</div>
+                </div>
+                <div className="rounded-xl bg-slate-900/80 p-3 border border-slate-800">
+                  <span className="text-xs text-slate-400 font-medium">Remaining Class Credits</span>
+                  <div className="text-lg font-bold text-teal-300 mt-0.5">{activePackage.totalRemaining} Credits</div>
+                </div>
+              </div>
+              <p className="mt-2.5 text-[11px] text-teal-200/80">
+                ℹ️ Only manually confirmed attendance reduces package credits (1 hr = 1 credit, 2 hrs = 2 credits, 3 hrs = 3 credits).
+              </p>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-slate-800/80 bg-[#0c1220]/90 p-4 sm:p-6 shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-teal-400" />
+                Attendance History & Class Logs ({sessions.filter((s) => s.attendance).length})
+              </h3>
+              {!activePackage && (
+                <button
+                  type="button"
+                  onClick={() => setMarkAttendanceOpen(true)}
+                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-teal-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  Mark Attendance
+                </button>
+              )}
+            </div>
+
+            <div className="divide-y divide-slate-800/80">
+              {sessions.filter((s) => s.attendance).length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-400">No attendance records yet.</div>
+              ) : (
+                sessions
+                  .filter((s) => s.attendance)
+                  .map((ses) => {
+                    const durationHours = (ses.attendance!.actualDurationMinutes / 60).toFixed(1);
+                    const creditsDeducted = Math.max(1, Math.round(ses.attendance!.actualDurationMinutes / 60));
+                    return (
+                      <div key={ses.id} className="py-4 space-y-2 text-xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-white text-sm">{ses.subject?.name}</span>
+                            <span className="rounded-full bg-teal-500/10 border border-teal-500/20 px-2.5 py-0.5 text-xs font-bold text-teal-300">
+                              {durationHours}h Completed ({creditsDeducted} Credit{creditsDeducted > 1 ? "s" : ""})
+                            </span>
+                            <StatusBadge status={ses.attendance!.sessionOutcome} size="sm" />
+                            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300 border border-slate-700">
+                              {ses.attendance!.studentAttendance}
+                            </span>
+                            {ses.attendance!.isReversed && <StatusBadge status="REVERSED" size="sm" />}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditingAttendance({
+                                  id: ses.attendance!.id,
+                                  studentName: student.name,
+                                  subjectName: ses.subject?.name || "Subject",
+                                  teacherName: ses.teacher?.name || "Trainer",
+                                  classDate: ses.scheduledStartTimeUtc.toString(),
+                                  durationMinutes: ses.attendance!.actualDurationMinutes,
+                                  topicCovered: ses.attendance!.topicCovered,
+                                  homework: ses.attendance!.homework || undefined,
+                                  studentProgressNote: ses.attendance!.studentProgressNote || undefined,
+                                })
+                              }
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-700"
+                            >
+                              <Edit2 className="h-3 w-3 text-teal-400" /> Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDeletingAttendance({
+                                  id: ses.attendance!.id,
+                                  studentName: student.name,
+                                  subjectName: ses.subject?.name || "Subject",
+                                  teacherName: ses.teacher?.name || "Trainer",
+                                  durationMinutes: ses.attendance!.actualDurationMinutes,
+                                  hoursCompleted: ses.attendance!.actualDurationMinutes / 60,
+                                })
+                              }
+                              className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-300 hover:bg-rose-500/20"
+                            >
+                              <Trash2 className="h-3 w-3" /> Delete
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-400 text-xs">
+                          <span>
+                            Class Date: <strong className="text-slate-200">{formatInTimeZone(ses.scheduledStartTimeUtc, "Asia/Kolkata")} IST</strong>
+                          </span>
+                          <span>•</span>
+                          <span>
+                            Trainer: <strong className="text-slate-200">{ses.teacher?.name || "Trainer"}</strong>
+                          </span>
+                          <span>•</span>
+                          <span>
+                            Marked by: <strong className="text-slate-300">{ses.attendance!.markedByName} ({ses.attendance!.markedByRole})</strong>
+                          </span>
+                        </div>
+
+                        <div className="text-slate-300">
+                          <strong className="text-white">Topic:</strong> {ses.attendance!.topicCovered}
+                        </div>
+                        {ses.attendance!.homework && (
+                          <div className="text-slate-400">
+                            <strong className="text-slate-300">Homework:</strong> {ses.attendance!.homework}
+                          </div>
+                        )}
+                        {ses.attendance!.studentProgressNote && (
+                          <div className="text-teal-300 bg-teal-500/10 border border-teal-500/20 p-2.5 rounded-xl text-xs">
+                            <strong>Trainer Note:</strong> {ses.attendance!.studentProgressNote}
+                          </div>
+                        )}
                       </div>
-                      <span className="text-slate-400 text-xs">{formatInTimeZone(ses.scheduledStartTimeUtc, "Asia/Kolkata")} IST</span>
-                    </div>
-                    <div className="text-slate-300"><strong className="text-white">Topic:</strong> {ses.attendance.topicCovered}</div>
-                    {ses.attendance.homework && <div className="text-slate-400"><strong className="text-slate-300">Homework:</strong> {ses.attendance.homework}</div>}
-                    {ses.attendance.studentProgressNote && (
-                      <div className="text-teal-300 bg-teal-500/10 border border-teal-500/20 p-2.5 rounded-xl text-xs">
-                        <strong>Trainer Note:</strong> {ses.attendance.studentProgressNote}
-                      </div>
-                    )}
-                  </div>
-                ))
-            )}
+                    );
+                  })
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1082,6 +1220,53 @@ export function StudentDetailClient({
             setEnrollModal(null);
             showSuccess(message);
           }}
+        />
+      )}
+
+      {markAttendanceOpen && (
+        <MarkAttendanceModal
+          isOpen={true}
+          onClose={() => setMarkAttendanceOpen(false)}
+          onSuccess={(msg) => {
+            setMarkAttendanceOpen(false);
+            showSuccess(msg);
+          }}
+          preSelectedStudent={{
+            id: student.id,
+            name: student.name,
+            grade: student.grade,
+            assignedSubjects: student.enrolments.map((e: any) => ({
+              id: e.subject.id,
+              name: e.subject.name,
+              teacherId: e.teacher?.id ?? null,
+              teacherName: e.teacher?.name ?? null,
+            })),
+          }}
+          allTrainers={availableTeachers.map((t) => ({ id: t.id, name: t.name }))}
+        />
+      )}
+
+      {editingAttendance && (
+        <EditAttendanceModal
+          isOpen={true}
+          onClose={() => setEditingAttendance(null)}
+          onSuccess={(msg) => {
+            setEditingAttendance(null);
+            showSuccess(msg);
+          }}
+          record={editingAttendance}
+        />
+      )}
+
+      {deletingAttendance && (
+        <DeleteAttendanceModal
+          isOpen={true}
+          onClose={() => setDeletingAttendance(null)}
+          onSuccess={(msg) => {
+            setDeletingAttendance(null);
+            showSuccess(msg);
+          }}
+          record={deletingAttendance}
         />
       )}
     </div>

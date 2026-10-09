@@ -3,11 +3,36 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, ClipboardList, MessageCircle } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  MessageCircle,
+  Clock,
+  GraduationCap,
+  Users,
+  CheckCircle2,
+  Calendar,
+  Wallet,
+} from "lucide-react";
 import { formatDateOnly, formatTimeOnly } from "@/lib/timezones";
 import { addDaysToLocalDate } from "@/lib/zoned-time";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Notice } from "@/components/ui/Notice";
+import { MarkAttendanceModal } from "@/components/attendance/MarkAttendanceModal";
+
+export interface TeacherPortalStudent {
+  id: string;
+  name: string;
+  grade: string;
+  whatsappNumber: string | null;
+  assignedSubjects: { id: string; name: string }[];
+}
+
+export interface WorkingHoursSummary {
+  totalHours: number;
+  totalClasses: number;
+}
 
 interface PortalSession {
   id: string;
@@ -26,19 +51,25 @@ const OUTCOME_LABELS: Record<string, string> = {
   CANCELLED: "Cancelled",
 };
 
-/** Trainer workspace: pick an IST date, see only your own classes and their attendance state. */
+/** Trainer workspace: view confirmed working hours, assigned students, simple attendance marking, and scheduled timetable. */
 export function TeacherPortal({
   teacherName,
+  teacherId,
   sessions,
   currentDate,
   todayDate,
   pendingCount,
+  myStudents = [],
+  workingHoursSummary = { totalHours: 0, totalClasses: 0 },
 }: {
   teacherName: string;
+  teacherId?: string;
   sessions: PortalSession[];
   currentDate: string;
   todayDate: string;
   pendingCount: number;
+  myStudents?: TeacherPortalStudent[];
+  workingHoursSummary?: WorkingHoursSummary;
 }) {
   const router = useRouter();
   const go = (date: string) => {
@@ -48,98 +79,336 @@ export function TeacherPortal({
   const isToday = currentDate === todayDate;
   const [now] = useState(() => Date.now());
 
-  return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <PageHeader title="My classes" context={`${teacherName} · times in IST`} description="Choose a date to see your classes. Mark attendance after each class." />
+  // Modal state for manual attendance
+  const [markingStudent, setMarkingStudent] = useState<TeacherPortalStudent | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
-      {pendingCount > 0 && (
-        <Notice tone="warning" title={`${pendingCount} past class${pendingCount === 1 ? "" : "es"} still need attendance`}>
-          <Link href="/attendance" className="font-semibold underline">Open attendance</Link>
+  const handleAttendanceSuccess = (msg: string) => {
+    setFeedback(msg);
+    router.refresh();
+  };
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        title="Trainer Dashboard"
+        context={`${teacherName} · times in IST`}
+        description="Mark attendance for your assigned students, track confirmed working hours, and view class schedule."
+      />
+
+      {feedback && (
+        <Notice tone="info" title="Success">
+          <div className="flex items-center justify-between">
+            <span>{feedback}</span>
+            <button
+              type="button"
+              onClick={() => setFeedback(null)}
+              className="text-xs underline font-bold"
+            >
+              Dismiss
+            </button>
+          </div>
         </Notice>
       )}
 
-      <div className="flex flex-wrap items-end gap-2 rounded-card border border-line bg-surface p-3">
+      {pendingCount > 0 && (
+        <Notice
+          tone="warning"
+          title={`${pendingCount} scheduled class${pendingCount === 1 ? "" : "es"} past start time`}
+        >
+          <Link href="/attendance" className="font-semibold underline">
+            Open attendance overview
+          </Link>
+        </Notice>
+      )}
+
+      {/* Trainer Metrics: Confirmed Working Hours & Classes */}
+      <section aria-labelledby="working-hours-heading">
+        <h2 id="working-hours-heading" className="sr-only">
+          Working Hours and Stats
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="rounded-2xl border border-teal-500/30 bg-gradient-to-br from-teal-500/10 via-slate-900 to-slate-900 p-5 shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-teal-300 uppercase tracking-wider">
+                  Total Working Hours
+                </span>
+                <Clock className="h-4 w-4 text-teal-400" />
+              </div>
+              <div className="mt-2 flex items-baseline gap-1">
+                <span className="text-3xl font-extrabold text-white tabular-nums">
+                  {workingHoursSummary.totalHours}
+                </span>
+                <span className="text-sm font-semibold text-slate-300">Hours</span>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-teal-200/80">
+              Updated automatically from confirmed attendance
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Completed Classes
+                </span>
+                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              </div>
+              <div className="mt-2 flex items-baseline gap-1">
+                <span className="text-3xl font-extrabold text-white tabular-nums">
+                  {workingHoursSummary.totalClasses}
+                </span>
+                <span className="text-sm font-semibold text-slate-400">Classes</span>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-400">
+              Confirmed attendance submissions
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Payouts & Salary
+                </span>
+                <Wallet className="h-4 w-4 text-purple-400" />
+              </div>
+              <div className="mt-2">
+                <Link
+                  href="/payouts"
+                  className="inline-flex items-center gap-1.5 text-sm font-bold text-teal-300 hover:text-teal-200 hover:underline"
+                >
+                  View Earnings & Payouts →
+                </Link>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-400">
+              Standard-specific hourly pay rates applied
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* "My Students" Section with Quick Attendance Marking */}
+      <section
+        aria-labelledby="my-students-heading"
+        className="rounded-2xl border border-slate-800/80 bg-slate-900/90 p-5 sm:p-6 shadow-xl space-y-4"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-teal-400" />
+            <h2 id="my-students-heading" className="text-lg font-bold text-white">
+              My Students ({myStudents.length})
+            </h2>
+          </div>
+          <span className="text-xs text-slate-400">
+            Select a student to mark attendance for completed class hours
+          </span>
+        </div>
+
+        {myStudents.length === 0 ? (
+          <p className="py-6 text-center text-xs text-slate-400">
+            No active students currently assigned to you.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {myStudents.map((stud) => (
+              <div
+                key={stud.id}
+                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-4 transition-colors hover:border-slate-700"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-bold text-white text-sm">{stud.name}</h3>
+                      <span className="text-xs text-slate-400">{stud.grade}</span>
+                    </div>
+                    {stud.whatsappNumber && (
+                      <a
+                        href={`https://wa.me/${stud.whatsappNumber.replace(/\D/g, "")}?text=${encodeURIComponent(
+                          `Hello, this is ${teacherName} from Xello Tuition about ${stud.name}'s tuition classes.`
+                        )}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-white"
+                        title="WhatsApp parent"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5 text-teal-400" /> WhatsApp
+                      </a>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {stud.assignedSubjects.map((sub) => (
+                      <span
+                        key={sub.id}
+                        className="rounded-md bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-xs font-semibold text-teal-300"
+                      >
+                        {sub.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-500">1 hr = 1 credit</span>
+                  <button
+                    type="button"
+                    onClick={() => setMarkingStudent(stud)}
+                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl bg-teal-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
+                  >
+                    <ClipboardList className="h-4 w-4" />
+                    Mark Attendance
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Date Picker for Schedule View */}
+      <div className="flex flex-wrap items-end gap-2 rounded-2xl border border-slate-800 bg-slate-900/90 p-3 shadow-lg">
         <button
           type="button"
           onClick={() => go(addDaysToLocalDate(currentDate, -1))}
-          className="inline-flex min-h-[44px] items-center gap-1 rounded-control border border-line-strong px-3 text-sm font-semibold text-ink hover:bg-raised"
+          className="inline-flex min-h-[44px] items-center gap-1 rounded-xl border border-slate-700 px-3 text-sm font-semibold text-slate-200 hover:bg-slate-800"
         >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Previous day
         </button>
         <div className="min-w-[10rem] flex-1">
-          <label htmlFor="portal-date" className="mb-1 block text-sm font-semibold text-ink-muted">Date</label>
+          <label htmlFor="portal-date" className="mb-1 block text-xs font-semibold text-slate-400">
+            Timetable Date (IST)
+          </label>
           <input
             id="portal-date"
             type="date"
             value={currentDate}
             onChange={(e) => go(e.target.value)}
-            className="min-h-[44px] w-full rounded-control border border-line-strong bg-raised px-3 text-base text-ink sm:text-sm"
+            className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base text-white sm:text-sm focus:border-teal-400 focus:outline-none"
           />
         </div>
         <button
           type="button"
           onClick={() => go(addDaysToLocalDate(currentDate, 1))}
-          className="inline-flex min-h-[44px] items-center gap-1 rounded-control border border-line-strong px-3 text-sm font-semibold text-ink hover:bg-raised"
+          className="inline-flex min-h-[44px] items-center gap-1 rounded-xl border border-slate-700 px-3 text-sm font-semibold text-slate-200 hover:bg-slate-800"
         >
           Next day <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </button>
         {!isToday && (
-          <button type="button" onClick={() => go(todayDate)} className="inline-flex min-h-[44px] items-center rounded-control px-3 text-sm font-semibold text-brand-text hover:bg-raised">
+          <button
+            type="button"
+            onClick={() => go(todayDate)}
+            className="inline-flex min-h-[44px] items-center rounded-xl px-3 text-sm font-semibold text-teal-300 hover:bg-slate-800"
+          >
             Today
           </button>
         )}
       </div>
 
-      <section aria-labelledby="portal-day-heading" className="rounded-card border border-line bg-surface">
-        <h2 id="portal-day-heading" className="border-b border-line p-4 text-lg font-semibold text-ink">
-          {isToday ? "Today" : dateLabel} ({sessions.length} class{sessions.length === 1 ? "" : "es"})
-        </h2>
+      {/* Timetable / Schedule Display Section */}
+      <section
+        aria-labelledby="portal-day-heading"
+        className="rounded-2xl border border-slate-800/80 bg-slate-900/90 shadow-xl overflow-hidden"
+      >
+        <div className="border-b border-slate-800 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h2 id="portal-day-heading" className="text-lg font-bold text-white flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-teal-400" />
+            Timetable Schedule: {isToday ? "Today" : dateLabel} ({sessions.length} class{sessions.length === 1 ? "" : "es"})
+          </h2>
+          <span className="text-xs text-slate-400">
+            Display-only schedule · No automatic attendance or credit deduction
+          </span>
+        </div>
+
         {sessions.length === 0 ? (
-          <p className="p-4 text-sm text-ink-muted">No classes assigned to you on {dateLabel}.</p>
+          <p className="p-6 text-sm text-slate-400 text-center">
+            No classes scheduled for you on {dateLabel}.
+          </p>
         ) : (
-          <ul className="divide-y divide-line">
+          <ul className="divide-y divide-slate-800/80">
             {sessions.map((s) => {
               const started = new Date(s.scheduledStartTimeUtc).getTime() <= now;
               const state = s.attendance
-                ? { label: `Attendance submitted: ${OUTCOME_LABELS[s.attendance.sessionOutcome] ?? s.attendance.sessionOutcome}`, cls: "border-emerald-400/40 text-success" }
+                ? {
+                    label: `Attendance Confirmed: ${OUTCOME_LABELS[s.attendance.sessionOutcome] ?? s.attendance.sessionOutcome}`,
+                    cls: "border-emerald-400/40 text-emerald-400 bg-emerald-500/10",
+                  }
                 : s.status === "SCHEDULED" && started
-                  ? { label: "Attendance pending", cls: "border-amber-300/50 text-warning" }
-                  : s.status === "SCHEDULED"
-                    ? { label: "Upcoming", cls: "border-line-strong text-ink-muted" }
-                    : { label: OUTCOME_LABELS[s.status] ?? s.status, cls: "border-line-strong text-ink-muted" };
+                ? { label: "Attendance Pending", cls: "border-amber-300/50 text-amber-300 bg-amber-500/10" }
+                : s.status === "SCHEDULED"
+                ? { label: "Upcoming (Display Only)", cls: "border-slate-700 text-slate-400 bg-slate-800/40" }
+                : { label: OUTCOME_LABELS[s.status] ?? s.status, cls: "border-slate-700 text-slate-400" };
+
+              // Check if student is in myStudents to allow marking
+              const matchedStudent = myStudents.find((ms) => ms.name === s.student.name);
+
               return (
-                <li key={s.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <li
+                  key={s.id}
+                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between hover:bg-slate-800/30 transition-colors"
+                >
                   <div className="min-w-0">
-                    <p className="font-semibold tabular-nums text-ink">
-                      {formatTimeOnly(s.scheduledStartTimeUtc)}–{formatTimeOnly(s.scheduledEndTimeUtc)}
+                    <p className="font-semibold tabular-nums text-white text-sm">
+                      {formatTimeOnly(s.scheduledStartTimeUtc)}–{formatTimeOnly(s.scheduledEndTimeUtc)} IST
                     </p>
-                    <p className="text-ink break-words">
-                      {s.student.name} <span className="text-ink-muted">· {s.subject.name} · {s.student.grade}</span>
+                    <p className="text-white text-sm break-words mt-0.5">
+                      {s.student.name}{" "}
+                      <span className="text-slate-400">
+                        · {s.subject.name} · {s.student.grade}
+                      </span>
                     </p>
-                    <span className={`mt-1 inline-block rounded-full border px-2.5 py-0.5 text-sm ${state.cls}`}>{state.label}</span>
+                    <span
+                      className={`mt-1.5 inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${state.cls}`}
+                    >
+                      {state.label}
+                    </span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 items-center">
                     {s.student.whatsappNumber && (
                       <a
-                        href={`https://wa.me/${s.student.whatsappNumber.replace(/\D/g, "")}?text=${encodeURIComponent(`Hello, this is ${teacherName} from Xello Tuition about ${s.student.name}'s ${s.subject.name} class.`)}`}
+                        href={`https://wa.me/${s.student.whatsappNumber.replace(/\D/g, "")}?text=${encodeURIComponent(
+                          `Hello, this is ${teacherName} from Xello Tuition about ${s.student.name}'s ${s.subject.name} class.`
+                        )}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-control border border-line-strong px-3 text-sm font-semibold text-ink hover:bg-raised"
+                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3 text-xs font-semibold text-slate-300 hover:text-white"
                       >
-                        <MessageCircle className="h-4 w-4" aria-hidden="true" /> WhatsApp<span className="sr-only"> {s.student.name}&apos;s parent</span>
+                        <MessageCircle className="h-3.5 w-3.5 text-teal-400" /> WhatsApp
                       </a>
                     )}
-                    {(s.attendance || (s.status === "SCHEDULED" && started)) && (
+                    {s.attendance ? (
                       <Link
                         href={`/attendance?session=${s.id}`}
-                        className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-control px-3 text-sm font-semibold ${
-                          s.attendance ? "border border-line-strong text-ink hover:bg-raised" : "bg-brand text-brand-ink hover:bg-brand-hover"
-                        }`}
+                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3 text-xs font-semibold text-slate-300 hover:text-white"
                       >
-                        <ClipboardList className="h-4 w-4" aria-hidden="true" />
-                        {s.attendance ? "View attendance" : "Mark attendance"}
-                        <span className="sr-only"> for {s.student.name}</span>
+                        <ClipboardList className="h-3.5 w-3.5" />
+                        View Attendance
                       </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (matchedStudent) {
+                            setMarkingStudent(matchedStudent);
+                          } else {
+                            // Synthesize student option from session
+                            setMarkingStudent({
+                              id: (s as any).studentId || "",
+                              name: s.student.name,
+                              grade: s.student.grade,
+                              whatsappNumber: s.student.whatsappNumber,
+                              assignedSubjects: [{ id: (s as any).subjectId || "", name: s.subject.name }],
+                            });
+                          }
+                        }}
+                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-teal-400 px-3 text-xs font-bold text-slate-950 hover:bg-teal-300 shadow-sm"
+                      >
+                        <ClipboardList className="h-3.5 w-3.5" />
+                        Mark Attendance
+                      </button>
                     )}
                   </div>
                 </li>
@@ -148,6 +417,19 @@ export function TeacherPortal({
           </ul>
         )}
       </section>
+
+      {/* Manual Attendance Modal */}
+      {markingStudent && (
+        <MarkAttendanceModal
+          isOpen={true}
+          onClose={() => setMarkingStudent(null)}
+          onSuccess={handleAttendanceSuccess}
+          preSelectedStudent={markingStudent}
+          isTrainer={true}
+          currentTrainerId={teacherId}
+          currentTrainerName={teacherName}
+        />
+      )}
     </div>
   );
 }

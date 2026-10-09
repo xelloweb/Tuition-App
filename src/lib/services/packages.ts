@@ -26,9 +26,10 @@ export async function getPackageDetailsWithHistory(packageId: string) {
       sessions: {
         select: {
           id: true,
+          durationMinutes: true,
           status: true,
           isCreditConsumed: true,
-          attendance: { select: { studentAttendance: true, sessionOutcome: true } },
+          attendance: { select: { studentAttendance: true, sessionOutcome: true, actualDurationMinutes: true } },
         },
       },
       invoices: {
@@ -49,9 +50,14 @@ export async function getPackageDetailsWithHistory(packageId: string) {
 
   const balances = await calculatePackageBalances(packageId);
 
-  const classesAttended = pkg.sessions.filter(
-    (s) => s.isCreditConsumed || s.status === "COMPLETED" || (s.attendance && (s.attendance.studentAttendance === "PRESENT" || s.attendance.sessionOutcome === "COMPLETED"))
-  ).length;
+  const classesAttended = pkg.sessions
+    .filter(
+      (s) => s.isCreditConsumed || s.status === "COMPLETED" || (s.attendance && (s.attendance.studentAttendance === "PRESENT" || s.attendance.sessionOutcome === "COMPLETED"))
+    )
+    .reduce((sum, s) => {
+      const mins = s.attendance?.actualDurationMinutes ?? s.durationMinutes ?? 60;
+      return sum + Math.max(1, Math.round(mins / 60));
+    }, 0);
 
   const editHistory = await prisma.auditLog.findMany({
     where: {
@@ -146,9 +152,10 @@ export async function editStudentPackage(packageId: string, input: EditPackageIn
         sessions: {
           select: {
             id: true,
+            durationMinutes: true,
             status: true,
             isCreditConsumed: true,
-            attendance: { select: { studentAttendance: true, sessionOutcome: true } },
+            attendance: { select: { studentAttendance: true, sessionOutcome: true, actualDurationMinutes: true } },
           },
         },
         invoices: {
@@ -159,9 +166,14 @@ export async function editStudentPackage(packageId: string, input: EditPackageIn
 
     if (!pkg) throw notFoundError("Package not found.");
 
-    const classesAttended = pkg.sessions.filter(
-      (s) => s.isCreditConsumed || s.status === "COMPLETED" || (s.attendance && (s.attendance.studentAttendance === "PRESENT" || s.attendance.sessionOutcome === "COMPLETED"))
-    ).length;
+    const classesAttended = pkg.sessions
+      .filter(
+        (s) => s.isCreditConsumed || s.status === "COMPLETED" || (s.attendance && (s.attendance.studentAttendance === "PRESENT" || s.attendance.sessionOutcome === "COMPLETED"))
+      )
+      .reduce((sum, s) => {
+        const mins = s.attendance?.actualDurationMinutes ?? s.durationMinutes ?? 60;
+        return sum + Math.max(1, Math.round(mins / 60));
+      }, 0);
 
     // Warning and confirmation if updated classes are fewer than already attended
     if (newTotalCredits < classesAttended && !input.confirmFewerThanAttended) {

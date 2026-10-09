@@ -64,9 +64,11 @@ export async function calculatePackageBalances(
     const subCalc = subjectMap.get(session.subjectId);
 
     if (session.isCreditConsumed) {
-      totalConsumed++;
+      const durationMins = session.attendance?.actualDurationMinutes ?? session.durationMinutes ?? 60;
+      const credits = Math.max(1, Math.round(durationMins / 60));
+      totalConsumed += credits;
       if (subCalc) {
-        subCalc.consumedCredits++;
+        subCalc.consumedCredits += credits;
       }
     } else if (session.isCreditReserved && session.status === "SCHEDULED") {
       totalReserved++;
