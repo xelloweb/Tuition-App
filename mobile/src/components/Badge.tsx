@@ -4,7 +4,7 @@ import { Colors, BorderRadius, Spacing } from "../config/theme";
 
 interface BadgeProps {
   label: string;
-  variant?: "primary" | "success" | "warning" | "danger" | "info" | "neutral";
+  variant?: "primary" | "secondary" | "success" | "warning" | "danger" | "info" | "neutral";
   color?: string;
   size?: "sm" | "md";
 }
@@ -20,6 +20,11 @@ export function Badge({ label, variant = "primary", color, size = "md" }: BadgeP
     textColor = color;
   } else {
     switch (variant) {
+      case "secondary":
+        bgColor = Colors.secondaryLight;
+        borderColor = Colors.secondaryBorder;
+        textColor = Colors.secondary;
+        break;
       case "success":
         bgColor = Colors.successLight;
         borderColor = Colors.successBorder;

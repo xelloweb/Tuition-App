@@ -4,13 +4,22 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { theme } from "../config/theme";
 import { AdminDashboardScreen } from "../screens/admin/AdminDashboardScreen";
 import { AdminStudentsScreen } from "../screens/admin/AdminStudentsScreen";
+import { AdminTimetableScreen } from "../screens/admin/AdminTimetableScreen";
+import { AdminBillingScreen } from "../screens/admin/AdminBillingScreen";
+import { AdminMoreMenuScreen } from "../screens/admin/AdminMoreMenuScreen";
 import { AdminTeachersScreen } from "../screens/admin/AdminTeachersScreen";
+import { AdminAttendanceScreen } from "../screens/admin/AdminAttendanceScreen";
+import { AdminAdmissionsScreen } from "../screens/admin/AdminAdmissionsScreen";
+import { AdminPackagesScreen } from "../screens/admin/AdminPackagesScreen";
+import { AdminPayoutsScreen } from "../screens/admin/AdminPayoutsScreen";
+import { AdminReportsScreen } from "../screens/admin/AdminReportsScreen";
 import { AdminProfileScreen } from "../screens/admin/AdminProfileScreen";
 import {
   LayoutDashboard,
   Users,
-  GraduationCap,
-  Shield,
+  Calendar,
+  Receipt,
+  Layers,
 } from "lucide-react-native";
 
 const Tab = createBottomTabNavigator();
@@ -29,11 +38,11 @@ function AdminTabs() {
           paddingBottom: 8,
           paddingTop: 8,
         },
-        tabBarActiveTintColor: theme.colors.teal,
+        tabBarActiveTintColor: theme.colors.brandCyan,
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "600",
+          fontSize: 10,
+          fontWeight: "700",
         },
       }}
     >
@@ -58,22 +67,32 @@ function AdminTabs() {
         }}
       />
       <Tab.Screen
-        name="AdminTeachers"
-        component={AdminTeachersScreen}
+        name="AdminTimetable"
+        component={AdminTimetableScreen}
         options={{
-          tabBarLabel: "Trainers",
+          tabBarLabel: "Timetable",
           tabBarIcon: ({ color, size }: { color: string; size: number }) => (
-            <GraduationCap size={size} color={color} />
+            <Calendar size={size} color={color} />
           ),
         }}
       />
       <Tab.Screen
-        name="AdminProfile"
-        component={AdminProfileScreen}
+        name="AdminBilling"
+        component={AdminBillingScreen}
         options={{
-          tabBarLabel: "Profile",
+          tabBarLabel: "Invoices",
           tabBarIcon: ({ color, size }: { color: string; size: number }) => (
-            <Shield size={size} color={color} />
+            <Receipt size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="AdminMoreMenu"
+        component={AdminMoreMenuScreen}
+        options={{
+          tabBarLabel: "All Modules",
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+            <Layers size={size} color={color} />
           ),
         }}
       />
@@ -85,6 +104,13 @@ export function AdminNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="AdminTabs" component={AdminTabs} />
+      <Stack.Screen name="AdminTeachers" component={AdminTeachersScreen} />
+      <Stack.Screen name="AdminAttendance" component={AdminAttendanceScreen} />
+      <Stack.Screen name="AdminAdmissions" component={AdminAdmissionsScreen} />
+      <Stack.Screen name="AdminPackages" component={AdminPackagesScreen} />
+      <Stack.Screen name="AdminPayouts" component={AdminPayoutsScreen} />
+      <Stack.Screen name="AdminReports" component={AdminReportsScreen} />
+      <Stack.Screen name="AdminProfile" component={AdminProfileScreen} />
     </Stack.Navigator>
   );
 }

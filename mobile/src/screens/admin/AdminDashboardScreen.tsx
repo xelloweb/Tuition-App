@@ -23,6 +23,10 @@ import {
   AlertCircle,
   Clock,
   CheckCircle2,
+  Receipt,
+  Inbox,
+  DollarSign,
+  Layers,
 } from "lucide-react-native";
 
 export function AdminDashboardScreen({ navigation }: any) {
@@ -102,7 +106,7 @@ export function AdminDashboardScreen({ navigation }: any) {
             {/* Teaching Hours Stat */}
             <Card style={styles.monthHoursCard}>
               <View style={styles.monthHoursHeader}>
-                <Clock size={20} color={theme.colors.teal} />
+                <Clock size={20} color={theme.colors.brandCyan} />
                 <Text style={styles.monthHoursTitle}>Teaching Hours Delivered This Month</Text>
               </View>
               <Text style={styles.monthHoursValue}>
@@ -112,6 +116,78 @@ export function AdminDashboardScreen({ navigation }: any) {
                 {data?.stats?.completedClassesThisMonth ?? 0} completed classes across all subjects
               </Text>
             </Card>
+
+            {/* Quick Actions Hub */}
+            <View style={styles.quickActionsSection}>
+              <Text style={styles.sectionTitle}>QUICK OPERATIONS</Text>
+              <View style={styles.quickGrid}>
+                <TouchableOpacity
+                  style={styles.quickTile}
+                  onPress={() => navigation.navigate("AdminBilling")}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.tileIconWrap, { backgroundColor: "rgba(203, 220, 66, 0.15)" }]}>
+                    <Receipt size={18} color={theme.colors.brandLime} />
+                  </View>
+                  <Text style={styles.tileLabel}>Invoices</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickTile}
+                  onPress={() => navigation.navigate("AdminTimetable")}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.tileIconWrap, { backgroundColor: "rgba(64, 174, 227, 0.15)" }]}>
+                    <Calendar size={18} color={theme.colors.brandCyan} />
+                  </View>
+                  <Text style={styles.tileLabel}>Timetable</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickTile}
+                  onPress={() => navigation.navigate("AdminAttendance")}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.tileIconWrap, { backgroundColor: "rgba(16, 185, 129, 0.15)" }]}>
+                    <CheckCircle2 size={18} color={theme.colors.success} />
+                  </View>
+                  <Text style={styles.tileLabel}>Attendance</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickTile}
+                  onPress={() => navigation.navigate("AdminAdmissions")}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.tileIconWrap, { backgroundColor: "rgba(245, 158, 11, 0.15)" }]}>
+                    <Inbox size={18} color={theme.colors.warning} />
+                  </View>
+                  <Text style={styles.tileLabel}>Admissions</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickTile}
+                  onPress={() => navigation.navigate("AdminPayouts")}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.tileIconWrap, { backgroundColor: "rgba(139, 92, 246, 0.15)" }]}>
+                    <DollarSign size={18} color={theme.colors.purple} />
+                  </View>
+                  <Text style={styles.tileLabel}>Payouts</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickTile}
+                  onPress={() => navigation.navigate("AdminMoreMenu")}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.tileIconWrap, { backgroundColor: "rgba(255, 255, 255, 0.1)" }]}>
+                    <Layers size={18} color={theme.colors.text} />
+                  </View>
+                  <Text style={styles.tileLabel}>All Features</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
 
             {/* Today's Schedule Overview */}
             <View style={styles.sectionHeader}>
@@ -267,5 +343,36 @@ const styles = StyleSheet.create({
   emptyText: {
     color: theme.colors.textMuted,
     fontSize: theme.fontSize.sm,
+  },
+  quickActionsSection: {
+    marginBottom: theme.spacing.lg,
+  },
+  quickGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+  quickTile: {
+    width: "31%",
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.borderRadius.lg,
+    paddingVertical: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  tileIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  tileLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: theme.colors.text,
   },
 });
