@@ -225,7 +225,7 @@ export function TimetableClient({
           }`}
         >
           <span>{banner.text}</span>
-          <button onClick={() => setBanner(null)} aria-label="Dismiss message" className="p-1 shrink-0"><X className="h-4 w-4" /></button>
+          <button onClick={() => setBanner(null)} aria-label="Dismiss message" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-1 shrink-0"><X className="h-4 w-4" /></button>
         </div>
       )}
 
@@ -241,7 +241,7 @@ export function TimetableClient({
           value={selectedSubject}
           aria-label="Filter by subject"
           onChange={(e) => setSelectedSubject(e.target.value)}
-          className="min-h-[44px] rounded-xl border border-slate-700 bg-slate-800/90 px-3 py-1.5 font-medium text-slate-200 focus:outline-hidden"
+          className="min-h-[44px] rounded-xl border border-slate-700 bg-slate-800/90 px-3 py-1.5 text-base font-medium text-slate-200 focus:outline-hidden sm:text-sm"
         >
           <option value="ALL" className="bg-slate-900 text-slate-200">All Subjects</option>
           {subjects.map((s) => (
@@ -254,7 +254,7 @@ export function TimetableClient({
           value={selectedTeacher}
           aria-label="Filter by trainer"
           onChange={(e) => setSelectedTeacher(e.target.value)}
-          className="min-h-[44px] rounded-xl border border-slate-700 bg-slate-800/90 px-3 py-1.5 font-medium text-slate-200 focus:outline-hidden"
+          className="min-h-[44px] rounded-xl border border-slate-700 bg-slate-800/90 px-3 py-1.5 text-base font-medium text-slate-200 focus:outline-hidden sm:text-sm"
         >
           <option value="ALL" className="bg-slate-900 text-slate-200">All trainers</option>
           {teachers.map((t) => (
@@ -267,7 +267,7 @@ export function TimetableClient({
           value={selectedStatus}
           aria-label="Filter by status"
           onChange={(e) => setSelectedStatus(e.target.value)}
-          className="min-h-[44px] rounded-xl border border-slate-700 bg-slate-800/90 px-3 py-1.5 font-medium text-slate-200 focus:outline-hidden"
+          className="min-h-[44px] rounded-xl border border-slate-700 bg-slate-800/90 px-3 py-1.5 text-base font-medium text-slate-200 focus:outline-hidden sm:text-sm"
         >
           <option value="ALL" className="bg-slate-900 text-slate-200">All Statuses</option>
           <option value="SCHEDULED" className="bg-slate-900 text-slate-200">Scheduled</option>
@@ -366,10 +366,10 @@ export function TimetableClient({
                         )}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-xl bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/25 flex items-center gap-1.5 transition-all shadow-sm"
+                        className="min-h-[44px] rounded-xl bg-emerald-500/15 border border-emerald-500/30 px-3 py-2 text-sm font-bold text-emerald-300 hover:bg-emerald-500/25 flex items-center gap-1.5 transition-all shadow-sm"
                         title={`WhatsApp ${ses.student.name} (${ses.student.whatsappNumber})`}
                       >
-                        <MessageCircle className="h-3.5 w-3.5" />
+                        <MessageCircle className="h-4 w-4" aria-hidden="true" />
                         <span>WhatsApp</span>
                       </a>
                     )}
@@ -424,7 +424,7 @@ export function TimetableClient({
               </h2>
               <button
                 onClick={() => setScheduleModalOpen(false)}
-                className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -544,14 +544,14 @@ export function TimetableClient({
                 <button
                   type="button"
                   onClick={() => setScheduleModalOpen(false)}
-                  className="rounded-xl px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  className="inline-flex items-center min-h-[44px] rounded-xl px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="rounded-xl bg-teal-400 px-5 py-2.5 font-bold text-slate-950 hover:brightness-110 disabled:opacity-50 transition-all active:scale-95"
+                  className="inline-flex items-center min-h-[44px] rounded-xl bg-teal-400 px-5 py-2.5 font-bold text-slate-950 hover:brightness-110 disabled:opacity-50 transition-all active:scale-95"
                 >
                   {loading ? "Checking Conflicts..." : "Confirm Booking"}
                 </button>
@@ -569,7 +569,7 @@ export function TimetableClient({
               </h2>
               <button
                 onClick={() => setRescheduleSession(null)}
-                className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -622,14 +622,14 @@ export function TimetableClient({
                 <button
                   type="button"
                   onClick={() => setRescheduleSession(null)}
-                  className="rounded-xl px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  className="inline-flex items-center min-h-[44px] rounded-xl px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="rounded-xl bg-teal-400 px-5 py-2.5 font-bold text-slate-950 hover:brightness-110 disabled:opacity-50 transition-all active:scale-95"
+                  className="inline-flex items-center min-h-[44px] rounded-xl bg-teal-400 px-5 py-2.5 font-bold text-slate-950 hover:brightness-110 disabled:opacity-50 transition-all active:scale-95"
                 >
                   {loading ? "Rescheduling..." : "Save Replacement"}
                 </button>

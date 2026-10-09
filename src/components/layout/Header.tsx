@@ -21,7 +21,7 @@ export function Header({ currentUser, istToday }: { currentUser: CurrentUser; is
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between gap-3 border-b border-line bg-surface px-3 sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
-        <Link href="/" className="flex items-center gap-2 rounded-control lg:hidden">
+        <Link href="/" className="flex min-h-[44px] items-center gap-2 rounded-control lg:hidden">
           <Image
             src="/brand/xello-mark.png"
             alt="Xello Logo"
@@ -49,14 +49,14 @@ export function Header({ currentUser, istToday }: { currentUser: CurrentUser; is
         </span>
         <Link
           href="/account"
-          className="hidden min-h-[40px] items-center rounded-control border border-line-strong px-3 text-sm font-semibold text-ink hover:bg-raised sm:inline-flex"
+          className="hidden min-h-[44px] items-center rounded-control border border-line-strong px-3 text-sm font-semibold text-ink hover:bg-raised sm:inline-flex"
         >
           My account
         </Link>
         <button
           type="button"
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="hidden min-h-[40px] items-center gap-1.5 rounded-control border border-rose-400/50 px-3 text-sm font-semibold text-danger hover:bg-rose-400/10 sm:inline-flex"
+          className="hidden min-h-[44px] items-center gap-1.5 rounded-control border border-rose-400/50 px-3 text-sm font-semibold text-danger hover:bg-rose-400/10 sm:inline-flex"
         >
           <LogOut className="h-4 w-4" aria-hidden="true" />
           Sign out

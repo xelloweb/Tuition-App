@@ -146,7 +146,7 @@ export function TrainerImportClient() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             spellCheck={false}
-            className="w-full rounded-control border border-line-strong bg-raised p-3 font-mono text-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/60"
+            className="w-full rounded-control border border-line-strong bg-raised p-3 font-mono text-base sm:text-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/60"
           />
           <Button icon={FileSpreadsheet} loading={working === "checking"} onClick={check} disabled={!text.trim()}>
             Check rows

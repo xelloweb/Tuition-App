@@ -325,7 +325,7 @@ export function IntakeForm({ subjects, formToken, privacyUrl, preview, todayIst 
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
                 {errorKeys.map((key) => (
                   <li key={key}>
-                    <button type="button" className="text-left text-danger underline" onClick={() => focusField(key)}>
+                    <button type="button" className="inline-flex items-center min-h-[44px] text-left text-danger underline" onClick={() => focusField(key)}>
                       {labelFor(key)}: {errors[key]}
                     </button>
                   </li>

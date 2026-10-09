@@ -257,7 +257,8 @@ export function EditPackageModal({
             <button
               type="button"
               onClick={() => setActiveTab("edit")}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+              aria-pressed={activeTab === "edit"}
+              className={`min-h-[44px] rounded-lg px-3 py-2 text-sm font-semibold transition-all ${
                 activeTab === "edit" ? "bg-teal-400 text-slate-950 shadow-xs" : "text-slate-400 hover:text-white"
               }`}
             >
@@ -266,19 +267,20 @@ export function EditPackageModal({
             <button
               type="button"
               onClick={() => setActiveTab("history")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+              aria-pressed={activeTab === "history"}
+              className={`flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-all ${
                 activeTab === "history" ? "bg-teal-400 text-slate-950 shadow-xs" : "text-slate-400 hover:text-white"
               }`}
             >
-              <History className="h-3.5 w-3.5" />
+              <History className="h-4 w-4" aria-hidden="true" />
               Edit History {history.length > 0 && `(${history.length})`}
             </button>
           </div>
         </div>
 
         {errorMsg && (
-          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/40 p-3 text-xs text-rose-200 flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/40 p-3 text-sm text-rose-200 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" aria-hidden="true" />
             <span>{errorMsg}</span>
           </div>
         )}
@@ -288,10 +290,10 @@ export function EditPackageModal({
           <form onSubmit={handleSave} className="space-y-5">
             {/* Package Presets */}
             <div className="space-y-2 rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+              <span id="package-type-label" className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
                 Select Package Type
               </span>
-              <div className="flex flex-wrap gap-2">
+              <div role="group" aria-labelledby="package-type-label" className="flex flex-wrap gap-2">
                 {PACKAGE_PRESETS.map((preset) => {
                   const isSelected = selectedPreset?.label === preset.label;
                   return (
@@ -299,7 +301,8 @@ export function EditPackageModal({
                       key={preset.label}
                       type="button"
                       onClick={() => applyPreset(preset)}
-                      className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all border ${
+                      aria-pressed={isSelected}
+                      className={`min-h-[44px] rounded-xl px-3 py-2 text-left text-sm font-semibold transition-all border ${
                         isSelected
                           ? "bg-teal-400 text-slate-950 border-teal-400 shadow-sm"
                           : "bg-slate-950/70 border-slate-800 text-slate-300 hover:border-teal-500/40 hover:text-white"
@@ -314,7 +317,8 @@ export function EditPackageModal({
                   onClick={() => {
                     if (selectedPreset) setName("Custom Package");
                   }}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all border ${
+                  aria-pressed={!selectedPreset}
+                  className={`min-h-[44px] rounded-xl px-3 py-2 text-sm font-semibold transition-all border ${
                     !selectedPreset
                       ? "bg-teal-400/20 text-teal-300 border-teal-500/50"
                       : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-white"
@@ -439,26 +443,28 @@ export function EditPackageModal({
             {/* Subject Allocations breakdown (if multiple enrolled subjects) */}
             {pkg.subjects && pkg.subjects.length > 1 && (
               <div className="space-y-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-300">
+                <div className="flex flex-wrap items-center justify-between gap-x-3">
+                  <span className="text-sm font-semibold text-slate-300">
                     Subject Class Distribution ({numTotalCredits} classes total)
                   </span>
                   <button
                     type="button"
                     onClick={() => rebalanceAllocations(numTotalCredits)}
-                    className="text-xs text-teal-400 hover:underline font-semibold"
+                    className="inline-flex min-h-[44px] items-center text-sm text-teal-400 hover:underline font-semibold"
                   >
                     Auto-balance
                   </button>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                <div className="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
                   {pkg.subjects.map((sub) => (
-                    <div key={sub.subjectId} className="rounded-xl border border-slate-800 bg-slate-900/80 p-2 text-xs space-y-1">
-                      <span className="font-semibold text-white truncate block">{sub.subjectName}</span>
-                      <div className="flex items-center justify-between text-slate-400">
-                        <span>Classes:</span>
+                    <div key={sub.subjectId} className="rounded-xl border border-slate-800 bg-slate-900/80 p-2 text-sm space-y-1">
+                      <span className="font-semibold text-white break-words block">{sub.subjectName}</span>
+                      <div className="flex items-center justify-between gap-2 text-slate-400">
+                        <span aria-hidden="true">Classes:</span>
                         <input
+                          aria-label={`${sub.subjectName} classes`}
                           type="number"
+                          inputMode="numeric"
                           min={0}
                           value={allocations[sub.subjectId] ?? sub.allocatedCredits}
                           onChange={(e) =>
@@ -467,7 +473,7 @@ export function EditPackageModal({
                               [sub.subjectId]: Math.max(0, Number(e.target.value) || 0),
                             }))
                           }
-                          className="w-16 rounded-lg bg-slate-950 border border-slate-700 px-2 py-0.5 text-center text-white font-bold"
+                          className="min-h-[44px] w-20 rounded-lg bg-slate-950 border border-slate-600 px-2 py-1 text-center text-base text-white font-bold focus:outline-none focus:ring-2 focus:ring-brand/60 sm:text-sm"
                         />
                       </div>
                     </div>
@@ -487,30 +493,30 @@ export function EditPackageModal({
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                 <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-2.5">
-                  <span className="text-[11px] text-slate-400 block">Total Classes</span>
+                  <span className="text-xs text-slate-400 block">Total Classes</span>
                   <span className="text-base font-bold text-white tabular-nums">{numTotalCredits}</span>
                 </div>
                 <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-2.5">
-                  <span className="text-[11px] text-slate-400 block">Classes Attended</span>
+                  <span className="text-xs text-slate-400 block">Classes Attended</span>
                   <span className="text-base font-bold text-slate-300 tabular-nums">{classesAttended}</span>
                 </div>
                 <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-2.5">
-                  <span className="text-[11px] text-teal-400 block">Remaining Classes</span>
+                  <span className="text-xs text-teal-400 block">Remaining Classes</span>
                   <span className={`text-base font-bold tabular-nums ${remainingClasses < 0 ? "text-rose-400" : "text-teal-300"}`}>
                     {remainingClasses}
                   </span>
-                  <span className="text-[10px] text-slate-500 block">Total - Attended</span>
+                  <span className="text-xs text-slate-400 block">Total - Attended</span>
                 </div>
                 <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-2.5">
-                  <span className="text-[11px] text-blue-400 block">Outstanding Balance</span>
+                  <span className="text-xs text-blue-400 block">Outstanding Balance</span>
                   <span className="text-base font-bold text-white tabular-nums">
                     ₹{outstandingBalance.toLocaleString("en-IN")}
                   </span>
-                  <span className="text-[10px] text-slate-500 block">Paid: ₹{totalPaid.toLocaleString("en-IN")}</span>
+                  <span className="text-xs text-slate-400 block">Paid: ₹{totalPaid.toLocaleString("en-IN")}</span>
                 </div>
               </div>
 
-              <p className="text-[11px] text-slate-400 leading-relaxed border-t border-teal-500/20 pt-2">
+              <p className="text-xs text-slate-400 leading-relaxed border-t border-teal-500/20 pt-2">
                 ✓ Preserves all previously recorded payments (<strong>₹{totalPaid.toLocaleString("en-IN")}</strong>) and completed classes (<strong>{classesAttended}</strong>).
                 Outstanding balance recalculates automatically as <strong>₹{numPrice.toLocaleString("en-IN")} - ₹{totalPaid.toLocaleString("en-IN")} = ₹{outstandingBalance.toLocaleString("en-IN")}</strong>.
               </p>
@@ -519,7 +525,7 @@ export function EditPackageModal({
             {/* Warning if fewer than attended (Requirement 10) */}
             {isFewerThanAttended && (
               <div className="rounded-2xl border border-amber-500/50 bg-amber-500/10 p-3.5 space-y-2">
-                <div className="flex items-start gap-2 text-xs text-amber-200">
+                <div className="flex items-start gap-2 text-sm text-amber-200">
                   <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
                   <div>
                     <strong className="text-amber-300 block">Fewer Classes Than Already Attended:</strong>
@@ -527,12 +533,12 @@ export function EditPackageModal({
                     Updating the total to <strong>{numTotalCredits} classes</strong> will result in attended classes exceeding the new total limit ({remainingClasses} remaining).
                   </div>
                 </div>
-                <label className="flex items-center gap-2 text-xs font-semibold text-white pt-1 cursor-pointer">
+                <label className="flex min-h-[44px] items-center gap-3 text-sm font-semibold text-white cursor-pointer">
                   <input
                     type="checkbox"
                     checked={confirmFewer}
                     onChange={(e) => setConfirmFewer(e.target.checked)}
-                    className="h-4 w-4 accent-amber-400 rounded"
+                    className="h-5 w-5 shrink-0 accent-amber-400 rounded"
                   />
                   <span>I understand and confirm updating total classes below attended classes</span>
                 </label>
@@ -540,7 +546,7 @@ export function EditPackageModal({
             )}
 
             {/* Footer Buttons */}
-            <div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-4">
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-800 pt-4">
               <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
                 Cancel
               </Button>
@@ -578,7 +584,7 @@ export function EditPackageModal({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
                       <div className="rounded-lg bg-slate-950/70 p-2.5 border border-slate-800 space-y-1">
-                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
                           Previous Details
                         </span>
                         <div className="text-slate-300 space-y-0.5">
@@ -590,7 +596,7 @@ export function EditPackageModal({
                       </div>
 
                       <div className="rounded-lg bg-teal-500/5 p-2.5 border border-teal-500/20 space-y-1">
-                        <span className="text-[11px] font-semibold text-teal-400 uppercase tracking-wider block">
+                        <span className="text-xs font-semibold text-teal-400 uppercase tracking-wider block">
                           Updated Details
                         </span>
                         <div className="text-slate-200 space-y-0.5">

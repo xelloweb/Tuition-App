@@ -222,7 +222,7 @@ export function TeachersClient({
             )}
             <span>{banner.text}</span>
           </div>
-          <button onClick={() => setBanner(null)} aria-label="Dismiss message" className="p-1 hover:text-white shrink-0">
+          <button onClick={() => setBanner(null)} aria-label="Dismiss message" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-1 hover:text-white shrink-0">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -240,7 +240,7 @@ export function TeachersClient({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by name, subject, class, place or email"
                 aria-label="Search trainers"
-                className="w-full rounded-xl border border-slate-700 bg-slate-900/90 pl-10 pr-3 py-2.5 text-xs sm:text-sm text-white placeholder:text-slate-400 focus:outline-hidden focus:border-teal-500 focus:ring-1 focus:ring-teal-500 min-h-[44px]"
+                className="w-full rounded-xl border border-slate-700 bg-slate-900/90 min-h-[44px] pl-10 pr-3 py-2.5 text-base sm:text-sm text-white placeholder:text-slate-400 focus:outline-hidden focus:border-teal-500 focus:ring-1 focus:ring-teal-500 min-h-[44px]"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -248,7 +248,7 @@ export function TeachersClient({
                 value={selectedSubject}
                 onChange={(e) => setSelectedSubject(e.target.value)}
                 aria-label="Filter by subject"
-                className="flex-1 sm:flex-none rounded-xl border border-slate-700 bg-slate-800/90 px-3.5 py-2.5 min-h-[44px] text-xs font-medium text-slate-200 focus:outline-hidden"
+                className="flex-1 sm:flex-none rounded-xl border border-slate-700 bg-slate-800/90 px-3.5 py-2.5 min-h-[44px] text-base sm:text-sm font-medium text-slate-200 focus:outline-hidden"
               >
                 <option value="ALL" className="bg-slate-900 text-slate-200">All Subjects</option>
                 {allSubjects.map((sub) => (
@@ -259,7 +259,7 @@ export function TeachersClient({
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
                 aria-label="Filter by status"
-                className="flex-1 sm:flex-none rounded-xl border border-slate-700 bg-slate-800/90 px-3.5 py-2.5 min-h-[44px] text-xs font-medium text-slate-200 focus:outline-hidden"
+                className="flex-1 sm:flex-none rounded-xl border border-slate-700 bg-slate-800/90 px-3.5 py-2.5 min-h-[44px] text-base sm:text-sm font-medium text-slate-200 focus:outline-hidden"
               >
                 <option value="ALL" className="bg-slate-900 text-slate-200">All Statuses</option>
                 <option value="ACTIVE" className="bg-slate-900 text-slate-200">Active</option>
@@ -415,7 +415,7 @@ export function TeachersClient({
                     <button
                       type="button"
                       onClick={() => handleInvite(teacher)}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-teal-500/30 bg-teal-500/10 px-3 py-2 min-h-[40px] text-xs font-semibold text-teal-300 hover:text-teal-200 hover:bg-teal-500/20 transition-colors"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-teal-500/30 bg-teal-500/10 px-3 py-2 min-h-[44px] text-xs font-semibold text-teal-300 hover:text-teal-200 hover:bg-teal-500/20 transition-colors"
                       title="Send Invite"
                     >
                       <Mail className="h-3.5 w-3.5" />
@@ -424,7 +424,7 @@ export function TeachersClient({
                     <button
                       type="button"
                       onClick={() => setEditingTeacher(teacher)}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/90 py-2 min-h-[40px] text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-700 transition-colors"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/90 py-2 min-h-[44px] text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-700 transition-colors"
                     >
                       <Edit2 className="h-3.5 w-3.5 text-teal-400" />
                       Edit Details
@@ -434,7 +434,7 @@ export function TeachersClient({
                         type="button"
                         onClick={() => handleToggleActive(teacher)}
                         disabled={togglingId === teacher.id}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 min-h-[40px] text-xs font-semibold text-amber-200 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 min-h-[44px] text-xs font-semibold text-amber-200 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
                         title={teacher.active ? "Deactivate (keeps history)" : "Reactivate"}
                       >
                         <Power className="h-3.5 w-3.5" />
@@ -447,7 +447,7 @@ export function TeachersClient({
                           setDeleteError(null);
                           setDeletingTeacher(teacher);
                         }}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 min-h-[40px] text-xs font-semibold text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 transition-colors"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 min-h-[44px] text-xs font-semibold text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 transition-colors"
                         title="Remove trainer (only possible before any assignments)"
                       >
                         <Trash2 className="h-3.5 w-3.5" />

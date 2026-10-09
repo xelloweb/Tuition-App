@@ -125,9 +125,9 @@ export function PackagesClient({ packages, templates, needsSetup = [], canEdit =
                 className="rounded-2xl border border-slate-800/80 bg-slate-900 p-6 shadow-xl hover:border-slate-700/80 transition-all space-y-5"
               >
                 {/* Card Top: Package Info & Student */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
-                  <div>
-                    <div className="flex items-center gap-2">
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-base font-bold text-white">
                         {pkg.packageName}
                       </span>
@@ -148,7 +148,7 @@ export function PackagesClient({ packages, templates, needsSetup = [], canEdit =
                   </div>
 
                   {/* Actions: Reallocate & View Ledger */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 xl:shrink-0">
                     <button
                       onClick={() =>
                         setSelectedForLedger({
@@ -157,25 +157,25 @@ export function PackagesClient({ packages, templates, needsSetup = [], canEdit =
                           name: pkg.packageName,
                         })
                       }
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white shadow-xs transition-all active:scale-95"
+                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700 hover:text-white shadow-xs transition-all active:scale-95"
                     >
-                      <History className="h-3.5 w-3.5 text-slate-400" />
+                      <History className="h-4 w-4 text-slate-400" aria-hidden="true" />
                       Credit Ledger
                     </button>
                     {canEdit && (
                       <button
                         onClick={() => setSelectedForEdit(pkg)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-teal-500/30 bg-teal-500/10 px-3.5 py-2 text-xs font-bold text-teal-300 hover:bg-teal-500/20 hover:text-teal-200 shadow-xs transition-all active:scale-95"
+                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-teal-500/30 bg-teal-500/10 px-3.5 py-2 text-sm font-bold text-teal-300 hover:bg-teal-500/20 hover:text-teal-200 shadow-xs transition-all active:scale-95"
                       >
-                        <Edit2 className="h-3.5 w-3.5" />
+                        <Edit2 className="h-4 w-4" aria-hidden="true" />
                         Edit Package
                       </button>
                     )}
                     <button
                       onClick={() => setSelectedForRealloc(pkg)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-teal-500 px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-teal-400 shadow-xs transition-all active:scale-95"
+                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-teal-500 px-3.5 py-2 text-sm font-bold text-slate-950 hover:bg-teal-400 shadow-xs transition-all active:scale-95"
                     >
-                      <Sparkles className="h-3.5 w-3.5" />
+                      <Sparkles className="h-4 w-4" aria-hidden="true" />
                       Reallocate Remaining Classes
                     </button>
                   </div>

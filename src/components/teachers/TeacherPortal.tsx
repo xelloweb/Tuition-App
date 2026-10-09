@@ -100,17 +100,8 @@ export function TeacherPortal({
       />
 
       {feedback && (
-        <Notice tone="info" title="Success">
-          <div className="flex items-center justify-between">
-            <span>{feedback}</span>
-            <button
-              type="button"
-              onClick={() => setFeedback(null)}
-              className="text-xs underline font-bold"
-            >
-              Dismiss
-            </button>
-          </div>
+        <Notice tone="info" title="Success" onDismiss={() => setFeedback(null)}>
+          {feedback}
         </Notice>
       )}
 
@@ -119,7 +110,7 @@ export function TeacherPortal({
           tone="warning"
           title={`${pendingCount} scheduled class${pendingCount === 1 ? "" : "es"} past start time`}
         >
-          <Link href="/attendance" className="font-semibold underline">
+          <Link href="/attendance" className="inline-flex items-center min-h-[44px] font-semibold underline">
             Open attendance overview
           </Link>
         </Notice>
@@ -137,7 +128,7 @@ export function TeacherPortal({
                 <span className="text-xs font-semibold text-teal-300 uppercase tracking-wider">
                   Total Working Hours
                 </span>
-                <Clock className="h-4 w-4 text-teal-400" />
+                <Clock className="h-4 w-4 text-teal-400" aria-hidden="true" />
               </div>
               <div className="mt-2 flex items-baseline gap-1">
                 <span className="text-3xl font-extrabold text-white tabular-nums">
@@ -146,7 +137,7 @@ export function TeacherPortal({
                 <span className="text-sm font-semibold text-slate-300">Hours</span>
               </div>
             </div>
-            <p className="mt-2 text-[11px] text-teal-200/80">
+            <p className="mt-2 text-xs text-teal-200/80">
               Updated automatically from confirmed attendance
             </p>
           </div>
@@ -157,7 +148,7 @@ export function TeacherPortal({
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   Completed Classes
                 </span>
-                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                <CheckCircle2 className="h-4 w-4 text-emerald-400" aria-hidden="true" />
               </div>
               <div className="mt-2 flex items-baseline gap-1">
                 <span className="text-3xl font-extrabold text-white tabular-nums">
@@ -166,7 +157,7 @@ export function TeacherPortal({
                 <span className="text-sm font-semibold text-slate-400">Classes</span>
               </div>
             </div>
-            <p className="mt-2 text-[11px] text-slate-400">
+            <p className="mt-2 text-xs text-slate-400">
               Confirmed attendance submissions
             </p>
           </div>
@@ -177,18 +168,18 @@ export function TeacherPortal({
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   Payouts & Salary
                 </span>
-                <Wallet className="h-4 w-4 text-purple-400" />
+                <Wallet className="h-4 w-4 text-purple-400" aria-hidden="true" />
               </div>
               <div className="mt-2">
                 <Link
                   href="/payouts"
-                  className="inline-flex items-center gap-1.5 text-sm font-bold text-teal-300 hover:text-teal-200 hover:underline"
+                  className="inline-flex min-h-[44px] items-center gap-1.5 text-sm font-bold text-teal-300 hover:text-teal-200 hover:underline"
                 >
                   View Earnings & Payouts →
                 </Link>
               </div>
             </div>
-            <p className="mt-2 text-[11px] text-slate-400">
+            <p className="mt-2 text-xs text-slate-400">
               Standard-specific hourly pay rates applied
             </p>
           </div>
@@ -202,7 +193,7 @@ export function TeacherPortal({
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-teal-400" />
+            <Users className="h-5 w-5 text-teal-400" aria-hidden="true" />
             <h2 id="my-students-heading" className="text-lg font-bold text-white">
               My Students ({myStudents.length})
             </h2>
@@ -232,14 +223,14 @@ export function TeacherPortal({
                       <div>
                         <Link
                           href={`/students/${studentId}`}
-                          className="font-bold text-white text-base hover:text-teal-300 hover:underline transition-colors"
+                          className="inline-flex min-h-[44px] items-center font-bold text-white text-base break-words hover:text-teal-300 hover:underline transition-colors"
                         >
                           {studentName}
                         </Link>
                         <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
                           <span>{stud.grade}</span>
                           {stud.studentCode && (
-                            <span className="font-mono text-[11px] text-slate-500">
+                            <span className="font-mono text-xs text-slate-400">
                               • {stud.studentCode}
                             </span>
                           )}
@@ -252,10 +243,10 @@ export function TeacherPortal({
                           )}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-white"
+                          className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3 text-sm font-semibold text-slate-300 hover:text-white"
                           title="WhatsApp parent"
                         >
-                          <MessageCircle className="h-3.5 w-3.5 text-teal-400" /> WhatsApp
+                          <MessageCircle className="h-4 w-4 text-teal-400" aria-hidden="true" /> WhatsApp<span className="sr-only"> parent of {studentName}</span>
                         </a>
                       )}
                     </div>
@@ -271,13 +262,12 @@ export function TeacherPortal({
                             key={subId}
                             className="rounded-lg border border-slate-800/90 bg-slate-900/60 p-3 space-y-2"
                           >
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
                               <span
-                                className="rounded-md border px-2 py-0.5 text-xs font-bold"
+                                className="rounded-md border px-2 py-0.5 text-sm font-bold text-ink"
                                 style={{
                                   backgroundColor: (sub.subjectColor || "#14b8a6") + "20",
-                                  borderColor: (sub.subjectColor || "#14b8a6") + "40",
-                                  color: sub.subjectColor || "#2dd4bf",
+                                  borderColor: (sub.subjectColor || "#14b8a6") + "80",
                                 }}
                               >
                                 {subName}
@@ -297,22 +287,22 @@ export function TeacherPortal({
                                     },
                                   })
                                 }
-                                className="inline-flex items-center gap-1 rounded-lg bg-teal-400 px-2.5 py-1 text-xs font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
+                                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-teal-400 px-3 text-sm font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
                               >
-                                <ClipboardList className="h-3.5 w-3.5" /> Mark Attendance
+                                <ClipboardList className="h-4 w-4" aria-hidden="true" /> Mark Attendance<span className="sr-only"> for {studentName}, {subName}</span>
                               </button>
                             </div>
 
                             {/* Scheduled Class Days & Timings */}
-                            <div className="text-[11px] text-slate-300 flex items-start gap-1.5">
-                              <Clock className="h-3.5 w-3.5 text-teal-400 shrink-0 mt-0.5" />
+                            <div className="text-xs text-slate-300 flex items-start gap-1.5">
+                              <Clock className="h-3.5 w-3.5 text-teal-400 shrink-0 mt-0.5" aria-hidden="true" />
                               <div>
                                 {sub.schedules && sub.schedules.length > 0 ? (
                                   <span className="text-slate-300">
                                     {sub.schedules.map((s: any) => s.timeDisplay).join(" • ")}
                                   </span>
                                 ) : (
-                                  <span className="text-slate-500">No scheduled timetable slots</span>
+                                  <span className="text-slate-400">No scheduled timetable slots</span>
                                 )}
                               </div>
                             </div>
@@ -320,7 +310,7 @@ export function TeacherPortal({
                             {/* Class Credits Allocated, Completed, Remaining */}
                             <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-800/60 text-center">
                               <div className="bg-slate-950/60 rounded px-1.5 py-1">
-                                <span className="block text-[10px] text-slate-400">Allocated</span>
+                                <span className="block text-xs text-slate-400">Allocated</span>
                                 <span className="text-xs font-bold text-white">
                                   {sub.hasSubjectAllocation && sub.allocatedCredits !== null
                                     ? `${sub.allocatedCredits} Cls`
@@ -328,13 +318,13 @@ export function TeacherPortal({
                                 </span>
                               </div>
                               <div className="bg-slate-950/60 rounded px-1.5 py-1">
-                                <span className="block text-[10px] text-slate-400">Completed</span>
+                                <span className="block text-xs text-slate-400">Completed</span>
                                 <span className="text-xs font-bold text-teal-300">
                                   {sub.completedClasses ?? 0} Cls
                                 </span>
                               </div>
                               <div className="bg-slate-950/60 rounded px-1.5 py-1">
-                                <span className="block text-[10px] text-slate-400">Remaining</span>
+                                <span className="block text-xs text-slate-400">Remaining</span>
                                 <span
                                   className={`text-xs font-bold ${
                                     sub.remainingCredits !== null && sub.remainingCredits <= 2
@@ -357,7 +347,7 @@ export function TeacherPortal({
                   <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
                     <Link
                       href={`/students/${studentId}`}
-                      className="text-xs font-bold text-teal-400 hover:text-teal-300 hover:underline"
+                      className="inline-flex min-h-[44px] items-center text-sm font-bold text-teal-400 hover:text-teal-300 hover:underline"
                     >
                       View Subject Profile & Timetable →
                     </Link>
@@ -415,7 +405,7 @@ export function TeacherPortal({
       >
         <div className="border-b border-slate-800 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <h2 id="portal-day-heading" className="text-lg font-bold text-white flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-teal-400" />
+            <Calendar className="h-5 w-5 text-teal-400" aria-hidden="true" />
             Timetable Schedule: {isToday ? "Today" : dateLabel} ({sessions.length} class{sessions.length === 1 ? "" : "es"})
           </h2>
           <span className="text-xs text-slate-400">
@@ -474,17 +464,17 @@ export function TeacherPortal({
                         )}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3 text-xs font-semibold text-slate-300 hover:text-white"
+                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3 text-sm font-semibold text-slate-300 hover:text-white"
                       >
-                        <MessageCircle className="h-3.5 w-3.5 text-teal-400" /> WhatsApp
+                        <MessageCircle className="h-3.5 w-3.5 text-teal-400" aria-hidden="true" /> WhatsApp
                       </a>
                     )}
                     {s.attendance ? (
                       <Link
                         href={`/attendance?session=${s.id}`}
-                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3 text-xs font-semibold text-slate-300 hover:text-white"
+                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3 text-sm font-semibold text-slate-300 hover:text-white"
                       >
-                        <ClipboardList className="h-3.5 w-3.5" />
+                        <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
                         View Attendance
                       </Link>
                     ) : (
@@ -503,9 +493,9 @@ export function TeacherPortal({
                             },
                           });
                         }}
-                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-teal-400 px-3 text-xs font-bold text-slate-950 hover:bg-teal-300 shadow-sm"
+                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-teal-400 px-3 text-sm font-bold text-slate-950 hover:bg-teal-300 shadow-sm"
                       >
-                        <ClipboardList className="h-3.5 w-3.5" />
+                        <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
                         Mark Attendance
                       </button>
                     )}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Download, CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
+import { controlBorder, controlClass } from "@/components/ui/Field";
 
 export function PaymentReportForm() {
   const [startDate, setStartDate] = useState("");
@@ -25,21 +26,21 @@ export function PaymentReportForm() {
       
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1 space-y-1">
-          <label htmlFor="paymentreportform-field-1" className="text-xs uppercase tracking-wider text-slate-400 font-bold">Start Date</label>
+          <label htmlFor="paymentreportform-field-1" className="text-xs uppercase tracking-wider text-slate-300 font-bold">Start Date</label>
           <input id="paymentreportform-field-1"
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-white focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            className={`${controlClass} ${controlBorder(false)}`}
           />
         </div>
         <div className="flex-1 space-y-1">
-          <label htmlFor="paymentreportform-field-2" className="text-xs uppercase tracking-wider text-slate-400 font-bold">End Date</label>
+          <label htmlFor="paymentreportform-field-2" className="text-xs uppercase tracking-wider text-slate-300 font-bold">End Date</label>
           <input id="paymentreportform-field-2"
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-white focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            className={`${controlClass} ${controlBorder(false)}`}
           />
         </div>
       </div>
@@ -47,9 +48,9 @@ export function PaymentReportForm() {
       <button
         onClick={handleDownload}
         disabled={!startDate || !endDate}
-        className="inline-flex w-full justify-center items-center gap-2 rounded-xl bg-teal-500 px-4 py-2 font-bold text-slate-950 hover:bg-teal-400 shadow-md text-xs transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="inline-flex min-h-[44px] w-full justify-center items-center gap-2 rounded-xl bg-teal-500 px-4 py-2 font-bold text-slate-950 hover:bg-teal-400 shadow-md text-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <Download className="h-3.5 w-3.5" />
+        <Download className="h-4 w-4" aria-hidden="true" />
         Download Payments CSV
       </button>
     </div>

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Button } from "@/components/ui/Button";
 import { AlertCircle, Edit2, Clock } from "lucide-react";
 import { apiRequest, errorMessage } from "@/lib/client-api";
+import { controlBorder, controlClass } from "@/components/ui/Field";
 
 export interface AttendanceRecordForEdit {
   id: string;
@@ -31,6 +32,7 @@ export function EditAttendanceModal({
   onSuccess,
   record,
 }: EditAttendanceModalProps) {
+  const fieldId = useId();
   const initialHours = record.durationMinutes / 60;
   const initialOpt = [1, 2, 3].includes(initialHours) ? String(initialHours) : "custom";
 
@@ -93,10 +95,10 @@ export function EditAttendanceModal({
               <Edit2 className="h-5 w-5" />
             </span>
             <div>
-              <h2 id="edit-attendance-title" className="text-lg font-bold text-white">
+              <h2 id="edit-attendance-title" className="text-lg font-bold text-ink">
                 Edit Attendance Record
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-sm text-ink-muted break-words">
                 {record.studentName} · {record.subjectName} · {record.teacherName}
               </p>
             </div>
@@ -104,18 +106,18 @@ export function EditAttendanceModal({
         </div>
 
         {errorMsg && (
-          <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-300 flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div role="alert" className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-danger flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
             <span>{errorMsg}</span>
           </div>
         )}
 
         {/* Duration Selection */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <p id={`${fieldId}-duration`} className="mb-1 block text-sm font-semibold text-ink-muted">
             Class Duration
-          </label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          </p>
+          <div role="group" aria-labelledby={`${fieldId}-duration`} className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
               { val: "1", label: "1 Hour", credits: "1 Credit" },
               { val: "2", label: "2 Hours", credits: "2 Credits" },
@@ -126,14 +128,15 @@ export function EditAttendanceModal({
                 key={opt.val}
                 type="button"
                 onClick={() => setDurationOption(opt.val as any)}
-                className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-bold transition-all ${
+                aria-pressed={durationOption === opt.val}
+                className={`flex min-h-[52px] flex-col items-center justify-center p-2.5 rounded-xl border text-sm font-bold transition-all ${
                   durationOption === opt.val
-                    ? "border-teal-400 bg-teal-500/10 text-teal-300 shadow-md shadow-teal-500/10"
-                    : "border-slate-800 bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "border-brand bg-brand/10 text-brand-text shadow-md shadow-teal-500/10"
+                    : "border-line bg-raised/60 text-ink-muted hover:bg-raised hover:text-ink"
                 }`}
               >
                 <span>{opt.label}</span>
-                <span className="text-[10px] font-normal text-slate-400 mt-0.5">
+                <span className="text-xs font-normal text-ink-muted mt-0.5">
                   {opt.val === "custom" ? "Specify hrs" : opt.credits}
                 </span>
               </button>
@@ -141,28 +144,30 @@ export function EditAttendanceModal({
           </div>
 
           {durationOption === "custom" && (
-            <div className="mt-2.5 flex items-center gap-2 rounded-xl bg-slate-900 border border-slate-800 p-2.5">
-              <Clock className="h-4 w-4 text-teal-400 shrink-0" />
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-xl bg-raised/60 border border-line p-2.5">
+              <Clock className="h-4 w-4 text-brand-text shrink-0" aria-hidden="true" />
               <input
+                aria-label="Custom class hours"
                 type="number"
                 min="0.5"
                 max="10"
                 step="0.5"
                 value={customHours}
                 onChange={(e) => setCustomHours(e.target.value)}
-                className="w-24 rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1 text-sm font-bold text-white text-center focus:border-teal-400 focus:outline-none"
+                inputMode="decimal"
+                className={`w-24 min-h-[44px] rounded-control border bg-canvas px-2.5 py-2 text-base font-bold text-ink text-center focus:outline-none focus:ring-2 focus:ring-brand/60 sm:text-sm ${controlBorder(false)}`}
                 placeholder="Hours"
                 required
               />
-              <span className="text-xs text-slate-300">
-                Hour(s) = <strong>{computedCredits} Class Credit(s)</strong>
+              <span className="text-sm text-ink-muted">
+                Hour(s) = <strong className="text-ink">{computedCredits} Class Credit(s)</strong>
               </span>
             </div>
           )}
         </div>
 
         {/* Note about auto recalculations */}
-        <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-3 text-xs text-slate-300">
+        <div className="rounded-xl bg-raised/60 border border-line p-3 text-sm text-ink-muted">
           <p>
             ℹ️ Changing duration automatically corrects the student&apos;s package balance, completed class hours, trainer working hours, and salary calculation without duplicate deductions.
           </p>
@@ -170,59 +175,63 @@ export function EditAttendanceModal({
 
         {/* Topic Covered */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <label htmlFor={`${fieldId}-topic`} className="mb-1 block text-sm font-semibold text-ink-muted">
             Topic Covered
           </label>
           <input
+            id={`${fieldId}-topic`}
             type="text"
             value={topicCovered}
             onChange={(e) => setTopicCovered(e.target.value)}
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:border-teal-400 focus:outline-none"
+            className={`${controlClass} ${controlBorder(false)}`}
           />
         </div>
 
         {/* Homework */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <label htmlFor={`${fieldId}-homework`} className="mb-1 block text-sm font-semibold text-ink-muted">
             Homework (Optional)
           </label>
           <input
+            id={`${fieldId}-homework`}
             type="text"
             value={homework}
             onChange={(e) => setHomework(e.target.value)}
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:border-teal-400 focus:outline-none"
+            className={`${controlClass} ${controlBorder(false)}`}
           />
         </div>
 
         {/* Trainer Progress Note */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <label htmlFor={`${fieldId}-note`} className="mb-1 block text-sm font-semibold text-ink-muted">
             Trainer / Class Note (Optional)
           </label>
           <textarea
+            id={`${fieldId}-note`}
             rows={2}
             value={studentProgressNote}
             onChange={(e) => setStudentProgressNote(e.target.value)}
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:border-teal-400 focus:outline-none"
+            className={`${controlClass} ${controlBorder(false)}`}
           />
         </div>
 
         {/* Reason for edit */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <label htmlFor={`${fieldId}-reason`} className="mb-1 block text-sm font-semibold text-ink-muted">
             Reason for Change (Audit Log)
           </label>
           <input
+            id={`${fieldId}-reason`}
             type="text"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="e.g. Corrected 1 hour to 2 hours completed"
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:border-teal-400 focus:outline-none"
+            className={`${controlClass} ${controlBorder(false)}`}
           />
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-3">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-3">
           <Button type="button" variant="ghost" onClick={onClose} disabled={loading}>
             Cancel
           </Button>

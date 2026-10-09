@@ -346,7 +346,7 @@ export function PayoutsClient({
                       <button
                         onClick={() => handleMarkPaid(run.id)}
                         disabled={loading}
-                        className="rounded-xl bg-emerald-500 px-3.5 py-2 font-bold text-slate-950 hover:bg-emerald-400 text-xs shadow-md transition-all active:scale-95"
+                        className="min-h-[44px] rounded-xl bg-emerald-500 px-3.5 py-2 font-bold text-slate-950 hover:bg-emerald-400 text-sm shadow-md transition-all active:scale-95"
                       >
                         Mark Paid
                       </button>

@@ -1204,7 +1204,7 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
                             key={preset.label}
                             type="button"
                             onClick={() => applyPreset(preset)}
-                            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all border ${
+                            className={`inline-flex items-center min-h-[44px] rounded-full px-3 py-1.5 text-xs font-semibold transition-all border ${
                               isSelected
                                 ? "bg-teal-500/20 border-teal-500/50 text-teal-300 shadow-xs"
                                 : "bg-surface border-line text-ink-muted hover:border-teal-500/30 hover:text-ink"

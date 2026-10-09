@@ -180,7 +180,7 @@ export function AdmissionsClient({
                   </div>
                 </div>
                 <h3 className="mt-2 text-base font-semibold text-ink">
-                  <Link href={`/admissions/${s.id}`} className="underline-offset-2 hover:underline">
+                  <Link href={`/admissions/${s.id}`} className="inline-flex min-h-[44px] items-center break-words underline-offset-2 hover:underline">
                     {s.studentName}
                   </Link>
                 </h3>

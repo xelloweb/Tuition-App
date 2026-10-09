@@ -24,6 +24,7 @@ import { errorMessage, readApiResponse } from "@/lib/client-api";
 import { formatInTimeZone, formatDateOnly } from "@/lib/timezones";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/Button";
+import { controlBorder, controlClass } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { RecordPaymentDialog } from "@/components/billing/RecordPaymentDialog";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
@@ -221,7 +222,7 @@ export function BillingClient({
       {banner && (
         <div role="status" className="flex items-start justify-between gap-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-100">
           <span>{banner}</span>
-          <button type="button" onClick={() => setBanner(null)} aria-label="Dismiss message" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg hover:bg-white/10">
+          <button type="button" onClick={() => setBanner(null)} aria-label="Dismiss message" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-white/10">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
@@ -318,26 +319,28 @@ export function BillingClient({
           {/* Controls: Search and Status Filters */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80">
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" aria-hidden="true" />
               <input
                 type="text"
+                aria-label="Search invoices"
                 value={invoiceSearchQuery}
                 onChange={(e) => setInvoiceSearchQuery(e.target.value)}
                 placeholder="Search by invoice #, student name, or code..."
-                className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-400 focus:outline-hidden focus:border-teal-500"
+                className="w-full min-h-[44px] bg-slate-800/80 border border-slate-600 rounded-xl pl-9 pr-11 py-2 text-base sm:text-sm text-white placeholder-slate-400 focus:outline-hidden focus:border-teal-500"
               />
               {invoiceSearchQuery && (
                 <button
                   type="button"
                   onClick={() => setInvoiceSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  aria-label="Clear search"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 inline-flex h-11 w-11 items-center justify-center text-slate-400 hover:text-white"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
             </div>
 
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+            <div role="group" aria-label="Filter invoices by status" className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
               {(["ALL", "UNPAID", "PAID", "OVERDUE", "CANCELLED"] as const).map((st) => {
                 const count =
                   st === "ALL"
@@ -355,7 +358,8 @@ export function BillingClient({
                     key={st}
                     type="button"
                     onClick={() => setInvoiceStatusFilter(st)}
-                    className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all whitespace-nowrap ${
+                    aria-pressed={invoiceStatusFilter === st}
+                    className={`min-h-[44px] shrink-0 rounded-xl px-3 py-2 text-sm font-semibold transition-all whitespace-nowrap ${
                       invoiceStatusFilter === st
                         ? "bg-teal-500/20 text-teal-300 border border-teal-500/40"
                         : "bg-slate-800/60 text-slate-400 hover:text-slate-200 border border-slate-700/50"
@@ -382,13 +386,14 @@ export function BillingClient({
                     key={inv.id}
                     className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-800/40 text-xs transition-colors"
                   >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-sm text-white">
+                    <div className="min-w-0">
+                      {/* Wraps as whole pieces on phones, so the invoice number is never split. */}
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-mono font-bold text-sm text-white whitespace-nowrap">
                           {inv.invoiceNumber}
                         </span>
                         <StatusBadge status={inv.status} size="sm" />
-                        <span className="text-slate-400 font-medium">
+                        <span className="basis-full text-slate-400 font-medium break-words sm:basis-auto">
                           Student: <strong className="text-slate-200">{inv.student.name}</strong> ({inv.student.studentCode})
                         </span>
                       </div>
@@ -411,9 +416,9 @@ export function BillingClient({
 
                       <button
                         onClick={() => setPreviewInvoice(inv)}
-                        className="rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 font-semibold text-slate-200 hover:bg-slate-700/80 hover:text-white flex items-center gap-1.5 text-xs shadow-xs transition-all active:scale-95"
+                        className="min-h-[44px] rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 font-semibold text-slate-200 hover:bg-slate-700/80 hover:text-white flex items-center gap-1.5 text-sm shadow-xs transition-all active:scale-95"
                       >
-                        <Printer className="h-3.5 w-3.5" />
+                        <Printer className="h-4 w-4" aria-hidden="true" />
                         Print / View
                       </button>
 
@@ -424,7 +429,7 @@ export function BillingClient({
                             setInvoiceToDelete(inv);
                             setDeleteError(null);
                           }}
-                          className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2 font-semibold text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 flex items-center gap-1.5 text-xs shadow-xs transition-all active:scale-95"
+                          className="min-h-[44px] rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2 font-semibold text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 flex items-center gap-1.5 text-xs shadow-xs transition-all active:scale-95"
                           title="Remove unpaid invoice"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -494,7 +499,7 @@ export function BillingClient({
                       setVerificationNotes("");
                       setErrorMsg("");
                     }}
-                    className="inline-flex items-center gap-2 rounded-xl bg-teal-500 px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-teal-400 shadow-xs shrink-0 transition-all active:scale-95"
+                    className="min-h-[44px] inline-flex items-center gap-2 rounded-xl bg-teal-500 px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-teal-400 shadow-xs shrink-0 transition-all active:scale-95"
                   >
                     <ShieldCheck className="h-4 w-4" />
                     Verify & Allocate Payment
@@ -566,14 +571,16 @@ export function BillingClient({
                 Verify & Allocate Payment
               </h2>
               <button
+                type="button"
                 onClick={() => setSelectedPaymentForVerify(null)}
-                className="text-slate-400 hover:text-white"
+                aria-label="Close"
+                className="-mr-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-slate-400 hover:text-white"
               >
-                <X className="h-5 w-5" />
+                <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
 
-            <form onSubmit={handleVerifySubmit} className="mt-4 space-y-4 text-xs">
+            <form onSubmit={handleVerifySubmit} className="mt-4 space-y-4 text-sm">
               <div className="rounded-2xl bg-slate-900/80 p-3.5 border border-slate-800">
                 <span className="font-bold text-white">
                   {selectedPaymentForVerify.student.name} • ₹{selectedPaymentForVerify.amount.toLocaleString("en-IN")}
@@ -590,7 +597,7 @@ export function BillingClient({
                 <select id="billingclient-field-1"
                   value={targetInvoiceId}
                   onChange={(e) => setTargetInvoiceId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-white"
+                  className={`${controlClass} ${controlBorder(false)}`}
                 >
                   <option value="">Hold as Unallocated Advance</option>
                   {selectedPaymentForVerify.student.invoices
@@ -615,12 +622,12 @@ export function BillingClient({
                   value={verificationNotes}
                   onChange={(e) => setVerificationNotes(e.target.value)}
                   placeholder="e.g. Cleared via ICICI Netbanking txn #882910"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-white placeholder-slate-500"
+                  className={`${controlClass} ${controlBorder(false)}`}
                 />
               </div>
 
               {errorMsg && (
-                <div className="rounded-xl bg-red-950/40 border border-red-500/30 p-3 text-red-300 font-medium">
+                <div role="alert" className="rounded-xl bg-red-950/40 border border-red-500/30 p-3 text-red-300 font-medium">
                   {errorMsg}
                 </div>
               )}
@@ -629,14 +636,14 @@ export function BillingClient({
                 <button
                   type="button"
                   onClick={() => setSelectedPaymentForVerify(null)}
-                  className="rounded-xl px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800"
+                  className="min-h-[44px] rounded-xl px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="rounded-xl bg-teal-500 px-4 py-2 font-bold text-slate-950 hover:bg-teal-400 disabled:opacity-50 transition-all active:scale-95"
+                  className="min-h-[44px] rounded-xl bg-teal-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-teal-400 disabled:opacity-50 transition-all active:scale-95"
                 >
                   {loading ? "Verifying..." : "Approve & Settle"}
                 </button>
@@ -648,57 +655,61 @@ export function BillingClient({
       {/* Printable Invoice Modal */}
       {previewInvoice && (
         <ModalShell labelledBy="invoice-title" onClose={() => setPreviewInvoice(null)} maxWidth="max-w-2xl" panelClassName="rounded-card bg-white p-6 text-slate-900 sm:p-8">
-            <div className="flex items-center justify-between pb-6 border-b border-slate-200 no-print">
-              <span className="text-xs font-bold text-teal-700 uppercase tracking-widest">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-6 border-b border-slate-200 no-print">
+              <span className="text-xs font-bold text-teal-800 uppercase tracking-widest">
                 Official Tuition Invoice & Receipt
               </span>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => window.print()}
-                  className="rounded-xl bg-teal-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-teal-700 flex items-center gap-1.5 shadow-xs"
+                  className="min-h-[44px] rounded-xl bg-teal-700 px-4 py-2 text-sm font-bold text-white hover:bg-teal-800 flex items-center gap-1.5 shadow-xs"
                 >
-                  <Printer className="h-3.5 w-3.5" /> Print
+                  <Printer className="h-4 w-4" aria-hidden="true" /> Print
                 </button>
                 <button
+                  type="button"
                   onClick={() => setPreviewInvoice(null)}
-                  className="rounded-xl p-1.5 text-slate-400 hover:text-slate-400"
+                  aria-label="Close invoice"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-5 w-5" aria-hidden="true" />
                 </button>
               </div>
             </div>
 
             {/* Invoice Printable Body */}
             <div className="mt-6 space-y-6">
-              <div className="flex justify-between items-start">
+              <div className="flex flex-wrap justify-between items-start gap-3">
                 <div>
                   <h2 id="invoice-title" className="text-2xl font-bold text-slate-900">XELLO TUITION</h2>
-                  <p className="text-xs text-slate-400">Kerala & GCC Online 1-to-1 Operations</p>
+                  <p className="text-xs text-slate-600">Kerala & GCC Online 1-to-1 Operations</p>
                 </div>
                 <div className="text-right">
                   <div className="text-lg font-bold font-mono text-slate-900">{previewInvoice.invoiceNumber}</div>
-                  <div className="text-xs text-slate-400">Date: {formatInTimeZone(previewInvoice.issueDate, "Asia/Kolkata")}</div>
+                  <div className="text-xs text-slate-600">Date: {formatInTimeZone(previewInvoice.issueDate, "Asia/Kolkata")}</div>
                 </div>
               </div>
 
-              <div className="rounded-xl bg-slate-50 p-4 border border-slate-200 text-xs grid grid-cols-2 gap-4">
+              <div className="rounded-xl bg-slate-50 p-4 border border-slate-200 text-xs grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <span className="font-bold text-slate-400 uppercase text-xs">Billed To:</span>
+                  <span className="font-bold text-slate-600 uppercase text-xs">Billed To:</span>
                   <div className="font-bold text-slate-900 text-sm">{previewInvoice.student.name}</div>
-                  <div className="text-slate-400">ID: {previewInvoice.student.studentCode} • {previewInvoice.student.grade}</div>
-                  <div className="text-slate-400">Parent: {previewInvoice.student.guardianName}</div>
+                  <div className="text-slate-600">ID: {previewInvoice.student.studentCode} • {previewInvoice.student.grade}</div>
+                  <div className="text-slate-600">Parent: {previewInvoice.student.guardianName}</div>
                 </div>
-                <div className="text-right">
-                  <span className="font-bold text-slate-400 uppercase text-xs">Payment Status:</span>
+                <div className="sm:text-right">
+                  <span className="font-bold text-slate-600 uppercase text-xs">Payment Status:</span>
                   <div className="font-bold text-emerald-700 text-sm">{previewInvoice.status}</div>
-                  <div className="text-slate-400">Due Date: {formatInTimeZone(previewInvoice.dueDate, "Asia/Kolkata")}</div>
+                  <div className="text-slate-600">Due Date: {formatInTimeZone(previewInvoice.dueDate, "Asia/Kolkata")}</div>
                 </div>
               </div>
 
               {/* Items Table */}
+              <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-slate-200 text-slate-400 text-left">
+                  <tr className="border-b border-slate-200 text-slate-600 text-left">
                     <th className="py-2">Description</th>
                     <th className="py-2 text-center">Qty</th>
                     <th className="py-2 text-right">Price</th>
@@ -709,21 +720,22 @@ export function BillingClient({
                   {previewInvoice.items?.map((it: any) => (
                     <tr key={it.id}>
                       <td className="py-2 font-medium text-slate-800">{it.description}</td>
-                      <td className="py-2 text-center text-slate-400">{it.quantity}</td>
-                      <td className="py-2 text-right text-slate-400">₹{it.unitPrice.toLocaleString("en-IN")}</td>
+                      <td className="py-2 text-center text-slate-600">{it.quantity}</td>
+                      <td className="py-2 text-right text-slate-600">₹{it.unitPrice.toLocaleString("en-IN")}</td>
                       <td className="py-2 text-right font-bold text-slate-900">₹{it.amount.toLocaleString("en-IN")}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              </div>
 
               <div className="border-t border-slate-200 pt-3 flex flex-col items-end text-xs space-y-1">
                 <div className="flex justify-between w-48">
-                  <span className="text-slate-400">Total Billed:</span>
+                  <span className="text-slate-600">Total Billed:</span>
                   <span className="font-bold text-slate-900">₹{previewInvoice.totalAmount.toLocaleString("en-IN")}</span>
                 </div>
                 <div className="flex justify-between w-48">
-                  <span className="text-slate-400">Verified Paid:</span>
+                  <span className="text-slate-600">Verified Paid:</span>
                   <span className="font-bold text-emerald-700">₹{previewInvoice.paidAmount.toLocaleString("en-IN")}</span>
                 </div>
                 <div className="flex justify-between w-48 text-sm font-bold border-t border-slate-200 pt-1">
@@ -741,14 +753,16 @@ export function BillingClient({
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h2 id="new-invoice-title" className="text-base font-bold text-white">Create New Invoice</h2>
               <button
+                type="button"
                 onClick={() => setNewInvoiceModalOpen(false)}
-                className="text-slate-400 hover:text-white"
+                aria-label="Close"
+                className="-mr-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-slate-400 hover:text-white"
               >
-                <X className="h-5 w-5" />
+                <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateInvoice} className="mt-4 space-y-4 text-xs">
+            <form onSubmit={handleCreateInvoice} className="mt-4 space-y-4 text-sm">
               <div>
                 <label htmlFor="billingclient-field-3" className="block font-bold text-slate-300 uppercase mb-1">
                   Student *
@@ -757,7 +771,7 @@ export function BillingClient({
                   required
                   value={invStudentId}
                   onChange={(e) => setInvStudentId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-white"
+                  className={`${controlClass} ${controlBorder(false)}`}
                 >
                   <option value="" className="bg-slate-900">Choose Student...</option>
                   {students.map((s) => (
@@ -777,7 +791,7 @@ export function BillingClient({
                   required
                   value={invDescription}
                   onChange={(e) => setInvDescription(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-white placeholder-slate-500"
+                  className={`${controlClass} ${controlBorder(false)}`}
                 />
               </div>
 
@@ -790,7 +804,7 @@ export function BillingClient({
                   required
                   value={invAmount}
                   onChange={(e) => setInvAmount(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-white placeholder-slate-500"
+                  className={`${controlClass} ${controlBorder(false)}`}
                 />
               </div>
 
@@ -803,12 +817,12 @@ export function BillingClient({
                   required
                   value={invDueDate}
                   onChange={(e) => setInvDueDate(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-white"
+                  className={`${controlClass} ${controlBorder(false)}`}
                 />
               </div>
 
               {errorMsg && (
-                <div className="rounded-xl bg-red-950/40 border border-red-500/30 p-3 text-red-300 font-medium">
+                <div role="alert" className="rounded-xl bg-red-950/40 border border-red-500/30 p-3 text-red-300 font-medium">
                   {errorMsg}
                 </div>
               )}
@@ -817,14 +831,14 @@ export function BillingClient({
                 <button
                   type="button"
                   onClick={() => setNewInvoiceModalOpen(false)}
-                  className="rounded-xl px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800"
+                  className="min-h-[44px] rounded-xl px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="rounded-xl bg-teal-500 px-4 py-2 font-bold text-slate-950 hover:bg-teal-400 disabled:opacity-50 transition-all active:scale-95"
+                  className="min-h-[44px] rounded-xl bg-teal-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-teal-400 disabled:opacity-50 transition-all active:scale-95"
                 >
                   {loading ? "Generating..." : "Generate Invoice"}
                 </button>

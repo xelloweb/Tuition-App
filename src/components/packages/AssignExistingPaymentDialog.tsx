@@ -277,7 +277,7 @@ export function AssignExistingPaymentDialog({
                 <button
                   type="button"
                   onClick={() => setAllocations(split(Number(totalCredits) || 0, subjectIds))}
-                  className="text-xs text-brand hover:underline font-semibold"
+                  className="inline-flex items-center min-h-[44px] text-xs text-brand hover:underline font-semibold"
                 >
                   Split evenly
                 </button>

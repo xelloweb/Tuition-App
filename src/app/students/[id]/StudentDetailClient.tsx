@@ -249,7 +249,7 @@ export function StudentDetailClient({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-2">
-        <Link href="/students" className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors min-h-[36px]">
+        <Link href="/students" className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors min-h-[44px]">
           <ArrowLeft className="h-4 w-4" /> Back to Students
         </Link>
         <span className="text-xs font-mono font-bold text-slate-400">Student ID: {student.studentCode}</span>
@@ -263,7 +263,7 @@ export function StudentDetailClient({
           }`}
         >
           <span>{banner.text}</span>
-          <button onClick={() => setBanner(null)} aria-label="Dismiss message" className="p-1 shrink-0"><X className="h-4 w-4" /></button>
+          <button onClick={() => setBanner(null)} aria-label="Dismiss message" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-1 shrink-0"><X className="h-4 w-4" /></button>
         </div>
       )}
 
@@ -392,7 +392,7 @@ export function StudentDetailClient({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 pt-1">
+              <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-1">
                 <span>
                   🟢 <strong>Assign Package Using Existing Payment:</strong> Maps existing payment to class credits. Student total collected remains unchanged.
                 </span>
@@ -420,7 +420,7 @@ export function StudentDetailClient({
                     <button
                       type="button"
                       onClick={() => setSelectedForEdit(activePackage)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-700 transition-colors"
+                      className="min-h-[44px] inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-700 transition-colors"
                     >
                       <Edit2 className="h-3 w-3 text-teal-400" />
                       Edit Package
@@ -429,7 +429,7 @@ export function StudentDetailClient({
                   <button
                     type="button"
                     onClick={() => setActiveTab("packages")}
-                    className="text-xs font-bold text-teal-400 hover:text-teal-300 hover:underline transition-colors text-left sm:text-right"
+                    className="inline-flex items-center min-h-[44px] text-xs font-bold text-teal-400 hover:text-teal-300 hover:underline transition-colors text-left sm:text-right"
                   >
                     View Full Breakdown & Ledger →
                   </button>
@@ -483,7 +483,7 @@ export function StudentDetailClient({
                         if (existingPayment) setAssignOpen(true);
                         else setSelectedForRealloc(activePackage);
                       }}
-                      className="text-xs underline hover:text-white font-bold"
+                      className="inline-flex items-center min-h-[44px] text-xs underline hover:text-white font-bold"
                     >
                       Allocate now
                     </button>
@@ -581,7 +581,7 @@ export function StudentDetailClient({
                         disabled={unenrollLoadingId === enr.id}
                         title="Unenroll subject"
                         aria-label={`Unenroll ${enr.subject?.name}`}
-                        className="rounded-lg p-2 min-h-[40px] min-w-[40px] flex items-center justify-center text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all disabled:opacity-50"
+                        className="rounded-lg p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all disabled:opacity-50"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -609,7 +609,7 @@ export function StudentDetailClient({
                     <button
                       type="button"
                       onClick={() => setEnrollModal({ reassign: { subjectId: enr.subjectId, subjectName: enr.subject?.name, teacherId: enr.teacherId } })}
-                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 py-2 min-h-[40px] text-xs font-semibold text-slate-200 hover:bg-slate-700"
+                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 py-2 min-h-[44px] text-xs font-semibold text-slate-200 hover:bg-slate-700"
                     >
                       <UserCog className="h-3.5 w-3.5 text-teal-400" />
                       {enr.teacher ? "Change trainer" : "Assign trainer"}
@@ -696,7 +696,7 @@ export function StudentDetailClient({
                   )}
                 </div>
               </div>
-              <div className="text-[11px] text-slate-400 pt-2 border-t border-amber-500/20 flex flex-wrap justify-between gap-2">
+              <div className="text-xs text-slate-400 pt-2 border-t border-amber-500/20 flex flex-wrap justify-between gap-2">
                 <span>🟢 <strong>Assign package using existing payment:</strong> Links existing payment. New payment created: ₹0. Total collected unchanged.</span>
                 <span>⚪ <strong>Purchase new package:</strong> New purchase: creates a new invoice for the parent to pay.</span>
               </div>
@@ -733,7 +733,7 @@ export function StudentDetailClient({
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => setSelectedForLedger({ id: pkg.packageId, number: pkg.packageNumber, name: pkg.packageName })}
-                    className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 min-h-[40px] text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+                    className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 min-h-[44px] text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
                   >
                     View Credit Ledger
                   </button>
@@ -741,7 +741,7 @@ export function StudentDetailClient({
                     <button
                       type="button"
                       onClick={() => setSelectedForEdit(pkg)}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-teal-500/30 bg-teal-500/10 px-3.5 py-2 min-h-[40px] text-xs font-bold text-teal-300 hover:bg-teal-500/20 hover:text-teal-200 transition-all"
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-teal-500/30 bg-teal-500/10 px-3.5 py-2 min-h-[44px] text-xs font-bold text-teal-300 hover:bg-teal-500/20 hover:text-teal-200 transition-all"
                     >
                       <Edit2 className="h-3.5 w-3.5" /> Edit Package
                     </button>
@@ -749,7 +749,7 @@ export function StudentDetailClient({
                   {permissions.canReallocate && (
                     <button
                       onClick={() => setSelectedForRealloc(pkg)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-teal-400 px-3.5 py-2 min-h-[40px] text-xs font-bold text-slate-950 hover:brightness-110 transition-all"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-teal-400 px-3.5 py-2 min-h-[44px] text-xs font-bold text-slate-950 hover:brightness-110 transition-all"
                     >
                       <Sparkles className="h-3.5 w-3.5" /> Reallocate Classes
                     </button>
@@ -792,7 +792,7 @@ export function StudentDetailClient({
                       if (existingPayment) setAssignOpen(true);
                       else setSelectedForRealloc(pkg);
                     }}
-                    className="rounded-lg bg-amber-400 px-3 py-1 font-bold text-slate-950 hover:brightness-110 transition-all"
+                    className="inline-flex items-center min-h-[44px] rounded-lg bg-amber-400 px-3 py-1 font-bold text-slate-950 hover:brightness-110 transition-all"
                   >
                     Allocate to subjects
                   </button>
@@ -846,7 +846,7 @@ export function StudentDetailClient({
                 <button
                   type="button"
                   onClick={() => setMarkAttendanceOpen(true)}
-                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-teal-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
+                  className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-teal-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
                 >
                   <Plus className="h-4 w-4" />
                   Mark Attendance
@@ -871,7 +871,7 @@ export function StudentDetailClient({
                   <div className="text-lg font-bold text-teal-300 mt-0.5">{activePackage.totalRemaining} Credits</div>
                 </div>
               </div>
-              <p className="mt-2.5 text-[11px] text-teal-200/80">
+              <p className="mt-2.5 text-xs text-teal-200/80">
                 ℹ️ Only manually confirmed attendance reduces package credits (1 hr = 1 credit, 2 hrs = 2 credits, 3 hrs = 3 credits).
               </p>
             </div>
@@ -887,7 +887,7 @@ export function StudentDetailClient({
                 <button
                   type="button"
                   onClick={() => setMarkAttendanceOpen(true)}
-                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-teal-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
+                  className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-teal-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
                 >
                   <Plus className="h-4 w-4" />
                   Mark Attendance
@@ -935,7 +935,7 @@ export function StudentDetailClient({
                                   studentProgressNote: ses.attendance!.studentProgressNote || undefined,
                                 })
                               }
-                              className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-700"
+                              className="min-h-[44px] inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-700"
                             >
                               <Edit2 className="h-3 w-3 text-teal-400" /> Edit
                             </button>
@@ -951,7 +951,7 @@ export function StudentDetailClient({
                                   hoursCompleted: ses.attendance!.actualDurationMinutes / 60,
                                 })
                               }
-                              className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-300 hover:bg-rose-500/20"
+                              className="min-h-[44px] inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-300 hover:bg-rose-500/20"
                             >
                               <Trash2 className="h-3 w-3" /> Delete
                             </button>
@@ -1040,7 +1040,7 @@ export function StudentDetailClient({
                           setInvoiceToDelete(inv);
                           setDeleteInvoiceError(null);
                         }}
-                        className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-1.5 text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 transition-colors"
+                        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/10 p-1.5 text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 transition-colors"
                         title="Remove unpaid invoice"
                       >
                         <Trash2 className="h-3.5 w-3.5" />

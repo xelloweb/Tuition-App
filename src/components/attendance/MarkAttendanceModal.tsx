@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Button } from "@/components/ui/Button";
 import { AlertCircle, CheckCircle2, Clock, Calendar, BookOpen, User, Sparkles } from "lucide-react";
 import { apiRequest, errorMessage } from "@/lib/client-api";
+import { controlBorder, controlClass } from "@/components/ui/Field";
 
 export interface StudentOption {
   id: string;
@@ -60,6 +61,7 @@ export function MarkAttendanceModal({
   currentTrainerId,
   currentTrainerName,
 }: MarkAttendanceModalProps) {
+  const fieldId = useId();
   const activePreStudent = preSelectedStudent || preselectedStudent;
   const activePreSubject = preSelectedSubject || preselectedSubject;
 
@@ -218,16 +220,16 @@ export function MarkAttendanceModal({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Header */}
-        <div className="border-b border-slate-800 pb-3">
+        <div className="border-b border-line pb-3">
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-500/20 text-teal-300">
-              <CheckCircle2 className="h-5 w-5" />
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand/20 text-brand-text">
+              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
-              <h2 id="mark-attendance-title" className="text-lg font-bold text-white">
+              <h2 id="mark-attendance-title" className="text-lg font-bold text-ink">
                 Mark Attendance
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-sm text-ink-muted">
                 Confirm completed class hours. Package credits will deduct automatically.
               </p>
             </div>
@@ -236,20 +238,20 @@ export function MarkAttendanceModal({
 
         {/* Error Notice */}
         {errorMsg && (
-          <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-300 flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div role="alert" className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-danger flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
             <span>{errorMsg}</span>
           </div>
         )}
 
         {/* Warning Notice */}
         {warningMsg && (
-          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300 space-y-2">
+          <div role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-warning space-y-2">
             <div className="flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
               <span>{warningMsg}</span>
             </div>
-            <label className="flex items-center gap-2 font-semibold text-white cursor-pointer pt-1">
+            <label className="flex min-h-[44px] items-center gap-3 font-semibold text-ink cursor-pointer">
               <input
                 type="checkbox"
                 checked={confirmExceedsCredits || confirmDuplicate}
@@ -257,7 +259,7 @@ export function MarkAttendanceModal({
                   setConfirmExceedsCredits(e.target.checked);
                   setConfirmDuplicate(e.target.checked);
                 }}
-                className="h-4 w-4 rounded border-slate-700 bg-slate-900 accent-teal-400"
+                className="h-5 w-5 shrink-0 rounded border-line-strong bg-raised accent-teal-400"
               />
               <span>I confirm and want to submit this attendance</span>
             </label>
@@ -266,23 +268,24 @@ export function MarkAttendanceModal({
 
         {/* Student Selection */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <label htmlFor={`${fieldId}-student`} className="mb-1 block text-sm font-semibold text-ink-muted">
             Student Name
           </label>
           {activePreStudent ? (
-            <div className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm font-bold text-white">
-              <span>{activePreStudent.name}</span>
+            <div id={`${fieldId}-student`} className="flex min-h-[44px] items-center justify-between gap-2 rounded-control border border-line-strong bg-raised px-3 py-2.5 text-base font-bold text-ink sm:text-sm">
+              <span className="min-w-0 break-words">{activePreStudent.name}</span>
               {activePreStudent.grade && (
-                <span className="text-xs text-slate-400 font-normal">
+                <span className="shrink-0 text-sm text-ink-muted font-normal">
                   {activePreStudent.grade}
                 </span>
               )}
             </div>
           ) : (
             <select
+              id={`${fieldId}-student`}
               value={studentId}
               onChange={(e) => handleStudentChange(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white focus:border-teal-400 focus:outline-none"
+              className={`${controlClass} ${controlBorder(false)}`}
               required
             >
               <option value="">Select Student</option>
@@ -297,13 +300,14 @@ export function MarkAttendanceModal({
 
         {/* Subject Selection */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <label htmlFor={`${fieldId}-subject`} className="mb-1 block text-sm font-semibold text-ink-muted">
             Subject
           </label>
           <select
+            id={`${fieldId}-subject`}
             value={subjectId}
             onChange={(e) => handleSubjectChange(e.target.value)}
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white focus:border-teal-400 focus:outline-none"
+            className={`${controlClass} ${controlBorder(false)}`}
             required
           >
             {availableSubjects.length === 0 ? (
@@ -321,13 +325,14 @@ export function MarkAttendanceModal({
         {/* Trainer (for staff only; trainers see their own name) */}
         {!isTrainer && (
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label htmlFor={`${fieldId}-trainer`} className="mb-1 block text-sm font-semibold text-ink-muted">
               Assigned Trainer
             </label>
             <select
+              id={`${fieldId}-trainer`}
               value={teacherId}
               onChange={(e) => setTeacherId(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white focus:border-teal-400 focus:outline-none"
+              className={`${controlClass} ${controlBorder(false)}`}
               required
             >
               <option value="">Select Trainer</option>
@@ -342,24 +347,25 @@ export function MarkAttendanceModal({
 
         {/* Class Date */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <label htmlFor={`${fieldId}-date`} className="mb-1 block text-sm font-semibold text-ink-muted">
             Class Date (IST)
           </label>
           <input
+            id={`${fieldId}-date`}
             type="date"
             value={classDate}
             onChange={(e) => setClassDate(e.target.value)}
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white focus:border-teal-400 focus:outline-none"
+            className={`${controlClass} ${controlBorder(false)}`}
             required
           />
         </div>
 
         {/* Class Duration Dropdown */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <p id={`${fieldId}-duration`} className="mb-1 block text-sm font-semibold text-ink-muted">
             Class Duration
-          </label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          </p>
+          <div role="group" aria-labelledby={`${fieldId}-duration`} className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
               { val: "1", label: "1 Hour", credits: "1 Credit" },
               { val: "2", label: "2 Hours", credits: "2 Credits" },
@@ -370,14 +376,15 @@ export function MarkAttendanceModal({
                 key={opt.val}
                 type="button"
                 onClick={() => setDurationOption(opt.val as any)}
-                className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-bold transition-all ${
+                aria-pressed={durationOption === opt.val}
+                className={`flex min-h-[52px] flex-col items-center justify-center p-2.5 rounded-xl border text-sm font-bold transition-all ${
                   durationOption === opt.val
-                    ? "border-teal-400 bg-teal-500/10 text-teal-300 shadow-md shadow-teal-500/10"
-                    : "border-slate-800 bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "border-brand bg-brand/10 text-brand-text shadow-md shadow-teal-500/10"
+                    : "border-line bg-raised/60 text-ink-muted hover:bg-raised hover:text-ink"
                 }`}
               >
                 <span>{opt.label}</span>
-                <span className="text-[10px] font-normal text-slate-400 mt-0.5">
+                <span className="text-xs font-normal text-ink-muted mt-0.5">
                   {opt.val === "custom" ? "Specify hrs" : opt.credits}
                 </span>
               </button>
@@ -385,64 +392,68 @@ export function MarkAttendanceModal({
           </div>
 
           {durationOption === "custom" && (
-            <div className="mt-2.5 flex items-center gap-2 rounded-xl bg-slate-900 border border-slate-800 p-2.5">
-              <Clock className="h-4 w-4 text-teal-400 shrink-0" />
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-xl bg-raised/60 border border-line p-2.5">
+              <Clock className="h-4 w-4 text-brand-text shrink-0" aria-hidden="true" />
               <input
+                aria-label="Custom class hours"
                 type="number"
                 min="0.5"
                 max="10"
                 step="0.5"
                 value={customHours}
                 onChange={(e) => setCustomHours(e.target.value)}
-                className="w-24 rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1 text-sm font-bold text-white text-center focus:border-teal-400 focus:outline-none"
+                inputMode="decimal"
+                className={`w-24 min-h-[44px] rounded-control border bg-canvas px-2.5 py-2 text-base font-bold text-ink text-center focus:outline-none focus:ring-2 focus:ring-brand/60 sm:text-sm ${controlBorder(false)}`}
                 placeholder="Hours"
                 required
               />
-              <span className="text-xs text-slate-300">
-                Hour(s) = <strong>{computedCredits} Class Credit(s)</strong>
+              <span className="text-sm text-ink-muted">
+                Hour(s) = <strong className="text-ink">{computedCredits} Class Credit(s)</strong>
               </span>
             </div>
           )}
         </div>
 
         {/* Dynamic Credit Calculation Note */}
-        <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-3 text-xs text-slate-300 flex items-center justify-between">
+        <div className="rounded-xl bg-raised/60 border border-line p-3 text-sm text-ink-muted flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <span>Automatic Package Credit Deduction:</span>
-          <span className="font-bold text-teal-300">
+          <span className="font-bold text-brand-text tabular-nums">
             {computedCredits} Credit{computedCredits > 1 ? "s" : ""}
           </span>
         </div>
 
         {/* Topic Covered (Optional) */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <label htmlFor={`${fieldId}-topic`} className="mb-1 block text-sm font-semibold text-ink-muted">
             Topic Covered (Optional)
           </label>
           <input
+            id={`${fieldId}-topic`}
             type="text"
             value={topicCovered}
             onChange={(e) => setTopicCovered(e.target.value)}
             placeholder="e.g. Quadratic Equations, Chapter 4 revision"
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-teal-400 focus:outline-none"
+            className={`${controlClass} ${controlBorder(false)}`}
           />
         </div>
 
         {/* Progress / Trainer Note (Optional) */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <label htmlFor={`${fieldId}-note`} className="mb-1 block text-sm font-semibold text-ink-muted">
             Trainer / Class Note (Optional)
           </label>
           <textarea
+            id={`${fieldId}-note`}
             rows={2}
             value={studentProgressNote}
             onChange={(e) => setStudentProgressNote(e.target.value)}
             placeholder="e.g. Student understood concepts well, homework assigned"
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-teal-400 focus:outline-none"
+            className={`${controlClass} ${controlBorder(false)}`}
           />
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-3">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-3">
           <Button type="button" variant="ghost" onClick={onClose} disabled={loading}>
             Cancel
           </Button>

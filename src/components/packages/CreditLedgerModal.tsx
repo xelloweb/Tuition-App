@@ -75,9 +75,10 @@ export function CreditLedgerModal({
           </div>
           <button
             onClick={onClose}
-            className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+            aria-label="Close"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -145,7 +146,7 @@ export function CreditLedgerModal({
           </span>
           <button
             onClick={onClose}
-            className="rounded-xl bg-slate-800 px-4 py-2 font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors"
+            className="min-h-[44px] rounded-xl bg-slate-800 px-4 py-2 font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors"
           >
             Close
           </button>

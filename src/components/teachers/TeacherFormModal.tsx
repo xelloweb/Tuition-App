@@ -74,8 +74,9 @@ interface TeacherFormModalProps {
 const splitList = (value?: string | null) =>
   (value || "").split(",").map((s) => s.trim()).filter(Boolean);
 
+// 44px tall; 16px text on phones (smaller text makes iPhones zoom in on focus).
 const inputBase =
-  "w-full rounded-xl border bg-slate-950 px-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-hidden";
+  "w-full min-h-[44px] rounded-xl border bg-slate-950 px-3 py-2.5 text-base sm:text-sm text-white placeholder-slate-400 focus:outline-hidden";
 
 export function TeacherFormModal({
   mode,
@@ -349,7 +350,7 @@ export function TeacherFormModal({
               type="button"
               onClick={() => setActive(!active)}
               aria-pressed={active}
-              className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-colors min-h-[38px] ${
+              className={`shrink-0 px-3 py-1.5 rounded-xl font-bold text-sm transition-colors min-h-[44px] ${
                 active
                   ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-400"
                   : "bg-slate-800 border border-slate-700 text-slate-400"
@@ -465,7 +466,7 @@ export function TeacherFormModal({
                   key={sub}
                   aria-pressed={isSelected}
                   onClick={() => toggle(selectedSubjects, setSelectedSubjects, sub, "subjects")}
-                  className={`rounded-xl px-3 py-1.5 min-h-[36px] text-xs font-medium transition-all ${
+                  className={`rounded-xl px-3 py-2 min-h-[44px] text-sm font-medium transition-all ${
                     isSelected
                       ? "bg-teal-500/20 text-teal-300 border border-teal-500/30 shadow-xs"
                       : "bg-slate-900 text-slate-400 border border-slate-800 hover:text-white hover:bg-slate-800"
@@ -494,7 +495,7 @@ export function TeacherFormModal({
             <button
               type="button"
               onClick={addCustomSubject}
-              className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition-colors shrink-0"
+              className="min-h-[44px] rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition-colors shrink-0"
             >
               + Add
             </button>
@@ -516,7 +517,7 @@ export function TeacherFormModal({
                   key={gr}
                   aria-pressed={isSelected}
                   onClick={() => toggle(selectedGrades, setSelectedGrades, gr, "grades")}
-                  className={`rounded-xl px-3 py-1.5 min-h-[36px] text-xs font-medium transition-all ${
+                  className={`rounded-xl px-3 py-2 min-h-[44px] text-sm font-medium transition-all ${
                     isSelected
                       ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-xs"
                       : "bg-slate-900 text-slate-400 border border-slate-800 hover:text-white hover:bg-slate-800"
@@ -587,7 +588,7 @@ export function TeacherFormModal({
                           value={tierRates[tier.key]}
                           aria-invalid={!!err(`gradeRates.${tier.key}`)}
                           onChange={(e) => handleTierChange(tier.key, e.target.value)}
-                          className="w-full min-h-[32px] text-xs font-bold text-white bg-transparent focus:outline-hidden focus-visible:ring-1 focus-visible:ring-teal-400 rounded"
+                          className="w-full min-h-[44px] text-base sm:text-sm font-bold text-white bg-transparent focus:outline-hidden focus-visible:ring-1 focus-visible:ring-teal-400 rounded"
                         />
                       </div>
                       <FieldError message={err(`gradeRates.${tier.key}`)} />

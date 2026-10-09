@@ -8,7 +8,8 @@ import { apiRequest, ClientApiError, errorMessage } from "@/lib/client-api";
 import { FieldError, FormErrorSummary, inputClass } from "@/components/ui/FormFeedback";
 import { MIN_PASSWORD_LENGTH, newPasswordProblem } from "@/lib/password-rules";
 
-const inputBase = "w-full rounded-xl border bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-hidden";
+// 44px tall; 16px text on phones so iPhones do not zoom in on focus.
+const inputBase = "w-full min-h-[44px] rounded-xl border bg-slate-950 px-3 py-2.5 text-base sm:text-sm text-white focus:outline-hidden";
 const buttonClass =
   "w-full inline-flex items-center justify-center gap-2 rounded-xl bg-teal-400 px-4 py-2.5 min-h-[44px] text-sm font-bold text-slate-950 disabled:opacity-50";
 

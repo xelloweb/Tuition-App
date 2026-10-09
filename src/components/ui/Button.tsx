@@ -35,7 +35,8 @@ export function Button({
     primary: "bg-brand text-brand-ink hover:bg-brand-hover",
     secondary: "bg-raised text-ink border border-line-strong hover:bg-slate-700",
     outline: "border border-line-strong bg-transparent text-ink hover:bg-raised",
-    danger: "bg-rose-500 text-white hover:bg-rose-400",
+    // White on rose-600/700 meets 4.5:1; rose-500 and lighter did not.
+    danger: "bg-rose-600 text-white hover:bg-rose-700",
     ghost: "text-ink-muted hover:bg-raised hover:text-ink",
   }[variant];
 

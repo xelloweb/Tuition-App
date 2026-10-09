@@ -216,9 +216,9 @@ export function DuesClient({
                         )}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-xl bg-emerald-500 px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-emerald-400 flex items-center gap-1.5 shadow-md transition-all active:scale-95"
+                        className="min-h-[44px] rounded-xl bg-emerald-500 px-3.5 py-2 text-sm font-bold text-slate-950 hover:bg-emerald-400 flex items-center gap-1.5 shadow-md transition-all active:scale-95"
                       >
-                        <MessageCircle className="h-3.5 w-3.5" />
+                        <MessageCircle className="h-4 w-4" aria-hidden="true" />
                         WhatsApp
                       </a>
 
@@ -231,7 +231,7 @@ export function DuesClient({
                           setPromisedDate("");
                           setNotes("");
                         }}
-                        className="rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition-all active:scale-95"
+                        className="min-h-[44px] rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition-all active:scale-95"
                       >
                         Log Call
                       </button>
@@ -257,7 +257,7 @@ export function DuesClient({
                     </div>
                     <button
                       onClick={() => setModalStudent(inv.student)}
-                      className="rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs text-slate-200 hover:text-white"
+                      className="inline-flex items-center min-h-[44px] rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs text-slate-200 hover:text-white"
                     >
                       Follow-up
                     </button>
@@ -317,9 +317,9 @@ export function DuesClient({
                         )}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-xl bg-emerald-500 px-3.5 py-2 font-bold text-slate-950 hover:bg-emerald-400 flex items-center gap-1.5 shadow-md transition-all active:scale-95"
+                        className="min-h-[44px] rounded-xl bg-emerald-500 px-3.5 py-2 font-bold text-slate-950 hover:bg-emerald-400 flex items-center gap-1.5 shadow-md transition-all active:scale-95"
                       >
-                        <MessageCircle className="h-3.5 w-3.5" />
+                        <MessageCircle className="h-4 w-4" aria-hidden="true" />
                         Chat Renewal
                       </a>
                       <button
@@ -327,7 +327,7 @@ export function DuesClient({
                           setModalStudent(pkg.student);
                           setFollowUpType("PACKAGE_EXHAUSTION");
                         }}
-                        className="rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 font-semibold text-slate-200 hover:text-white hover:bg-slate-700 transition-all active:scale-95"
+                        className="inline-flex items-center min-h-[44px] rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 font-semibold text-slate-200 hover:text-white hover:bg-slate-700 transition-all active:scale-95"
                       >
                         Log Renewal Action
                       </button>
@@ -348,10 +348,12 @@ export function DuesClient({
                 Log Follow-up Call / Interaction
               </h2>
               <button
+                type="button"
                 onClick={() => setModalStudent(null)}
-                className="text-slate-400 hover:text-white"
+                aria-label="Close"
+                className="-mr-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-slate-400 hover:text-white"
               >
-                <X className="h-5 w-5" />
+                <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
 
@@ -442,14 +444,14 @@ export function DuesClient({
                 <button
                   type="button"
                   onClick={() => setModalStudent(null)}
-                  className="rounded-xl px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800"
+                  className="inline-flex items-center min-h-[44px] rounded-xl px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="rounded-xl bg-teal-500 px-4 py-2 font-bold text-slate-950 hover:bg-teal-400 disabled:opacity-50 transition-all active:scale-95"
+                  className="inline-flex items-center min-h-[44px] rounded-xl bg-teal-500 px-4 py-2 font-bold text-slate-950 hover:bg-teal-400 disabled:opacity-50 transition-all active:scale-95"
                 >
                   {loading ? "Saving..." : "Record Follow-up"}
                 </button>

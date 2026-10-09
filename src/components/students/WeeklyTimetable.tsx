@@ -84,7 +84,7 @@ function fromView(view: TimetableView): SlotDraft[] {
 }
 
 const fieldBase =
-  "w-full rounded-xl border bg-slate-950 px-2.5 py-2 min-h-[44px] text-xs text-white focus:outline-hidden";
+  "w-full rounded-xl border bg-slate-950 px-2.5 py-2 min-h-[44px] text-base sm:text-sm text-white focus:outline-hidden";
 
 export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }: WeeklyTimetableProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -319,7 +319,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
             {notice.tone === "success" ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
             {notice.text}
           </span>
-          <button onClick={() => setNotice(null)} aria-label="Dismiss" className="p-1 shrink-0"><X className="h-4 w-4" /></button>
+          <button onClick={() => setNotice(null)} aria-label="Dismiss" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-1 shrink-0"><X className="h-4 w-4" /></button>
         </div>
       )}
 
@@ -378,7 +378,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
                           <span className="line-through">
                             {WEEKDAYS[Number(d.weekday)]?.long} {start !== null ? formatMinutes(start) : d.start}–{end !== null ? formatMinutes(end) : d.end}
                           </span>
-                          <button type="button" onClick={() => update(d.key, { removed: false })} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 min-h-[36px] font-bold hover:bg-rose-500/10">
+                          <button type="button" onClick={() => update(d.key, { removed: false })} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 min-h-[44px] font-bold hover:bg-rose-500/10">
                             <Undo2 className="h-3.5 w-3.5" /> Undo
                           </button>
                         </li>
@@ -402,7 +402,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
                                 onClick={() => update(d.key, { editing: !d.editing })}
                                 aria-label="Edit slot"
                                 aria-expanded={d.editing}
-                                className="rounded-lg p-2 min-h-[40px] min-w-[40px] flex items-center justify-center border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                                className="rounded-lg p-2 min-h-[44px] min-w-[44px] flex items-center justify-center border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
                               >
                                 <Pencil className="h-3.5 w-3.5 text-teal-400" />
                               </button>
@@ -410,7 +410,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
                                 type="button"
                                 onClick={() => removeSlot(d)}
                                 aria-label="Remove slot"
-                                className="rounded-lg p-2 min-h-[40px] min-w-[40px] flex items-center justify-center border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20"
+                                className="rounded-lg p-2 min-h-[44px] min-w-[44px] flex items-center justify-center border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -636,7 +636,7 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
               onClick={generate}
               disabled={busy !== null || isDirty}
               title={isDirty ? "Save or discard timetable changes first" : "Books any missing classes; safe to repeat"}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 min-h-[40px] text-xs font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 min-h-[44px] text-xs font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-50"
             >
               {busy === "generate" ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <CalendarPlus className="h-3.5 w-3.5 text-teal-400" />}
               Book next {view.windowDays} days{view.pendingBookings ? ` (${view.pendingBookings} pending)` : ""}

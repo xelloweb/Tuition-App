@@ -248,7 +248,7 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
                   <select id="reallocatemodal-field-1"
                     value={transferFrom}
                     onChange={(e) => setTransferFrom(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2 font-semibold text-white text-xs focus:outline-hidden focus:border-teal-500"
+                    className="w-full min-h-[44px] rounded-xl border border-slate-600 bg-slate-950 p-2 font-semibold text-white text-base sm:text-sm focus:outline-hidden focus:border-teal-500"
                   >
                     {pkg.subjects.map((s) => (
                       <option key={s.subjectId} value={s.subjectId}>
@@ -263,7 +263,7 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
                   <select id="reallocatemodal-field-2"
                     value={transferTo}
                     onChange={(e) => setTransferTo(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2 font-semibold text-white text-xs focus:outline-hidden focus:border-teal-500"
+                    className="w-full min-h-[44px] rounded-xl border border-slate-600 bg-slate-950 p-2 font-semibold text-white text-base sm:text-sm focus:outline-hidden focus:border-teal-500"
                   >
                     {pkg.subjects.map((s) => (
                       <option key={s.subjectId} value={s.subjectId}>
@@ -281,7 +281,7 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
                         key={cnt}
                         type="button"
                         onClick={() => setTransferCount(cnt)}
-                        className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-colors ${
+                        className={`inline-flex items-center min-h-[44px] flex-1 py-1.5 rounded-lg font-bold text-xs transition-colors ${
                           transferCount === cnt
                             ? "bg-teal-500 text-slate-950"
                             : "bg-slate-900 border border-slate-700 text-slate-300 hover:text-white"
@@ -297,7 +297,7 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
                   <button
                     type="button"
                     onClick={handleApplyTransfer}
-                    className="w-full rounded-xl bg-teal-500 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-teal-400 transition-all active:scale-95"
+                    className="inline-flex items-center min-h-[44px] w-full rounded-xl bg-teal-500 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-teal-400 transition-all active:scale-95"
                   >
                     Apply Transfer
                   </button>
@@ -356,10 +356,10 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
                           type="button"
                           onClick={() => handleDecrement(sub.subjectId, minAllowed)}
                           disabled={currentVal <= minAllowed}
-                          className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          className="h-11 w-11 flex items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                           aria-label={`Decrease ${sub.subjectName} credits`}
                         >
-                          <Minus className="h-4 w-4" />
+                          <Minus className="h-4 w-4" aria-hidden="true" />
                         </button>
 
                         <input
@@ -373,17 +373,18 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
                               parseInt(e.target.value) || 0
                             )
                           }
-                          className="w-16 h-9 rounded-xl border border-slate-700 bg-slate-950 px-2 py-1 text-sm font-bold text-white text-center font-mono tabular-nums focus:border-teal-500 focus:outline-hidden"
+                          inputMode="numeric"
+                          className="w-16 h-11 rounded-xl border border-slate-600 bg-slate-950 px-2 py-1 text-base font-bold text-white text-center font-mono tabular-nums focus:border-teal-500 focus:outline-hidden sm:text-sm"
                           aria-label={`${sub.subjectName} credit allocation`}
                         />
 
                         <button
                           type="button"
                           onClick={() => handleIncrement(sub.subjectId)}
-                          className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                          className="h-11 w-11 flex items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
                           aria-label={`Increase ${sub.subjectName} credits`}
                         >
-                          <Plus className="h-4 w-4" />
+                          <Plus className="h-4 w-4" aria-hidden="true" />
                         </button>
                       </div>
 
@@ -466,7 +467,7 @@ export function ReallocateModal({ pkg, onClose, onSuccess }: ReallocateModalProp
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. Student requested Chemistry boost for upcoming exams"
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:border-teal-500 focus:outline-hidden min-touch-target"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 min-h-[44px] px-3.5 py-2.5 text-base sm:text-sm text-white placeholder-slate-500 focus:border-teal-500 focus:outline-hidden min-touch-target"
             />
             <p className="mt-1 text-xs text-slate-400">
               Reason is permanently logged in the auditable credit ledger along with role and timestamp.

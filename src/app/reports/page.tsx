@@ -69,7 +69,7 @@ export default async function ReportsPage() {
           Downloadable Formula-Safe CSV Datasets
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
           {/* Packages Export */}
           <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 space-y-3">
             <div className="font-bold text-white text-sm">
@@ -81,9 +81,9 @@ export default async function ReportsPage() {
             <a
               href="/api/reports/export?type=packages"
               download
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-500 px-4 py-2 font-bold text-slate-950 hover:bg-teal-400 shadow-md text-xs transition-all active:scale-95"
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-teal-500 px-4 py-2 font-bold text-slate-950 hover:bg-teal-400 shadow-md text-sm transition-all active:scale-95"
             >
-              <Download className="h-3.5 w-3.5" />
+              <Download className="h-4 w-4" aria-hidden="true" />
               Download Packages CSV
             </a>
           </div>
@@ -99,9 +99,9 @@ export default async function ReportsPage() {
             <a
               href="/api/reports/export?type=attendance"
               download
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-500 px-4 py-2 font-bold text-slate-950 hover:bg-teal-400 shadow-md text-xs transition-all active:scale-95"
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-teal-500 px-4 py-2 font-bold text-slate-950 hover:bg-teal-400 shadow-md text-sm transition-all active:scale-95"
             >
-              <Download className="h-3.5 w-3.5" />
+              <Download className="h-4 w-4" aria-hidden="true" />
               Download Attendance CSV
             </a>
           </div>
@@ -119,9 +119,9 @@ export default async function ReportsPage() {
               <a
                 href="/api/reports/export?type=collections"
                 download
-                className="inline-flex items-center gap-2 rounded-xl bg-teal-500 px-4 py-2 font-bold text-slate-950 hover:bg-teal-400 shadow-md text-xs transition-all active:scale-95"
+                className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-teal-500 px-4 py-2 font-bold text-slate-950 hover:bg-teal-400 shadow-md text-sm transition-all active:scale-95"
               >
-                <Download className="h-3.5 w-3.5" />
+                <Download className="h-4 w-4" aria-hidden="true" />
                 Download Invoices CSV
               </a>
             </div>

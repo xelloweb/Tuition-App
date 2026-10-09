@@ -44,7 +44,7 @@ export function FormErrorSummary({
           {entries.map(([field, msg]) => (
             <li key={field}>
               {onFocusField ? (
-                <button type="button" className="underline underline-offset-2 text-left" onClick={() => onFocusField(field)}>
+                <button type="button" className="inline-flex items-center min-h-[44px] underline underline-offset-2 text-left" onClick={() => onFocusField(field)}>
                   {labels[field] ? `${labels[field]}: ` : ""}
                   {msg}
                 </button>

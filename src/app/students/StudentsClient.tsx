@@ -292,13 +292,13 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, dr
             <span>
               {banner.text}{" "}
               {banner.href && (
-                <Link href={banner.href} className="underline underline-offset-2 hover:text-white whitespace-nowrap">
+                <Link href={banner.href} className="inline-flex items-center min-h-[44px] underline underline-offset-2 hover:text-white whitespace-nowrap">
                   Open profile →
                 </Link>
               )}
             </span>
           </div>
-          <button onClick={() => setBanner(null)} aria-label="Dismiss message" className="p-1 hover:text-white shrink-0">
+          <button onClick={() => setBanner(null)} aria-label="Dismiss message" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-1 hover:text-white shrink-0">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -344,12 +344,12 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, dr
               onChange={(e) => setFilter(setSearchQuery)(e.target.value)}
               placeholder="Search by name, student ID, guardian or phone..."
               aria-label="Search students"
-              className="w-full rounded-xl border border-slate-700 bg-slate-900/90 pl-10 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder:text-slate-400 focus:outline-hidden focus:border-teal-500 focus:ring-1 focus:ring-teal-500 min-touch-target"
+              className="w-full rounded-xl border border-slate-700 bg-slate-900/90 min-h-[44px] pl-10 pr-9 py-2.5 text-base sm:text-sm text-white placeholder:text-slate-400 focus:outline-hidden focus:border-teal-500 focus:ring-1 focus:ring-teal-500 min-touch-target"
             />
             {searchQuery && (
               <button
                 onClick={() => setFilter(setSearchQuery)("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
                 aria-label="Clear search"
               >
                 <X className="h-4 w-4" />
@@ -384,7 +384,7 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, dr
             <span className="font-semibold text-slate-300">≤3 Classes Left</span>
           </label>
           {activeFiltersCount > 0 && (
-            <button onClick={resetFilters} className="inline-flex items-center gap-1 text-slate-400 hover:text-rose-400 font-bold ml-auto px-2 py-1 transition-colors">
+            <button onClick={resetFilters} className="min-h-[44px] inline-flex items-center gap-1 text-slate-400 hover:text-rose-400 font-bold ml-auto px-2 py-1 transition-colors">
               <RotateCcw className="h-3 w-3" />
               <span>Reset Filters</span>
             </button>
@@ -519,7 +519,7 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, dr
                       <button
                         type="button"
                         onClick={() => setMarkingStudent(student)}
-                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-teal-400 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
+                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-teal-400 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
                       >
                         <ClipboardList className="h-4 w-4" />
                         Mark Attendance
@@ -531,7 +531,7 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, dr
                       <button
                         type="button"
                         onClick={() => setEditingStudent(student)}
-                        className="rounded-xl p-2 min-h-[40px] min-w-[40px] flex items-center justify-center border border-slate-700 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+                        className="rounded-xl p-2 min-h-[44px] min-w-[44px] flex items-center justify-center border border-slate-700 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
                         title="Edit student"
                         aria-label={`Edit ${student.name}`}
                       >
@@ -543,7 +543,7 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, dr
                           setDeleteError(null);
                           setDeletingStudent(student);
                         }}
-                        className="rounded-xl p-2 min-h-[40px] min-w-[40px] flex items-center justify-center border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-colors"
+                        className="rounded-xl p-2 min-h-[44px] min-w-[44px] flex items-center justify-center border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-colors"
                         title="Remove or archive student"
                         aria-label={`Remove or archive ${student.name}`}
                       >
@@ -571,7 +571,7 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, dr
         <ModalShell labelledBy="filter-title" onClose={() => setFilterSheetOpen(false)} maxWidth="max-w-md"><div className="space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <h2 id="filter-title" className="text-lg font-semibold text-ink">Filter students</h2>
-              <button onClick={() => setFilterSheetOpen(false)} aria-label="Close filters" className="p-2 text-slate-400 hover:text-white transition-colors">
+              <button onClick={() => setFilterSheetOpen(false)} aria-label="Close filters" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-2 text-slate-400 hover:text-white transition-colors">
                 <X className="h-5 w-5" />
               </button>
             </div>

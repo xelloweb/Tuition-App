@@ -7,6 +7,7 @@ import { ModalShell } from "@/components/ui/ModalShell";
 import { FieldError, FormErrorSummary } from "@/components/ui/FormFeedback";
 import { apiRequest, ClientApiError, errorMessage } from "@/lib/client-api";
 import { SubjectOption, TeacherOption } from "./StudentFormModal";
+import { controlBorder, controlClass } from "@/components/ui/Field";
 
 interface EnrollSubjectModalProps {
   studentId: string;
@@ -105,7 +106,7 @@ export function EnrollSubjectModal({
                 <button
                   type="button"
                   onClick={() => setQuickSubjectModalOpen(true)}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-teal-400 hover:text-teal-300 transition-colors min-h-[32px]"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-teal-400 hover:text-teal-300 transition-colors min-h-[44px]"
                 >
                   <BookPlus className="h-3.5 w-3.5" />
                   Add Custom Subject
@@ -119,7 +120,7 @@ export function EnrollSubjectModal({
                   if (e.target.value === "__NEW__") setQuickSubjectModalOpen(true);
                   else setSubjectId(e.target.value);
                 }}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-white font-medium focus:border-teal-500 focus:outline-hidden"
+                className={`${controlClass} ${controlBorder(false)} font-medium`}
               >
                 <option value="">Select subject…</option>
                 {subjectsList.map((sub) => {
@@ -143,7 +144,7 @@ export function EnrollSubjectModal({
               value={teacherId}
               aria-invalid={!!fieldErrors.teacherId}
               onChange={(e) => setTeacherId(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-white font-medium focus:border-teal-500 focus:outline-hidden"
+              className={`${controlClass} ${controlBorder(false)} font-medium`}
             >
               <option value="">Assign later (no trainer yet)</option>
               {activeTeachers.map((t) => (
@@ -167,7 +168,7 @@ export function EnrollSubjectModal({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="e.g. 1-on-1 focus on organic chemistry"
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-white placeholder-slate-500 focus:border-teal-500 focus:outline-hidden"
+                className={`${controlClass} ${controlBorder(false)}`}
               />
             </div>
           )}

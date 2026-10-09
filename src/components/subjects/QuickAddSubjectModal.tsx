@@ -175,7 +175,7 @@ export function QuickAddSubjectModal({
                   type="button"
                   key={p.hex}
                   onClick={() => setSelectedColor(p.hex)}
-                  className={`h-7 w-7 rounded-full transition-transform ${
+                  className={`h-11 w-11 rounded-full transition-transform ${
                     selectedColor === p.hex
                       ? "ring-2 ring-white scale-110 shadow-lg"
                       : "opacity-80 hover:opacity-100 hover:scale-105"
@@ -192,14 +192,14 @@ export function QuickAddSubjectModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              className="inline-flex items-center min-h-[44px] rounded-xl px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-400 px-4 py-2 text-xs font-bold text-slate-950 hover:brightness-110 disabled:opacity-50 transition-all active:scale-95"
+              className="min-h-[44px] inline-flex items-center gap-2 rounded-xl bg-teal-400 px-4 py-2 text-xs font-bold text-slate-950 hover:brightness-110 disabled:opacity-50 transition-all active:scale-95"
             >
               {loading ? (
                 <>
