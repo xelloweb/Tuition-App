@@ -181,8 +181,8 @@ export function PackagesClient({ packages, templates, needsSetup = [], canEdit =
                   </div>
                 </div>
 
-                {/* Balance Summary Counters */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 text-center">
+                {/* Consumed = attended classes; Remaining = Entitled − Consumed. Booked future classes are not consumed. */}
+                <div className="grid grid-cols-3 gap-3 rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 text-center">
                   <div>
                     <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
                       1. Entitled
@@ -205,22 +205,6 @@ export function PackagesClient({ packages, templates, needsSetup = [], canEdit =
                     </span>
                     <div className="text-xl font-bold text-teal-300 mt-0.5">
                       {pkg.totalRemaining}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-xs text-blue-400 font-bold uppercase tracking-wider">
-                      4. Reserved
-                    </span>
-                    <div className="text-xl font-bold text-blue-300 mt-0.5">
-                      {pkg.totalReserved}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-xs text-emerald-400 font-bold uppercase tracking-wider">
-                      5. Available
-                    </span>
-                    <div className="text-xl font-bold text-emerald-300 mt-0.5">
-                      {pkg.totalAvailable}
                     </div>
                   </div>
                 </div>
@@ -260,38 +244,25 @@ export function PackagesClient({ packages, templates, needsSetup = [], canEdit =
                             }}
                             title={`Consumed: ${sub.consumedCredits}`}
                           />
-                          <div
-                            className="bg-blue-400 h-2"
-                            style={{
-                              width: `${(sub.reservedCredits / sub.allocatedCredits) * 100}%`,
-                            }}
-                            title={`Reserved: ${sub.reservedCredits}`}
-                          />
                         </div>
 
-                        <div className="grid grid-cols-4 gap-1 text-xs text-center pt-1 border-t border-slate-800/80">
+                        <div className="grid grid-cols-3 gap-1 text-xs text-center pt-1 border-t border-slate-800/80">
                           <div>
-                            <div className="text-xs text-slate-400 uppercase">Alloc</div>
+                            <div className="text-xs text-slate-400 uppercase">Allocated</div>
                             <div className="font-bold text-white">
                               {sub.allocatedCredits}
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs text-slate-400 uppercase">Used</div>
+                            <div className="text-xs text-slate-400 uppercase">Consumed</div>
                             <div className="font-bold text-slate-400">
                               {sub.consumedCredits}
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs text-teal-400 uppercase">Remain</div>
+                            <div className="text-xs text-teal-400 uppercase">Remaining</div>
                             <div className="font-bold text-teal-300">
                               {sub.remainingCredits}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-emerald-400 uppercase">Avail</div>
-                            <div className="font-bold text-emerald-300">
-                              {sub.availableCredits}
                             </div>
                           </div>
                         </div>

@@ -149,8 +149,27 @@ export async function recordManualAttendance(
     });
     if (!teacher) throw notFoundError("Trainer not found.");
 
-    // Select the best active package (prioritize package with allocation for this subject)
-    let selectedPackage = student.packages.find((p) =>
+    // A class already booked for this student and subject on that day (from the weekly
+    // timetable or scheduled one-off) is the class being marked: it is completed in place,
+    // on its own package, so it is never counted both as reserved and as consumed.
+    const dayStartUtc = zonedTimeToUtc(classDate, 0, BUSINESS_TIME_ZONE);
+    const dayEndUtc = zonedTimeToUtc(classDate, 24 * 60, BUSINESS_TIME_ZONE);
+    const bookedThatDay = await tx.session.findMany({
+      where: {
+        studentId,
+        subjectId,
+        status: "SCHEDULED",
+        isCreditConsumed: false,
+        attendance: { is: null },
+        scheduledStartTimeUtc: { gte: dayStartUtc, lt: dayEndUtc },
+      },
+      include: { package: { include: { allocations: true } } },
+      orderBy: { scheduledStartTimeUtc: "asc" },
+    });
+    const booked = bookedThatDay.find((b) => b.teacherId === teacherId) ?? bookedThatDay[0] ?? null;
+
+    // Otherwise select the best active package (prioritize package with allocation for this subject)
+    let selectedPackage = booked?.package ?? student.packages.find((p) =>
       p.allocations.some((a) => a.subjectId === subjectId && a.allocatedCredits > 0)
     );
     if (!selectedPackage && student.packages.length > 0) {
@@ -190,8 +209,6 @@ export async function recordManualAttendance(
     const endTimeUtc = new Date(startTimeUtc.getTime() + durationMinutes * 60000);
 
     // 4. Check for duplicate submission on the exact same date & student & subject & trainer
-    const dayStartUtc = zonedTimeToUtc(classDate, 0, BUSINESS_TIME_ZONE);
-    const dayEndUtc = zonedTimeToUtc(classDate, 24 * 60, BUSINESS_TIME_ZONE);
     const duplicate = await tx.session.findFirst({
       where: {
         studentId,
@@ -224,21 +241,33 @@ export async function recordManualAttendance(
       );
     }
 
-    // 5. Create Session (completed, isCreditConsumed: true)
-    const session = await tx.session.create({
-      data: {
-        packageId: selectedPackage.id,
-        studentId,
-        teacherId: teacher.id,
-        subjectId,
-        scheduledStartTimeUtc: startTimeUtc,
-        scheduledEndTimeUtc: endTimeUtc,
-        durationMinutes,
-        status: "COMPLETED",
-        isCreditReserved: false,
-        isCreditConsumed: true,
-      },
-    });
+    // 5. Complete the booked class, or create the class (completed, isCreditConsumed: true)
+    const session = booked
+      ? await tx.session.update({
+          where: { id: booked.id },
+          data: {
+            teacherId: teacher.id,
+            durationMinutes,
+            scheduledEndTimeUtc: new Date(booked.scheduledStartTimeUtc.getTime() + durationMinutes * 60000),
+            status: "COMPLETED",
+            isCreditReserved: false,
+            isCreditConsumed: true,
+          },
+        })
+      : await tx.session.create({
+          data: {
+            packageId: selectedPackage.id,
+            studentId,
+            teacherId: teacher.id,
+            subjectId,
+            scheduledStartTimeUtc: startTimeUtc,
+            scheduledEndTimeUtc: endTimeUtc,
+            durationMinutes,
+            status: "COMPLETED",
+            isCreditReserved: false,
+            isCreditConsumed: true,
+          },
+        });
 
     // 6. Create AttendanceRecord
     const attendance = await tx.attendanceRecord.create({
@@ -285,7 +314,7 @@ export async function recordManualAttendance(
       data: {
         teacherId: teacher.id,
         sessionId: session.id,
-        sessionDate: startTimeUtc,
+        sessionDate: session.scheduledStartTimeUtc,
         durationMinutes,
         rateSnapshot: ratePerHour,
         amount,
@@ -552,9 +581,18 @@ export async function deleteManualAttendance(
       }
     }
 
-    // 3. Delete AttendanceRecord and Session
+    // 3. Delete the AttendanceRecord. A class from the weekly timetable goes back to
+    // being a booked, unmarked class (it stays in the timetable); a class created only
+    // for this attendance is deleted.
     await tx.attendanceRecord.delete({ where: { id: record.id } });
-    await tx.session.delete({ where: { id: record.sessionId } });
+    if (record.session.timetableSlotId) {
+      await tx.session.update({
+        where: { id: record.sessionId },
+        data: { status: "SCHEDULED", isCreditConsumed: false, isCreditReserved: true },
+      });
+    } else {
+      await tx.session.delete({ where: { id: record.sessionId } });
+    }
 
     // 4. Audit Log
     await tx.auditLog.create({
@@ -578,7 +616,9 @@ export async function deleteManualAttendance(
     return {
       success: true,
       restoredCredits: creditsToRestore,
-      message: `Attendance record deleted. ${creditsToRestore} class credit(s) restored to student package.`,
+      message: record.session.timetableSlotId
+        ? `Attendance removed. ${creditsToRestore} class credit(s) restored; the class is back in the timetable as not yet marked.`
+        : `Attendance record deleted. ${creditsToRestore} class credit(s) restored to student package.`,
     };
   });
 }

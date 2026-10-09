@@ -438,7 +438,7 @@ export function StudentDetailClient({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 rounded-2xl bg-slate-900/90 p-4 border border-slate-800 text-center">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 rounded-2xl bg-slate-900/90 p-4 border border-slate-800 text-center">
                 <div>
                   <span className="text-xs text-slate-400 font-medium">Package Value</span>
                   <div className="text-base font-bold text-white">
@@ -452,20 +452,16 @@ export function StudentDetailClient({
                   </div>
                 </div>
                 <div>
-                  <span className="text-xs text-slate-400 font-medium">Total Classes</span>
+                  <span className="text-xs text-slate-400 font-medium">Entitled</span>
                   <div className="text-base font-bold text-white">{activePackage.totalEntitlement}</div>
                 </div>
                 <div>
-                  <span className="text-xs text-slate-400 font-medium">Attended</span>
+                  <span className="text-xs text-slate-400 font-medium">Consumed</span>
                   <div className="text-base font-bold text-slate-300">{activePackage.totalConsumed}</div>
                 </div>
                 <div>
-                  <span className="text-xs text-slate-400 font-medium">Balance Classes</span>
+                  <span className="text-xs text-slate-400 font-medium">Remaining</span>
                   <div className="text-base font-bold text-teal-400">{activePackage.totalRemaining}</div>
-                </div>
-                <div>
-                  <span className="text-xs text-slate-400 font-medium">Available</span>
-                  <div className="text-base font-bold text-emerald-400">{activePackage.totalAvailable}</div>
                 </div>
               </div>
 
@@ -780,13 +776,12 @@ export function StudentDetailClient({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 rounded-2xl bg-slate-900/90 p-4 border border-slate-800 text-center">
+              {/* Consumed = attended classes; Remaining = Entitled − Consumed. Booked future classes are not consumed. */}
+              <div className="grid grid-cols-3 gap-3 rounded-2xl bg-slate-900/90 p-4 border border-slate-800 text-center">
                 {[
                   ["Entitled", pkg.totalEntitlement, "text-white"],
                   ["Consumed", pkg.totalConsumed, "text-slate-300"],
                   ["Remaining", pkg.totalRemaining, "text-teal-400"],
-                  ["Reserved", pkg.totalReserved, "text-blue-400"],
-                  ["Available", pkg.totalAvailable, "text-emerald-400"],
                 ].map(([label, value, color]) => (
                   <div key={label as string}>
                     <span className="text-xs text-slate-400 font-medium">{label}</span>
@@ -820,12 +815,11 @@ export function StudentDetailClient({
                       </div>
                       <span className="text-xs font-semibold text-slate-400">{sub.subjectCode}</span>
                     </div>
-                    <div className="grid grid-cols-4 gap-1 text-xs text-center pt-2 border-t border-slate-800">
+                    <div className="grid grid-cols-3 gap-1 text-xs text-center pt-2 border-t border-slate-800">
                       {[
-                        ["Alloc", sub.allocatedCredits, "text-white"],
-                        ["Used", sub.consumedCredits, "text-slate-300"],
-                        ["Remain", sub.remainingCredits, "text-teal-400"],
-                        ["Avail", sub.availableCredits, "text-emerald-400"],
+                        ["Allocated", sub.allocatedCredits, "text-white"],
+                        ["Consumed", sub.consumedCredits, "text-slate-300"],
+                        ["Remaining", sub.remainingCredits, "text-teal-400"],
                       ].map(([label, value, color]) => (
                         <div key={label as string}>
                           <div className="text-xs text-slate-400">{label}</div>
