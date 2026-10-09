@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Xello Tuition",
-    "slug": "xello-tuition",
+    "slug": "xello-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -25,6 +25,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "77d5eb4a-ef0a-477e-b832-2292e171d83d"
+      }
+    },
+    "owner": "xelloapps-team",
+    "plugins": [
+      "expo-asset"
+    ]
   }
 }
