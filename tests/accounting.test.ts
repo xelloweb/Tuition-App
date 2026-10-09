@@ -4,7 +4,7 @@ import { prisma, owner, coordinator, accounts, makeSubject, makeTeacher, makeStu
 import { calculatePackageBalances } from "../src/lib/package-calculations";
 import { executeReallocation, validateReallocation } from "../src/lib/reallocation";
 import { correctAttendanceRecord, submitSessionAttendance } from "../src/lib/attendance-ledger";
-import { calculateStudentFinancialSummary, isPastDue, verifyAndAllocatePayment } from "../src/lib/billing";
+import { calculateStudentFinancialSummary, cancelInvoice, isPastDue, removeInvoice, verifyAndAllocatePayment } from "../src/lib/billing";
 import { ApiError } from "../src/lib/api-errors";
 
 async function pastSession(packageId: string, studentId: string, teacherId: string, subjectId: string, hoursAgo: number) {
@@ -218,4 +218,84 @@ describe("payments", () => {
     const pay = await payment(student.id, 500);
     await assert.rejects(verifyAndAllocatePayment({ paymentId: pay.id, user: coordinator }), (e: ApiError) => e.status === 403);
   });
+
+  test("accounts or owner can remove unpaid invoices with no recorded payments", async () => {
+    const student = await makeStudent();
+    const inv = await prisma.invoice.create({
+      data: {
+        invoiceNumber: uid("INV-DEL"),
+        studentId: student.id,
+        dueDate: new Date(),
+        subtotal: 3000,
+        totalAmount: 3000,
+        paidAmount: 0,
+        balanceDue: 3000,
+        status: "UNPAID",
+        items: { create: [{ description: "Package", quantity: 1, unitPrice: 3000, amount: 3000 }] },
+      },
+    });
+
+    // Coordinators cannot delete invoices
+    await assert.rejects(removeInvoice(inv.id, coordinator), (e: ApiError) => e.status === 403);
+
+    // Accounts can remove the unpaid invoice
+    const deleted = await removeInvoice(inv.id, accounts);
+    assert.equal(deleted.id, inv.id);
+
+    // Invoice and items are gone
+    assert.equal(await prisma.invoice.findUnique({ where: { id: inv.id } }), null);
+    assert.equal(await prisma.invoiceLineItem.count({ where: { invoiceId: inv.id } }), 0);
+
+    // Audit log was recorded
+    const audit = await prisma.auditLog.findFirst({
+      where: { entityType: "INVOICE", entityId: inv.id, action: "DELETE_INVOICE" },
+    });
+    assert.ok(audit);
+    assert.equal(audit.actorRole, "ACCOUNTS");
+  });
+
+  test("cannot remove an invoice that has payments recorded", async () => {
+    const student = await makeStudent();
+    const inv = await prisma.invoice.create({
+      data: {
+        invoiceNumber: uid("INV-PAID"),
+        studentId: student.id,
+        dueDate: new Date(),
+        subtotal: 3000,
+        totalAmount: 3000,
+        paidAmount: 1500,
+        balanceDue: 1500,
+        status: "PARTIALLY_PAID",
+      },
+    });
+
+    await assert.rejects(removeInvoice(inv.id, owner), (e: ApiError) => e.status === 409);
+  });
+
+  test("accounts or owner can cancel an invoice", async () => {
+    const student = await makeStudent();
+    const inv = await prisma.invoice.create({
+      data: {
+        invoiceNumber: uid("INV-CNC"),
+        studentId: student.id,
+        dueDate: new Date(),
+        subtotal: 5000,
+        totalAmount: 5000,
+        paidAmount: 0,
+        balanceDue: 5000,
+        status: "UNPAID",
+      },
+    });
+
+    // Coordinators cannot cancel invoices
+    await assert.rejects(cancelInvoice(inv.id, coordinator), (e: ApiError) => e.status === 403);
+
+    const cancelled = await cancelInvoice(inv.id, accounts, "Duplicate invoice");
+    assert.equal(cancelled.status, "CANCELLED");
+    assert.equal(cancelled.balanceDue, 0);
+
+    // Already cancelled invoice cannot be cancelled again
+    await assert.rejects(cancelInvoice(inv.id, owner), (e: ApiError) => e.status === 409);
+  });
 });
+

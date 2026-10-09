@@ -105,6 +105,9 @@ export function StudentDetailClient({
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<any | null>(null);
+  const [deleteInvoiceLoading, setDeleteInvoiceLoading] = useState(false);
+  const [deleteInvoiceError, setDeleteInvoiceError] = useState<string | null>(null);
   const [enrollModal, setEnrollModal] = useState<null | { reassign?: { subjectId: string; subjectName: string; teacherId: string | null } }>(null);
   const [unenrollLoadingId, setUnenrollLoadingId] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -207,6 +210,23 @@ export function StudentDetailClient({
       setDeleteError(errorMessage(err, "Could not archive this student."));
     } finally {
       setDeleteLoading(false);
+    }
+  };
+
+  const handleDeleteInvoice = async () => {
+    if (!invoiceToDelete) return;
+    setDeleteInvoiceLoading(true);
+    setDeleteInvoiceError(null);
+    try {
+      const data = await apiRequest<{ message: string }>(`/api/invoices/${invoiceToDelete.id}`, {
+        method: "DELETE",
+      });
+      setInvoiceToDelete(null);
+      showSuccess(data.message || `Invoice ${invoiceToDelete.invoiceNumber} removed.`);
+    } catch (err: any) {
+      setDeleteInvoiceError(errorMessage(err, "Failed to remove invoice."));
+    } finally {
+      setDeleteInvoiceLoading(false);
     }
   };
 
@@ -1008,9 +1028,24 @@ export function StudentDetailClient({
                       Due: {formatDateOnly(inv.dueDate)} • Total: ₹{inv.totalAmount.toLocaleString("en-IN")}
                     </div>
                   </div>
-                  <div className="sm:text-right">
-                    <div className="font-bold text-white">Balance Due: ₹{inv.balanceDue.toLocaleString("en-IN")}</div>
-                    <div className="text-xs text-slate-400">Paid: ₹{inv.paidAmount.toLocaleString("en-IN")}</div>
+                  <div className="flex items-center gap-3">
+                    <div className="sm:text-right">
+                      <div className="font-bold text-white">Balance Due: ₹{inv.balanceDue.toLocaleString("en-IN")}</div>
+                      <div className="text-xs text-slate-400">Paid: ₹{inv.paidAmount.toLocaleString("en-IN")}</div>
+                    </div>
+                    {inv.paidAmount === 0 && permissions.showFinancial && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInvoiceToDelete(inv);
+                          setDeleteInvoiceError(null);
+                        }}
+                        className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-1.5 text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 transition-colors"
+                        title="Remove unpaid invoice"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1204,6 +1239,25 @@ export function StudentDetailClient({
           alternativeAction={student.status !== "WITHDRAWN" ? { label: "Archive instead", onClick: handleArchive } : undefined}
           onConfirm={handleDeleteStudent}
           onCancel={() => setDeleteModalOpen(false)}
+        />
+      )}
+
+      {invoiceToDelete && (
+        <DeleteConfirmModal
+          title="Remove Unpaid Invoice"
+          message={`Permanently remove invoice ${invoiceToDelete.invoiceNumber} for ${student.name}? This will delete the invoice and remove the ₹${invoiceToDelete.balanceDue.toLocaleString("en-IN")} outstanding balance.`}
+          itemName={`${invoiceToDelete.invoiceNumber}`}
+          itemDetails={`Total Amount: ₹${invoiceToDelete.totalAmount.toLocaleString("en-IN")} • Due: ${formatDateOnly(invoiceToDelete.dueDate)} • Status: ${invoiceToDelete.status}`}
+          confirmLabel="Yes, Remove Invoice"
+          loading={deleteInvoiceLoading}
+          errorMessage={deleteInvoiceError}
+          onConfirm={handleDeleteInvoice}
+          onCancel={() => {
+            if (!deleteInvoiceLoading) {
+              setInvoiceToDelete(null);
+              setDeleteInvoiceError(null);
+            }
+          }}
         />
       )}
 

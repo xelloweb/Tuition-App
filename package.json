@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push --skip-generate && npm run seed && npm run secure-accounts && next build --webpack",
+    "build": "prisma generate && prisma db push --skip-generate && npm run seed && npm run secure-accounts && npm run cleanup-unpaid-invoices && next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "seed": "npx tsx prisma/seed.ts",
     "cleanup-students": "npx tsx scripts/cleanup-students.ts --force",
+    "cleanup-unpaid-invoices": "npx tsx scripts/cleanup-unpaid-invoices.ts",
     "test": "node scripts/run-tests.mjs",
     "typecheck": "tsc --noEmit",
     "secure-accounts": "npx tsx scripts/secure-accounts.ts"

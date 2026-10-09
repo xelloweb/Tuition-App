@@ -1,6 +1,6 @@
 import { prisma } from "./prisma";
 import { CurrentUser, PaymentMethod } from "./types";
-import { canVerifyPayments } from "./auth";
+import { canAccessFinancial, canVerifyPayments } from "./auth";
 import { conflictError, forbiddenError, notFoundError, relatedRecordError } from "./api-errors";
 import { BUSINESS_TIME_ZONE } from "./constants";
 import { localDateInZone } from "./zoned-time";
@@ -194,3 +194,110 @@ export async function calculateFinancialSummary(now: Date = new Date()) {
   }
   return { currency: "INR" as const, billed, received, outstanding, overdue, overdueInvoices, dueToday, advance: Math.max(0, received - allocated) };
 }
+
+export async function removeInvoice(invoiceId: string, user: CurrentUser) {
+  if (!canAccessFinancial(user.role)) {
+    throw forbiddenError("Only Accounts staff or Owner can delete invoices.");
+  }
+
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: {
+      student: { select: { id: true, name: true, studentCode: true } },
+      allocations: { include: { payment: true } },
+    },
+  });
+
+  if (!invoice) throw notFoundError("Invoice not found.");
+
+  if (invoice.paidAmount > 0) {
+    throw conflictError(
+      `Cannot remove an invoice that has payments recorded (₹${invoice.paidAmount.toLocaleString("en-IN")} paid). Cancel the invoice instead or refund payments first.`
+    );
+  }
+
+  const verifiedAllocations = invoice.allocations.filter((a) => a.payment?.isVerified);
+  if (verifiedAllocations.length > 0) {
+    throw conflictError("Cannot remove an invoice linked to verified payments.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    // Delete any unverified payment allocations
+    await tx.paymentAllocation.deleteMany({ where: { invoiceId } });
+    // Delete instalments
+    await tx.invoiceInstalment.deleteMany({ where: { invoiceId } });
+    // Delete follow-ups
+    await tx.followUp.deleteMany({ where: { invoiceId } });
+    // Delete line items
+    await tx.invoiceLineItem.deleteMany({ where: { invoiceId } });
+    // Delete invoice
+    const deleted = await tx.invoice.delete({ where: { id: invoiceId } });
+
+    await tx.auditLog.create({
+      data: {
+        entityType: "INVOICE",
+        entityId: invoiceId,
+        action: "DELETE_INVOICE",
+        actorRole: user.role,
+        actorName: user.name,
+        details: JSON.stringify({
+          invoiceNumber: invoice.invoiceNumber,
+          studentName: invoice.student?.name,
+          studentCode: invoice.student?.studentCode,
+          totalAmount: invoice.totalAmount,
+          balanceDue: invoice.balanceDue,
+          reason: "Unpaid invoice removed by user",
+        }),
+      },
+    });
+
+    return deleted;
+  });
+}
+
+export async function cancelInvoice(invoiceId: string, user: CurrentUser, reason?: string) {
+  if (!canAccessFinancial(user.role)) {
+    throw forbiddenError("Only Accounts staff or Owner can cancel invoices.");
+  }
+
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: {
+      student: { select: { id: true, name: true, studentCode: true } },
+    },
+  });
+
+  if (!invoice) throw notFoundError("Invoice not found.");
+  if (invoice.status === "CANCELLED") throw conflictError("Invoice is already cancelled.");
+
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        status: "CANCELLED",
+        balanceDue: 0,
+        notes: reason ? `${invoice.notes ? invoice.notes + " | " : ""}Cancelled: ${reason}` : invoice.notes,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        entityType: "INVOICE",
+        entityId: invoiceId,
+        action: "CANCEL_INVOICE",
+        actorRole: user.role,
+        actorName: user.name,
+        details: JSON.stringify({
+          invoiceNumber: invoice.invoiceNumber,
+          studentName: invoice.student?.name,
+          studentCode: invoice.student?.studentCode,
+          totalAmount: invoice.totalAmount,
+          reason: reason || "Invoice cancelled by user",
+        }),
+      },
+    });
+
+    return updated;
+  });
+}
+

@@ -1,7 +1,7 @@
 "use client";
 
 import { ModalShell } from "@/components/ui/ModalShell";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Receipt,
@@ -16,6 +16,9 @@ import {
   X,
   CreditCard,
   Building,
+  Trash2,
+  Search,
+  Filter,
 } from "lucide-react";
 import { errorMessage, readApiResponse } from "@/lib/client-api";
 import { formatInTimeZone, formatDateOnly } from "@/lib/timezones";
@@ -23,6 +26,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { RecordPaymentDialog } from "@/components/billing/RecordPaymentDialog";
+import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 
 interface BillingClientProps {
   invoices: any[];
@@ -39,16 +43,33 @@ interface BillingClientProps {
 }
 
 export function BillingClient({
-  invoices,
+  invoices: initialInvoices,
   payments,
   unverifiedPayments,
   students,
-  financialStats,
+  financialStats: initialFinancialStats,
 }: BillingClientProps) {
   const router = useRouter();
+  const [invoices, setInvoices] = useState(initialInvoices);
+  const [financialStats, setFinancialStats] = useState(initialFinancialStats);
   const [activeTab, setActiveTab] = useState<"invoices" | "verification" | "payments">("invoices");
   const [recordOpen, setRecordOpen] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
+
+  // Invoice delete and filtering state
+  const [invoiceToDelete, setInvoiceToDelete] = useState<any | null>(null);
+  const [isDeletingInvoice, setIsDeletingInvoice] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState<"ALL" | "UNPAID" | "PAID" | "OVERDUE" | "CANCELLED">("ALL");
+  const [invoiceSearchQuery, setInvoiceSearchQuery] = useState("");
+
+  useEffect(() => {
+    setInvoices(initialInvoices);
+  }, [initialInvoices]);
+
+  useEffect(() => {
+    setFinancialStats(initialFinancialStats);
+  }, [initialFinancialStats]);
 
   // Verify modal state
   const [selectedPaymentForVerify, setSelectedPaymentForVerify] = useState<any | null>(null);
@@ -126,6 +147,59 @@ export function BillingClient({
       setLoading(false);
     }
   };
+
+  const handleDeleteInvoice = async () => {
+    if (!invoiceToDelete) return;
+    setIsDeletingInvoice(true);
+    setDeleteError(null);
+
+    try {
+      const res = await fetch(`/api/invoices/${invoiceToDelete.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Failed to remove invoice.");
+      }
+
+      setInvoices((prev: any[]) => prev.filter((i: any) => i.id !== invoiceToDelete.id));
+      setFinancialStats((prev: any) => ({
+        ...prev,
+        netBilled: Math.max(0, prev.netBilled - invoiceToDelete.totalAmount),
+        outstanding: Math.max(0, prev.outstanding - invoiceToDelete.balanceDue),
+        overdue:
+          new Date().toISOString().slice(0, 10) > new Date(invoiceToDelete.dueDate).toISOString().slice(0, 10)
+            ? Math.max(0, prev.overdue - invoiceToDelete.balanceDue)
+            : prev.overdue,
+      }));
+      setBanner(`Invoice ${invoiceToDelete.invoiceNumber} removed successfully.`);
+      setInvoiceToDelete(null);
+      router.refresh();
+    } catch (err: any) {
+      setDeleteError(err.message || "Failed to remove invoice.");
+    } finally {
+      setIsDeletingInvoice(false);
+    }
+  };
+
+  const filteredInvoices = invoices.filter((inv) => {
+    if (invoiceStatusFilter !== "ALL") {
+      if (invoiceStatusFilter === "OVERDUE") {
+        const isPast = new Date().toISOString().slice(0, 10) > new Date(inv.dueDate).toISOString().slice(0, 10);
+        if (inv.status !== "OVERDUE" && !(inv.balanceDue > 0 && isPast)) return false;
+      } else if (inv.status !== invoiceStatusFilter) {
+        return false;
+      }
+    }
+    if (invoiceSearchQuery.trim()) {
+      const q = invoiceSearchQuery.toLowerCase().trim();
+      const matchNumber = inv.invoiceNumber?.toLowerCase().includes(q);
+      const matchName = inv.student?.name?.toLowerCase().includes(q);
+      const matchCode = inv.student?.studentCode?.toLowerCase().includes(q);
+      if (!matchNumber && !matchName && !matchCode) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -240,56 +314,128 @@ export function BillingClient({
 
       {/* Tab 1: Invoices */}
       {activeTab === "invoices" && (
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-900 shadow-xl overflow-hidden">
-          <div className="divide-y divide-slate-800/80">
-            {invoices.length === 0 ? (
-              <div className="py-14 text-center text-xs text-slate-400">
-                No invoices recorded yet. Click &quot;Create Invoice&quot; to issue your first invoice.
-              </div>
-            ) : (
-              invoices.map((inv) => (
-                <div
-                  key={inv.id}
-                  className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-800/40 text-xs transition-colors"
+        <div className="space-y-4">
+          {/* Controls: Search and Status Filters */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                value={invoiceSearchQuery}
+                onChange={(e) => setInvoiceSearchQuery(e.target.value)}
+                placeholder="Search by invoice #, student name, or code..."
+                className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-400 focus:outline-hidden focus:border-teal-500"
+              />
+              {invoiceSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setInvoiceSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-sm text-white">
-                        {inv.invoiceNumber}
-                      </span>
-                      <StatusBadge status={inv.status} size="sm" />
-                      <span className="text-slate-400 font-medium">
-                        Student: <strong className="text-slate-200">{inv.student.name}</strong> ({inv.student.studentCode})
-                      </span>
-                    </div>
-                    <div className="text-slate-400 mt-1 flex flex-wrap items-center gap-2">
-                      <span>Due: {formatDateOnly(inv.dueDate)}</span>
-                      <span>•</span>
-                      <span>Total: ₹{inv.totalAmount.toLocaleString("en-IN")}</span>
-                      <span>•</span>
-                      <span>Paid: ₹{inv.paidAmount.toLocaleString("en-IN")}</span>
-                    </div>
-                  </div>
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
-                    <div className="text-right">
-                      <span className="text-xs text-slate-400 uppercase">Balance Due</span>
-                      <div className="font-bold text-sm text-white">
-                        ₹{inv.balanceDue.toLocaleString("en-IN")}
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+              {(["ALL", "UNPAID", "PAID", "OVERDUE", "CANCELLED"] as const).map((st) => {
+                const count =
+                  st === "ALL"
+                    ? invoices.length
+                    : st === "OVERDUE"
+                    ? invoices.filter(
+                        (i) =>
+                          (i.status === "OVERDUE" || (i.balanceDue > 0 && new Date().toISOString().slice(0, 10) > new Date(i.dueDate).toISOString().slice(0, 10))) &&
+                          i.status !== "CANCELLED"
+                      ).length
+                    : invoices.filter((i) => i.status === st).length;
+
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setInvoiceStatusFilter(st)}
+                    className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all whitespace-nowrap ${
+                      invoiceStatusFilter === st
+                        ? "bg-teal-500/20 text-teal-300 border border-teal-500/40"
+                        : "bg-slate-800/60 text-slate-400 hover:text-slate-200 border border-slate-700/50"
+                    }`}
+                  >
+                    {st === "ALL" ? "All" : st.charAt(0) + st.slice(1).toLowerCase().replace("_", " ")} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-900 shadow-xl overflow-hidden">
+            <div className="divide-y divide-slate-800/80">
+              {filteredInvoices.length === 0 ? (
+                <div className="py-14 text-center text-xs text-slate-400">
+                  {invoices.length === 0
+                    ? 'No invoices recorded yet. Click "Create Invoice" to issue your first invoice.'
+                    : "No invoices match the selected filter."}
+                </div>
+              ) : (
+                filteredInvoices.map((inv) => (
+                  <div
+                    key={inv.id}
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-800/40 text-xs transition-colors"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-sm text-white">
+                          {inv.invoiceNumber}
+                        </span>
+                        <StatusBadge status={inv.status} size="sm" />
+                        <span className="text-slate-400 font-medium">
+                          Student: <strong className="text-slate-200">{inv.student.name}</strong> ({inv.student.studentCode})
+                        </span>
+                      </div>
+                      <div className="text-slate-400 mt-1 flex flex-wrap items-center gap-2">
+                        <span>Due: {formatDateOnly(inv.dueDate)}</span>
+                        <span>•</span>
+                        <span>Total: ₹{inv.totalAmount.toLocaleString("en-IN")}</span>
+                        <span>•</span>
+                        <span>Paid: ₹{inv.paidAmount.toLocaleString("en-IN")}</span>
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => setPreviewInvoice(inv)}
-                      className="rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 font-semibold text-slate-200 hover:bg-slate-700/80 hover:text-white flex items-center gap-1.5 text-xs shadow-xs transition-all active:scale-95"
-                    >
-                      <Printer className="h-3.5 w-3.5" />
-                      Print / View
-                    </button>
+                    <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                      <div className="text-right">
+                        <span className="text-xs text-slate-400 uppercase">Balance Due</span>
+                        <div className="font-bold text-sm text-white">
+                          ₹{inv.balanceDue.toLocaleString("en-IN")}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => setPreviewInvoice(inv)}
+                        className="rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 font-semibold text-slate-200 hover:bg-slate-700/80 hover:text-white flex items-center gap-1.5 text-xs shadow-xs transition-all active:scale-95"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        Print / View
+                      </button>
+
+                      {inv.paidAmount === 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInvoiceToDelete(inv);
+                            setDeleteError(null);
+                          }}
+                          className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2 font-semibold text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 flex items-center gap-1.5 text-xs shadow-xs transition-all active:scale-95"
+                          title="Remove unpaid invoice"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -685,6 +831,24 @@ export function BillingClient({
               </div>
             </form>
           </ModalShell>
+      )}
+      {invoiceToDelete && (
+        <DeleteConfirmModal
+          title="Remove Unpaid Invoice"
+          message={`Permanently remove invoice ${invoiceToDelete.invoiceNumber} for ${invoiceToDelete.student.name} (${invoiceToDelete.student.studentCode})? This will delete the invoice and remove the ₹${invoiceToDelete.balanceDue.toLocaleString("en-IN")} outstanding balance.`}
+          itemName={`${invoiceToDelete.invoiceNumber} • ${invoiceToDelete.student.name}`}
+          itemDetails={`Total: ₹${invoiceToDelete.totalAmount.toLocaleString("en-IN")} • Due: ${formatDateOnly(invoiceToDelete.dueDate)} • Status: ${invoiceToDelete.status}`}
+          confirmLabel="Yes, Remove Invoice"
+          loading={isDeletingInvoice}
+          errorMessage={deleteError}
+          onConfirm={handleDeleteInvoice}
+          onCancel={() => {
+            if (!isDeletingInvoice) {
+              setInvoiceToDelete(null);
+              setDeleteError(null);
+            }
+          }}
+        />
       )}
       {recordOpen && (
         <RecordPaymentDialog
