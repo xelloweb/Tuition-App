@@ -8,6 +8,9 @@ import { FieldError, FormErrorSummary } from "@/components/ui/FormFeedback";
 import { apiRequest, ClientApiError, errorMessage } from "@/lib/client-api";
 import { SubjectOption, TeacherOption } from "./StudentFormModal";
 import { controlBorder, controlClass } from "@/components/ui/Field";
+import { TrainerAvailabilityPanel, useTrainerWeeks } from "@/components/teachers/TrainerWeekView";
+import { DAY_NAMES, findWeeklyOverlap, overlapMessage, rangeLabel } from "@/lib/trainer-week";
+import { slotInZone } from "@/lib/zoned-time";
 
 interface EnrollSubjectModalProps {
   studentId: string;
@@ -17,6 +20,8 @@ interface EnrollSubjectModalProps {
   currentlyEnrolledSubjectIds?: string[];
   /** When set, the modal (re)assigns the trainer for this already-enrolled subject. */
   reassign?: { subjectId: string; subjectName: string; teacherId: string | null };
+  /** The subject's current weekly class times, checked against the chosen trainer's week. */
+  subjectSlots?: { weekday: number; startMinutes: number; endMinutes: number; timeZone: string }[];
   onClose: () => void;
   onSuccess: (message: string) => void;
 }
@@ -28,6 +33,7 @@ export function EnrollSubjectModal({
   availableTeachers = [],
   currentlyEnrolledSubjectIds = [],
   reassign,
+  subjectSlots = [],
   onClose,
   onSuccess,
 }: EnrollSubjectModalProps) {
@@ -42,6 +48,22 @@ export function EnrollSubjectModal({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const activeTeachers = availableTeachers.filter((t) => t.active);
+
+  // The chosen trainer's week (without this student), for availability and instant clash warnings.
+  const { weeks, errors: weekErrors } = useTrainerWeeks(teacherId ? [teacherId] : [], studentId);
+  const trainerName = activeTeachers.find((t) => t.id === teacherId)?.name ?? "This trainer";
+  const schedule = teacherId ? weeks[teacherId] : undefined;
+  const clash = (() => {
+    if (!schedule || !reassign || teacherId === (reassign.teacherId ?? "")) return null;
+    for (const slot of subjectSlots) {
+      const ist = slot.timeZone === "Asia/Kolkata" ? slot : slotInZone(slot, "Asia/Kolkata");
+      const booked = findWeeklyOverlap(schedule.slots, ist);
+      if (booked) {
+        return `${overlapMessage(trainerName, booked).replace(/ Choose a time.*$/, "")} This overlaps ${studentName}'s ${reassign.subjectName} class on ${DAY_NAMES[ist.weekday]} ${rangeLabel(ist.startMinutes, ist.endMinutes)}. Choose another trainer, or move this class in the timetable first.`;
+      }
+    }
+    return null;
+  })();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,6 +176,16 @@ export function EnrollSubjectModal({
               ))}
             </select>
             <FieldError message={fieldErrors.teacherId} />
+            {clash && !fieldErrors.teacherId && (
+              <p role="alert" className="mt-2 rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm font-medium text-danger">
+                {clash}
+              </p>
+            )}
+            {teacherId && (
+              <div className="mt-2">
+                <TrainerAvailabilityPanel trainerName={trainerName} schedule={schedule} error={weekErrors[teacherId]} />
+              </div>
+            )}
             {activeTeachers.length === 0 && (
               <p className="mt-1 text-xs text-amber-300">No active trainers yet — you can enrol now and assign a trainer later.</p>
             )}
@@ -184,7 +216,7 @@ export function EnrollSubjectModal({
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || Boolean(clash)}
               className="inline-flex items-center gap-2 rounded-xl bg-teal-400 px-4 py-2 min-h-[44px] text-xs font-bold text-slate-950 hover:brightness-110 disabled:opacity-50 transition-all active:scale-95"
             >
               {loading ? (

@@ -3,6 +3,8 @@
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Field, controlBorder, controlClass } from "@/components/ui/Field";
+import { TrainerAvailabilityPanel, useTrainerWeeks } from "@/components/teachers/TrainerWeekView";
+import { findWeeklyOverlap, overlapMessage } from "@/lib/trainer-week";
 
 export interface SlotDraft {
   key: string;
@@ -75,6 +77,7 @@ export function WeeklyScheduleStep({
   classMinutes,
   packageInfo,
   preferences,
+  studentId,
 }: {
   rows: SubjectRow[];
   subjectName: (subjectId: string) => string;
@@ -89,6 +92,8 @@ export function WeeklyScheduleStep({
   packageInfo?: PackageSummary | null;
   /** Times a parent suggested on the public form (IST). Shown for reference; never booked by themselves. */
   preferences?: { subjectId: string; subjectName: string; weekday: number; start: string; end: string }[] | null;
+  /** When editing an existing student: their own current slots are not clashes. */
+  studentId?: string;
 }) {
   const update = (key: string, patch: Partial<SlotDraft>) => {
     const index = slots.findIndex((s) => s.key === key);
@@ -125,6 +130,11 @@ export function WeeklyScheduleStep({
   };
 
   const subjectRows = rows.filter((r) => r.subjectId);
+  // Each chosen trainer's week, for the availability panel and instant clash warnings.
+  const { weeks: trainerWeeks, errors: trainerWeekErrors } = useTrainerWeeks(
+    [...subjectRows.map((r) => r.teacherId), ...slots.map((sl) => sl.teacherId)],
+    studentId
+  );
   if (subjectRows.length === 0) {
     return <p className="text-sm text-ink-muted">Add a subject first; weekly slots are set per subject.</p>;
   }
@@ -205,6 +215,7 @@ export function WeeklyScheduleStep({
       </p>
       {subjectRows.map((row) => {
         const assigned = row.teacherId ? teacherName(row.teacherId) : null;
+        const rowWeek = row.teacherId ? trainerWeeks[row.teacherId] : undefined;
         const entries = slots.map((slot, index) => ({ slot, index })).filter((e) => e.slot.subjectId === row.subjectId);
         const headingId = `schedule-${row.key}`;
         return (
@@ -232,6 +243,9 @@ export function WeeklyScheduleStep({
                 {entries.length ? "Add another slot" : "Add a slot"}
               </Button>
             </div>
+            {row.teacherId && assigned && (
+              <TrainerAvailabilityPanel trainerName={assigned} schedule={rowWeek} error={trainerWeekErrors[row.teacherId]} />
+            )}
             {entries.length === 0 ? (
               <p className="text-sm text-ink-subtle">No weekly slots yet for {subjectName(row.subjectId)}.</p>
             ) : (
@@ -295,6 +309,23 @@ export function WeeklyScheduleStep({
                           {startError}
                         </p>
                       )}
+                      {!startError &&
+                        (() => {
+                          // Checked as soon as a time is entered; saving is refused by the server too.
+                          const trainerId = slot.teacherId || row.teacherId;
+                          const week = trainerId ? trainerWeeks[trainerId] : undefined;
+                          const start = toMinutes(slot.start);
+                          const end = toMinutes(slot.end);
+                          const booked =
+                            week && start !== null && end !== null && end > start
+                              ? findWeeklyOverlap(week.slots, { weekday: Number(slot.weekday), startMinutes: start, endMinutes: end })
+                              : null;
+                          return booked && week ? (
+                            <p role="alert" className="mt-2 rounded-control border border-rose-500/40 bg-rose-500/10 p-2 text-sm font-medium text-danger">
+                              {overlapMessage(week.trainer.name, booked)}
+                            </p>
+                          ) : null;
+                        })()}
                       {generalError && <p className="mt-2 text-sm font-medium text-danger">{generalError}</p>}
                     </li>
                   );

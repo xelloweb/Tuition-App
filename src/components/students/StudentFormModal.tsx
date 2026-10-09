@@ -1332,6 +1332,7 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
               clearSlotErrors={(index) => clearFieldError(`slots.${index}.weekday`, `slots.${index}.start`, `slots.${index}.end`, `slots.${index}.enrolmentId`)}
               classMinutes={CLASS_MINUTES}
               preferences={intakeInfo?.preferences}
+              studentId={isEdit ? student?.id : undefined}
               packageInfo={{
                 includePackage,
                 packageName,

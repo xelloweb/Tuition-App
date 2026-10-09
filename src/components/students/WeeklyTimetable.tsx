@@ -28,6 +28,8 @@ import { FieldError } from "@/components/ui/FormFeedback";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { TimetableView } from "@/lib/services/timetable";
 import type { TeacherOption } from "./StudentFormModal";
+import { TrainerAvailabilityPanel, useTrainerWeeks } from "@/components/teachers/TrainerWeekView";
+import { findWeeklyOverlap, overlapMessage } from "@/lib/trainer-week";
 
 interface SlotDraft {
   key: string;
@@ -103,6 +105,23 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
   const teacherById = useMemo(() => new Map(teachers.map((t) => [t.id, t])), [teachers]);
   const original = useMemo(() => new Map(view.slots.map((s) => [s.id, s])), [view.slots]);
 
+  // Each subject trainer's week without this student: shown while choosing times,
+  // and used to warn about an overlap as soon as a time is entered.
+  const { weeks: trainerWeeks, errors: trainerWeekErrors } = useTrainerWeeks(
+    canEdit ? view.enrolments.map((e) => e.teacherId ?? "") : [],
+    studentId
+  );
+  const trainerClash = (d: SlotDraft): string | null => {
+    const enr = enrolmentById.get(d.enrolmentId);
+    const teacherId = d.teacherId || enr?.teacherId || "";
+    const week = teacherId ? trainerWeeks[teacherId] : undefined;
+    const start = parseTimeOfDay(d.start);
+    const end = parseTimeOfDay(d.end);
+    if (!week || start === null || end === null || end <= start) return null;
+    const booked = findWeeklyOverlap(week.slots, { weekday: Number(d.weekday), startMinutes: start, endMinutes: end });
+    return booked ? overlapMessage(week.trainer.name, booked) : null;
+  };
+
   const liveDrafts = drafts.filter((d) => !d.removed);
   const isDirty =
     drafts.some((d) => {
@@ -123,6 +142,16 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
   };
 
   const update = (key: string, patch: Partial<SlotDraft>) => {
+    // The server's message for this slot no longer applies once it is changed;
+    // the instant trainer check shows any new clash straight away.
+    const index = liveDrafts.findIndex((d) => d.key === key);
+    if (index >= 0) {
+      setFieldErrors((prev) => {
+        const prefix = `slots.${index}.`;
+        if (!Object.keys(prev).some((k) => k.startsWith(prefix))) return prev;
+        return Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix)));
+      });
+    }
     setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)));
     setPreview(null);
   };
@@ -361,6 +390,13 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
                   </div>
                   <span className="text-xs text-slate-400 shrink-0">{subjectDrafts.filter((d) => !d.removed).length} slot(s)</span>
                 </div>
+                {canEdit && enr.teacherId && (
+                  <TrainerAvailabilityPanel
+                    trainerName={enr.teacherName ?? "Trainer"}
+                    schedule={trainerWeeks[enr.teacherId]}
+                    error={trainerWeekErrors[enr.teacherId]}
+                  />
+                )}
 
                 <ul className="space-y-2">
                   {subjectDrafts.length === 0 && <li className="text-xs text-slate-400 italic">No weekly slots yet.</li>}
@@ -457,6 +493,14 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
                         {slotErrors.map((m) => (
                           <FieldError key={m} message={m} />
                         ))}
+                        {(() => {
+                          const clashText = slotErrors.length ? null : trainerClash(d);
+                          return clashText ? (
+                            <p role="alert" className="rounded-lg border border-rose-500/40 bg-rose-500/10 p-2 text-sm font-medium text-danger">
+                              {clashText}
+                            </p>
+                          ) : null;
+                        })()}
                       </li>
                     );
                   })}

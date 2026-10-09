@@ -191,6 +191,60 @@ async function loadStudentContext(db: Db, studentId: string, now: Date) {
  * (inside the save transaction) the authoritative execution.
  * `input === null` keeps the current slots unchanged (used by "generate").
  */
+export interface TrainerSlotClash {
+  studentId: string;
+  studentName: string;
+  subjectName: string;
+  weekday: number;
+  startMinutes: number;
+  endMinutes: number;
+  timeZone: string;
+  /** e.g. "Monday 7:00 PM–8:00 PM IST" */
+  label: string;
+}
+
+/**
+ * For each candidate weekly slot, the first current weekly slot of another
+ * student with the same trainer that overlaps it, or null. Overlap is checked
+ * on the real dates of the next two weeks, so slots kept in another time zone
+ * compare correctly; back-to-back classes (8–9 PM after 7–8 PM) do not clash.
+ * Used by timetable saves, trainer changes and the trainer availability view.
+ */
+export async function findTrainerSlotClashes(
+  db: Db,
+  teacherId: string,
+  candidates: Pick<PlannedSlot, "weekday" | "startMinutes" | "endMinutes" | "timeZone">[],
+  { excludeStudentId, fromLocalDate, now = new Date() }: { excludeStudentId?: string; fromLocalDate?: string; now?: Date } = {}
+): Promise<(TrainerSlotClash | null)[]> {
+  if (candidates.length === 0) return [];
+  const others = await db.timetableSlot.findMany({
+    where: {
+      teacherId,
+      ...(excludeStudentId ? { enrolment: { studentId: { not: excludeStudentId } } } : {}),
+      ...currentSlotWhere(now),
+    },
+    include: { enrolment: { include: { student: { select: { id: true, name: true } }, subject: { select: { name: true } } } } },
+  });
+  const from = fromLocalDate ?? localDateInZone(now, BUSINESS_TIME_ZONE);
+  const otherOccurrences = others.map((o) => occurrencesBetween(o, from, CONFLICT_HORIZON_DAYS));
+  return candidates.map((c) => {
+    const mine = occurrencesBetween({ ...c, effectiveFrom: new Date(0), effectiveUntil: null }, from, CONFLICT_HORIZON_DAYS);
+    const index = others.findIndex((_, i) => mine.some((x) => otherOccurrences[i].some((y) => overlaps(x.start, x.end, y.start, y.end))));
+    if (index < 0) return null;
+    const other = others[index];
+    return {
+      studentId: other.enrolment.student.id,
+      studentName: other.enrolment.student.name,
+      subjectName: other.enrolment.subject.name,
+      weekday: other.weekday,
+      startMinutes: other.startMinutes,
+      endMinutes: other.endMinutes,
+      timeZone: other.timeZone,
+      label: `${slotLabel(other)} ${zoneLabel(other.timeZone)}`,
+    };
+  });
+}
+
 export async function buildTimetablePlan(
   db: Db,
   studentId: string,
@@ -343,21 +397,12 @@ export async function buildTimetablePlan(
 
   // ---- trainer conflicts with other students' recurring slots ----
   const slotTeacherIds = [...new Set(slots.map((s) => s.teacherId).filter((id): id is string => Boolean(id)))];
-  if (slotTeacherIds.length) {
-    const others = await db.timetableSlot.findMany({
-      where: { teacherId: { in: slotTeacherIds }, enrolment: { studentId: { not: studentId } }, ...currentSlotWhere(now) },
-      include: { enrolment: { include: { student: { select: { name: true } }, subject: { select: { name: true } } } } },
-    });
-    slots.forEach((s, i) => {
-      const field = `slots.${s.index}.start`;
-      if (!s.teacherId || errors[field]) return;
-      for (const other of others.filter((o) => o.teacherId === s.teacherId)) {
-        const otherOcc = occurrencesBetween(other, today, CONFLICT_HORIZON_DAYS);
-        if (horizon[i].some((x) => otherOcc.some((y) => overlaps(x.start, x.end, y.start, y.end)))) {
-          errors[field] = `${s.teacherName} already teaches ${other.enrolment.student.name} (${other.enrolment.subject.name}) on ${slotLabel(other)} ${zoneLabel(other.timeZone)}.`;
-          break;
-        }
-      }
+  for (const teacherId of slotTeacherIds) {
+    const mine = slots.filter((s) => s.teacherId === teacherId && !errors[`slots.${s.index}.start`]);
+    const clashes = await findTrainerSlotClashes(db, teacherId, mine, { excludeStudentId: studentId, fromLocalDate: today, now });
+    mine.forEach((s, k) => {
+      const clash = clashes[k];
+      if (clash) errors[`slots.${s.index}.start`] = `${s.teacherName} already teaches ${clash.studentName} (${clash.subjectName}) on ${clash.label}.`;
     });
   }
 

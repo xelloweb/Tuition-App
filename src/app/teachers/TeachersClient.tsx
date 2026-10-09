@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { formatDays } from "@/lib/trainer-profile";
 import Link from "next/link";
-import { FileSpreadsheet, MapPin } from "lucide-react";
+import { CalendarDays, FileSpreadsheet, MapPin } from "lucide-react";
 
 export interface TeacherListItem extends TeacherFormRecord {
   ratesVisible: boolean;
@@ -408,6 +408,16 @@ export function TeachersClient({
                       Calculation: <span className="font-semibold text-slate-300">Hourly Rate × Class Hours</span>
                     </div>
                   </div>
+                )}
+
+                {(canManage || isTeacherView) && (
+                  <Link
+                    href={`/teachers/${teacher.id}`}
+                    className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-teal-500/30 bg-teal-500/10 px-3 py-2 text-sm font-semibold text-teal-200 hover:bg-teal-500/20 transition-colors"
+                  >
+                    <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                    Timetable &amp; students<span className="sr-only"> for {teacher.name}</span>
+                  </Link>
                 )}
 
                 {canManage && (

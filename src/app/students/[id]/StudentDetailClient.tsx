@@ -47,6 +47,7 @@ import { MobileTabs } from "@/components/ui/MobileTabs";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { TimetableView } from "@/lib/services/timetable";
 import type { PackageBalanceBreakdown } from "@/lib/types";
+import { RemovePackageDialog } from "@/components/packages/RemovePackageDialog";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface StudentDetailClientProps {
@@ -60,7 +61,7 @@ interface StudentDetailClientProps {
   activity?: { id: string; action: string; actorName: string; createdAt: string; details: string }[];
   ledger?: { id: string; eventType: string; creditsDelta: number; reason: string; actorName: string; createdAt: string }[];
   viewerTimeZone?: string;
-  permissions?: { canManage: boolean; canSchedule: boolean; canReallocate: boolean; canEditPackage?: boolean; showFinancial: boolean; showFollowUps: boolean };
+  permissions?: { canManage: boolean; canSchedule: boolean; canReallocate: boolean; canEditPackage?: boolean; canRemovePackage?: boolean; showFinancial: boolean; showFollowUps: boolean };
   /** Owner only, and only when money already paid is not yet a working package. */
   existingPayment?: ExistingPaymentOptions | null;
   /** Tab to open first (e.g. ?tab=packages). */
@@ -99,6 +100,7 @@ export function StudentDetailClient({
   const [assignOpen, setAssignOpen] = useState(false);
   const [editStartStep, setEditStartStep] = useState<"package" | undefined>(undefined);
   const [selectedForEdit, setSelectedForEdit] = useState<PackageBalanceBreakdown | null>(null);
+  const [removingPackage, setRemovingPackage] = useState<{ id: string; number: string } | null>(null);
   const [selectedForRealloc, setSelectedForRealloc] = useState<PackageBalanceBreakdown | null>(null);
   const [selectedForLedger, setSelectedForLedger] = useState<{ id: string; number: string; name: string } | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -746,6 +748,15 @@ export function StudentDetailClient({
                       <Edit2 className="h-3.5 w-3.5" /> Edit Package
                     </button>
                   )}
+                  {permissions.canRemovePackage && (
+                    <button
+                      type="button"
+                      onClick={() => setRemovingPackage({ id: pkg.packageId, number: pkg.packageNumber })}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2 min-h-[44px] text-xs font-semibold text-rose-300 hover:bg-rose-500/20 transition-all"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Remove wrong package
+                    </button>
+                  )}
                   {permissions.canReallocate && (
                     <button
                       onClick={() => setSelectedForRealloc(pkg)}
@@ -1162,6 +1173,18 @@ export function StudentDetailClient({
         </div>
       )}
 
+      {removingPackage && (
+        <RemovePackageDialog
+          packageId={removingPackage.id}
+          packageNumber={removingPackage.number}
+          onClose={() => setRemovingPackage(null)}
+          onRemoved={(message) => {
+            setRemovingPackage(null);
+            showSuccess(message);
+          }}
+        />
+      )}
+
       {selectedForEdit && (
         <EditPackageModal
           pkg={selectedForEdit}
@@ -1269,6 +1292,13 @@ export function StudentDetailClient({
           availableTeachers={availableTeachers}
           currentlyEnrolledSubjectIds={enrolments.map((e) => e.subjectId)}
           reassign={enrollModal.reassign}
+          subjectSlots={
+            enrollModal.reassign && timetable
+              ? timetable.slots.filter(
+                  (sl) => timetable.enrolments.find((e) => e.id === sl.enrolmentId)?.subjectId === enrollModal.reassign!.subjectId
+                )
+              : []
+          }
           onClose={() => setEnrollModal(null)}
           onSuccess={(message) => {
             setEnrollModal(null);

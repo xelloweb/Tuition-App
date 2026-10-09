@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { canManageStudents, requirePermission, requireUser } from "@/lib/auth";
 import {
+  ApiError,
   notFoundError,
   readJsonObject,
   relatedRecordError,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/api-errors";
 import { FieldCollector } from "@/lib/validation";
 import { teacherPublicSelect } from "@/lib/services/students";
+import { trainerChangeClash } from "@/lib/services/trainer-schedule";
 import { generateTimetableOccurrences, retireEnrolmentSlots } from "@/lib/services/timetable";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -49,6 +51,16 @@ export const POST = withErrorHandling<Ctx>("POST /api/students/[id]/enrolments",
     const existing = await tx.subjectEnrollment.findUnique({
       where: { studentId_subjectId: { studentId, subjectId } },
     });
+
+    // A new trainer takes over this subject's weekly slots: refuse if any of them
+    // overlaps a class the new trainer already teaches (back-to-back is fine).
+    if (existing && teacherId && existing.teacherId !== teacherId) {
+      const clash = await trainerChangeClash(tx, { enrolmentId: existing.id, studentId, teacherId });
+      if (clash) {
+        throw new ApiError(409, "CONFLICT", clash.message, { fieldErrors: { teacherId: clash.message }, details: { clash: clash.clash } });
+      }
+    }
+
     const enr = existing
       ? await tx.subjectEnrollment.update({
           where: { id: existing.id },
