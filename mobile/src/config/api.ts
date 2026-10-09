@@ -61,7 +61,8 @@ export async function apiRequest<T = any>(endpoint: string, options: FetchOption
       // Only the phone app's own endpoints read the token, so only their 401 means "signed out".
       if (res.status === 401 && token && endpoint.startsWith("/api/mobile/") && onSessionExpired) onSessionExpired();
       const message = data.message || data.error || `Request failed with status ${res.status}`;
-      throw new Error(message);
+      // Keep the server's code and details (e.g. a confirmation the person must give).
+      throw Object.assign(new Error(message), { status: res.status, code: data.code, details: data.details });
     }
 
     return data;

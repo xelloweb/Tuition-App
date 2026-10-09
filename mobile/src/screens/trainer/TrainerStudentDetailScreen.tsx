@@ -131,6 +131,8 @@ export function TrainerStudentDetailScreen({ route, navigation }: any) {
               size="sm"
               onPress={() =>
                 navigation.navigate("MarkAttendance", {
+                  studentId: student.id,
+                  subjectId: sub.subjectId,
                   studentName: student.name,
                   studentCode: student.studentCode,
                   subjectName: sub.subjectName,

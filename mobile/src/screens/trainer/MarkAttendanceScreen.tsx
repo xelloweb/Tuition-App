@@ -16,10 +16,14 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../config/api";
+import { istTodayDate } from "../../config/ist";
 import { ArrowLeft, CheckCircle2, UserCheck, BookOpen, Clock, FileText } from "lucide-react-native";
 
 export function MarkAttendanceScreen({ route, navigation }: any) {
-  const { sessionId, studentName, studentCode, subjectName, onSuccess } = route.params || {};
+  const { sessionId, studentId, subjectId, studentName, studentCode, subjectName, onSuccess } = route.params || {};
+  // From today's classes: a scheduled class. From a student's page: a class recorded for that
+  // student and subject, exactly like "Mark Attendance" on the website.
+  const isScheduledClass = Boolean(sessionId);
   const { token } = useAuth();
 
   const [studentAttendance, setStudentAttendance] = useState<"PRESENT" | "LATE" | "ABSENT">("PRESENT");
@@ -30,55 +34,103 @@ export function MarkAttendanceScreen({ route, navigation }: any) {
   const [progressNote, setProgressNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // "Absent" is a student no-show: the package's own no-show rule decides whether a credit is used.
+  const outcomeForSession = studentAttendance === "ABSENT" ? "STUDENT_NO_SHOW" : sessionOutcome;
+
+  const showSaved = (message: string) =>
+    Alert.alert("Attendance Marked!", message, [
+      {
+        text: "OK",
+        onPress: () => {
+          if (onSuccess) onSuccess();
+          navigation.goBack();
+        },
+      },
+    ]);
+
+  const recordClass = async (confirm: { confirmExceedsCredits?: boolean; confirmDuplicate?: boolean } = {}) => {
+    const minutes = parseInt(actualDurationMinutes, 10) || 60;
+    setSubmitting(true);
+    try {
+      const result = await apiRequest<{ message?: string; creditsDeducted?: number }>("/api/mobile/trainer/attendance", {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          studentId,
+          subjectId,
+          classDate: istTodayDate(),
+          durationMinutes: minutes,
+          topicCovered: topicCovered.trim(),
+          homework: homework.trim() || undefined,
+          studentProgressNote: progressNote.trim() || undefined,
+          ...confirm,
+        }),
+      });
+      showSaved(result.message || `Class for ${studentName || "student"} recorded.`);
+    } catch (err: any) {
+      const code = err?.details?.code;
+      if (code === "EXCEEDS_PACKAGE_CREDITS" || code === "DUPLICATE_ATTENDANCE") {
+        // The website asks the same question with a tick-box before saving.
+        Alert.alert("Please confirm", err.message, [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Submit anyway",
+            onPress: () =>
+              recordClass({
+                ...confirm,
+                ...(code === "EXCEEDS_PACKAGE_CREDITS" ? { confirmExceedsCredits: true } : { confirmDuplicate: true }),
+              }),
+          },
+        ]);
+      } else {
+        Alert.alert("Attendance not saved", err?.message || "The server did not accept the attendance. Check your connection and try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!topicCovered.trim()) {
+    // Same rule as the website: a topic is required when the class took place.
+    if ((!isScheduledClass || outcomeForSession === "COMPLETED") && !topicCovered.trim()) {
       Alert.alert("Topic Required", "Please enter the topic covered during this class.");
       return;
     }
 
-    if (!sessionId) {
-      // Opened without a scheduled class (e.g. from a student profile): there is nothing to save against.
-      Alert.alert(
-        "Choose the class first",
-        "Attendance is saved against a scheduled class. Open today's class from your Dashboard and mark it there."
-      );
+    if (!isScheduledClass) {
+      if (!studentId || !subjectId) {
+        Alert.alert("Choose the class first", "Open the student from My Students, or today's class from your Dashboard.");
+        return;
+      }
+      await recordClass();
       return;
     }
 
     setSubmitting(true);
     try {
-      await apiRequest(`/api/sessions/${sessionId}/attendance`, {
+      // Same rules as the website: credits through the ledger, only your own classes, no double marking.
+      const result = await apiRequest<{ shouldConsumeCredit?: boolean; alreadyProcessed?: boolean; message?: string }>(`/api/mobile/trainer/sessions/${sessionId}/attendance`, {
         method: "POST",
         token,
         body: JSON.stringify({
-          sessionOutcome,
+          sessionOutcome: outcomeForSession,
           studentAttendance,
           actualDurationMinutes: parseInt(actualDurationMinutes, 10) || 60,
-          topicCovered: topicCovered.trim(),
+          topicCovered: topicCovered.trim() || undefined,
           homework: homework.trim() || undefined,
           studentProgressNote: progressNote.trim() || undefined,
         }),
       });
-
-      Alert.alert(
-        "Attendance Marked!",
-        `Class for ${studentName || "student"} marked as ${studentAttendance}. 1 class credit deducted and trainer hours recorded.`,
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              if (onSuccess) onSuccess();
-              navigation.goBack();
-            },
-          },
-        ]
+      showSaved(
+        result.alreadyProcessed
+          ? result.message || "Attendance was already submitted for this class; nothing was charged twice."
+          : `Class for ${studentName || "student"} marked as ${studentAttendance}. ${
+              result.shouldConsumeCredit ? "1 class credit used" : "No class credit used"
+            } and trainer hours recorded.`
       );
     } catch (err: any) {
       // Stay on the form so nothing typed is lost; never report a failed save as saved.
-      Alert.alert(
-        "Attendance not saved",
-        `${err?.message || "The server did not accept the attendance."}\n\nYou can mark this class on the website instead.`
-      );
+      Alert.alert("Attendance not saved", err?.message || "The server did not accept the attendance. Check your connection and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -114,8 +166,9 @@ export function MarkAttendanceScreen({ route, navigation }: any) {
           </View>
         </Card>
 
-        {/* 1. Student Attendance Status */}
-        <Text style={styles.sectionHeading}>Student Attendance</Text>
+        {/* 1. Student Attendance Status (scheduled classes only; a recorded class took place) */}
+        {isScheduledClass && <Text style={styles.sectionHeading}>Student Attendance</Text>}
+        {isScheduledClass && (
         <View style={styles.pillsRow}>
           {(["PRESENT", "LATE", "ABSENT"] as const).map((status) => {
             const isSelected = studentAttendance === status;
@@ -144,10 +197,13 @@ export function MarkAttendanceScreen({ route, navigation }: any) {
             );
           })}
         </View>
+        )}
 
         {/* 2. Duration */}
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Class Duration (Minutes)</Text>
+          <Text style={styles.label}>
+            Class Duration (Minutes){isScheduledClass ? "" : " · 60 minutes = 1 class credit"}
+          </Text>
           <View style={styles.inputWrapper}>
             <Clock size={16} color={Colors.textMuted} style={styles.inputIcon} />
             <TextInput
@@ -163,7 +219,9 @@ export function MarkAttendanceScreen({ route, navigation }: any) {
 
         {/* 3. Topic Covered */}
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Topic Covered *</Text>
+          <Text style={styles.label}>
+            {!isScheduledClass || outcomeForSession === "COMPLETED" ? "Topic Covered *" : "Topic Covered (optional)"}
+          </Text>
           <View style={[styles.inputWrapper, { height: 80, alignItems: "flex-start", paddingTop: 10 }]}>
             <BookOpen size={16} color={Colors.textMuted} style={styles.inputIcon} />
             <TextInput
@@ -211,7 +269,7 @@ export function MarkAttendanceScreen({ route, navigation }: any) {
 
         {/* Submit Button */}
         <Button
-          title="Save & Deduct 1 Credit"
+          title="Save Attendance"
           onPress={handleSubmit}
           loading={submitting}
           size="lg"

@@ -3,14 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
 import { canManageStudents, requirePermission } from "@/lib/auth";
 import { requireMobileUser } from "@/lib/mobile-auth";
+import { istPeriods } from "@/lib/ist-periods";
 
 export const GET = withErrorHandling("GET /api/mobile/admin/dashboard", async (req) => {
   const user = await requireMobileUser(req);
   requirePermission(canManageStudents(user.role));
   const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+  // Days and months start at IST midnight, whatever clock the server uses.
+  const { today, month } = istPeriods(now);
 
   const [
     totalStudents,
@@ -23,7 +23,7 @@ export const GET = withErrorHandling("GET /api/mobile/admin/dashboard", async (r
     prisma.teacher.count({ where: { active: true } }),
     prisma.session.findMany({
       where: {
-        scheduledStartTimeUtc: { gte: startOfDay, lte: endOfDay },
+        scheduledStartTimeUtc: today,
       },
       include: {
         student: { select: { id: true, name: true, grade: true } },
@@ -35,7 +35,7 @@ export const GET = withErrorHandling("GET /api/mobile/admin/dashboard", async (r
     }),
     prisma.attendanceRecord.findMany({
       where: {
-        markedAt: { gte: startOfMonth },
+        markedAt: month,
         sessionOutcome: "COMPLETED",
       },
       select: { actualDurationMinutes: true },

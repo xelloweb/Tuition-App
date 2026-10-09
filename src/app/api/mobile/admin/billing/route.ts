@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withErrorHandling } from "@/lib/api-errors";
+import { validationError, withErrorHandling } from "@/lib/api-errors";
 import { canAccessFinancial, canVerifyPayments, requirePermission } from "@/lib/auth";
 import { requireMobileUser } from "@/lib/mobile-auth";
 
@@ -57,32 +57,15 @@ export const GET = withErrorHandling("GET /api/mobile/admin/billing", async (req
   });
 });
 
+/**
+ * "Mark paid" used to set an invoice to Paid with no payment behind it, so the
+ * money never reached payments, verification or the reports. Payments are
+ * recorded on the website, where they wait for verification like every other.
+ */
 export const POST = withErrorHandling("POST /api/mobile/admin/billing", async (req) => {
   const user = await requireMobileUser(req);
   requirePermission(canVerifyPayments(user.role));
-  const body = await req.json();
-  const { invoiceId, action } = body;
-
-  if (!invoiceId) {
-    return NextResponse.json({ success: false, message: "Invoice ID required" }, { status: 400 });
-  }
-
-  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
-  if (!invoice) {
-    return NextResponse.json({ success: false, message: "Invoice not found" }, { status: 404 });
-  }
-
-  if (action === "MARK_PAID") {
-    const updated = await prisma.invoice.update({
-      where: { id: invoiceId },
-      data: {
-        status: "PAID",
-        paidAmount: invoice.totalAmount,
-        balanceDue: 0,
-      },
-    });
-    return NextResponse.json({ success: true, invoice: updated, message: "Invoice marked as paid." });
-  }
-
-  return NextResponse.json({ success: false, message: "Invalid action" }, { status: 400 });
+  throw validationError(
+    "Record payments on the website: Invoices & payments → Record payment. The invoice balance changes once the payment is verified."
+  );
 });

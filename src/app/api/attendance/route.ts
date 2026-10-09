@@ -1,39 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { readJsonObject, withErrorHandling } from "@/lib/api-errors";
-import { recordManualAttendance } from "@/lib/services/manual-attendance";
+import { parseManualAttendanceBody, recordManualAttendance } from "@/lib/services/manual-attendance";
 import { prisma } from "@/lib/prisma";
 
 export const POST = withErrorHandling("POST /api/attendance", async (req) => {
   const user = await requireUser();
   const body = await readJsonObject(req);
 
-  const studentId = String(body.studentId ?? "").trim();
-  const subjectId = String(body.subjectId ?? "").trim();
-  const teacherId = body.teacherId ? String(body.teacherId).trim() : undefined;
-  const classDate = String(body.classDate ?? "").trim();
-  const durationMinutes = Number(body.durationMinutes ?? 60);
-  const topicCovered = typeof body.topicCovered === "string" ? body.topicCovered : undefined;
-  const homework = typeof body.homework === "string" ? body.homework : undefined;
-  const studentProgressNote = typeof body.studentProgressNote === "string" ? body.studentProgressNote : undefined;
-  const confirmExceedsCredits = Boolean(body.confirmExceedsCredits);
-  const confirmDuplicate = Boolean(body.confirmDuplicate);
-
-  const result = await recordManualAttendance(
-    {
-      studentId,
-      subjectId,
-      teacherId,
-      classDate,
-      durationMinutes,
-      topicCovered,
-      homework,
-      studentProgressNote,
-      confirmExceedsCredits,
-      confirmDuplicate,
-    },
-    user
-  );
+  const result = await recordManualAttendance(parseManualAttendanceBody(body), user);
 
   return NextResponse.json(result);
 });

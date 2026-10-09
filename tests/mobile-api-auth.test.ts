@@ -23,6 +23,11 @@ import * as timetable from "../src/app/api/mobile/admin/timetable/route";
 import * as trainerDashboard from "../src/app/api/mobile/trainer/dashboard/route";
 import * as trainerStudents from "../src/app/api/mobile/trainer/students/route";
 import * as trainerTimetable from "../src/app/api/mobile/trainer/timetable/route";
+import * as trainerRecord from "../src/app/api/mobile/trainer/attendance/route";
+import * as trainerSessionMark from "../src/app/api/mobile/trainer/sessions/[id]/attendance/route";
+
+// Routes with an id in the path get it the way Next.js passes it.
+const withId = (h: unknown): Handler => (req) => (h as (r: Request, c: unknown) => Promise<Response>)(req, { params: Promise.resolve({ id: "any-session" }) });
 
 type Handler = (req: Request, ctx: unknown) => Promise<Response>;
 const BASE = "http://localhost";
@@ -44,6 +49,8 @@ const ENDPOINTS: [string, string, Handler][] = [
   ["GET", "/api/mobile/trainer/dashboard", trainerDashboard.GET as Handler],
   ["GET", "/api/mobile/trainer/students", trainerStudents.GET as Handler],
   ["GET", "/api/mobile/trainer/timetable", trainerTimetable.GET as Handler],
+  ["POST", "/api/mobile/trainer/attendance", trainerRecord.POST as Handler],
+  ["POST", "/api/mobile/trainer/sessions/any-session/attendance", withId(trainerSessionMark.POST)],
 ];
 
 function call(handler: Handler, method: string, path: string, token?: string, body?: unknown) {

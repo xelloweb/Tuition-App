@@ -8,6 +8,18 @@ import { getTeacherRateForGrade } from "../rates";
 import { BUSINESS_TIME_ZONE } from "../constants";
 import { zonedTimeToUtc } from "../zoned-time";
 
+/**
+ * A class whose trainer payout is already paid, or included in a payout run,
+ * keeps its hours: deleting it or changing its length would make the payout
+ * records disagree with the money actually paid. Only the owner may still do it.
+ */
+const PAYOUT_LOCKED_MESSAGE =
+  "This class is already in a trainer payout (paid or in a payout run), so its hours cannot be changed here. Ask the owner to correct it.";
+
+function isPayoutLocked(payout: { status: string; payoutRunId: string | null } | undefined): boolean {
+  return Boolean(payout && (payout.status === "PAID" || payout.payoutRunId));
+}
+
 export interface RecordManualAttendanceInput {
   studentId: string;
   subjectId: string;
@@ -42,6 +54,22 @@ export function hoursToCredits(durationMinutes: number): number {
  * - Automatically logs trainer working hours and payout amount.
  * - Enforces validations and duplicate safeguards.
  */
+/** Reads a manual-attendance request body; shared by the website and the phone app. */
+export function parseManualAttendanceBody(body: Record<string, unknown>): RecordManualAttendanceInput {
+  return {
+    studentId: String(body.studentId ?? "").trim(),
+    subjectId: String(body.subjectId ?? "").trim(),
+    teacherId: body.teacherId ? String(body.teacherId).trim() : undefined,
+    classDate: String(body.classDate ?? "").trim(),
+    durationMinutes: Number(body.durationMinutes ?? 60),
+    topicCovered: typeof body.topicCovered === "string" ? body.topicCovered : undefined,
+    homework: typeof body.homework === "string" ? body.homework : undefined,
+    studentProgressNote: typeof body.studentProgressNote === "string" ? body.studentProgressNote : undefined,
+    confirmExceedsCredits: Boolean(body.confirmExceedsCredits),
+    confirmDuplicate: Boolean(body.confirmDuplicate),
+  };
+}
+
 export async function recordManualAttendance(
   input: RecordManualAttendanceInput,
   user: CurrentUser
@@ -330,10 +358,10 @@ export async function editManualAttendance(
 
   if (!record) throw notFoundError("Attendance record not found.");
 
-  // Check authorization: Owner, Coordinator, or the Teacher who taught / marked the class
+  // Check authorization: Owner, Coordinator, or the trainer who taught the class.
+  // (Never by display name: names are not unique and people can change their own.)
   const isTeacher = user.role === "TEACHER" && user.teacherId === record.session.teacherId;
-  const isMarkedByUser = record.markedByName === user.name;
-  if (!canManageStudents(user.role) && !isTeacher && !isMarkedByUser) {
+  if (!canManageStudents(user.role) && !isTeacher) {
     throw forbiddenError("You are not authorized to edit this attendance record.");
   }
 
@@ -342,6 +370,10 @@ export async function editManualAttendance(
   const oldCredits = hoursToCredits(oldDuration);
   const newCredits = hoursToCredits(newDuration);
   const creditsDelta = oldCredits - newCredits; // e.g. 2 - 1 = +1 (restores 1 credit); 1 - 2 = -1 (deducts 1 credit)
+
+  if (newDuration !== oldDuration && isPayoutLocked(record.session.payoutItems[0]) && user.role !== "OWNER") {
+    throw conflictError(PAYOUT_LOCKED_MESSAGE);
+  }
 
   return await prisma.$transaction(async (tx) => {
     // 1. Update Session and AttendanceRecord
@@ -477,9 +509,11 @@ export async function deleteManualAttendance(
 
   // Check authorization
   const isTeacher = user.role === "TEACHER" && user.teacherId === record.session.teacherId;
-  const isMarkedByUser = record.markedByName === user.name;
-  if (!canManageStudents(user.role) && !isTeacher && !isMarkedByUser) {
+  if (!canManageStudents(user.role) && !isTeacher) {
     throw forbiddenError("You are not authorized to delete this attendance record.");
+  }
+  if (isPayoutLocked(record.session.payoutItems[0]) && user.role !== "OWNER") {
+    throw conflictError(PAYOUT_LOCKED_MESSAGE);
   }
 
   const duration = record.actualDurationMinutes || record.session.durationMinutes || 60;

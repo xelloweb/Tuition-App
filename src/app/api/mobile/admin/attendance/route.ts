@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withErrorHandling } from "@/lib/api-errors";
+import { notFoundError, readJsonObject, validationError, withErrorHandling } from "@/lib/api-errors";
+import { parseAttendanceBody, submitSessionAttendance } from "@/lib/attendance-ledger";
 import { canCorrectAttendance, requirePermission } from "@/lib/auth";
 import { requireMobileUser } from "@/lib/mobile-auth";
+import { istPeriods } from "@/lib/ist-periods";
 
 export const GET = withErrorHandling("GET /api/mobile/admin/attendance", async (req) => {
   const user = await requireMobileUser(req);
@@ -11,8 +13,7 @@ export const GET = withErrorHandling("GET /api/mobile/admin/attendance", async (
   const filter = searchParams.get("filter") || "RECENT"; // "MISSING" | "TODAY" | "RECENT"
 
   const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  const { today } = istPeriods(now); // IST day
 
   let whereClause: any = {};
 
@@ -24,7 +25,7 @@ export const GET = withErrorHandling("GET /api/mobile/admin/attendance", async (
     };
   } else if (filter === "TODAY") {
     whereClause = {
-      scheduledStartTimeUtc: { gte: startOfDay, lte: endOfDay },
+      scheduledStartTimeUtc: today,
     };
   }
 
@@ -45,7 +46,7 @@ export const GET = withErrorHandling("GET /api/mobile/admin/attendance", async (
       where: { scheduledEndTimeUtc: { lt: now }, attendance: null, status: "SCHEDULED" },
     }),
     prisma.session.count({
-      where: { scheduledStartTimeUtc: { gte: startOfDay, lte: endOfDay } },
+      where: { scheduledStartTimeUtc: today },
     }),
   ]);
 
@@ -74,57 +75,24 @@ export const GET = withErrorHandling("GET /api/mobile/admin/attendance", async (
   });
 });
 
+/**
+ * Staff mark a class from the phone with exactly the website's rules
+ * (credit deduction through the ledger, package checks, no double marking).
+ * Changing attendance that is already recorded goes through the website's
+ * audited "Correct attendance" flow.
+ */
 export const POST = withErrorHandling("POST /api/mobile/admin/attendance", async (req) => {
   const user = await requireMobileUser(req);
   requirePermission(canCorrectAttendance(user.role));
-  const body = await req.json();
-  const { sessionId, sessionOutcome, studentAttendance, topicCovered, durationMinutes } = body;
-
-  if (!sessionId || !sessionOutcome) {
-    return NextResponse.json({ success: false, message: "Session ID and outcome are required" }, { status: 400 });
+  const body = await readJsonObject(req);
+  const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
+  if (!sessionId) throw validationError("Choose the class to mark.");
+  // The phone sends no length: use the class's scheduled length, as before.
+  if (body.actualDurationMinutes === undefined) {
+    const session = await prisma.session.findUnique({ where: { id: sessionId }, select: { durationMinutes: true } });
+    if (!session) throw notFoundError("Class not found.");
+    body.actualDurationMinutes = session.durationMinutes;
   }
-
-  const session = await prisma.session.findUnique({
-    where: { id: sessionId },
-    include: { attendance: true },
-  });
-
-  if (!session) {
-    return NextResponse.json({ success: false, message: "Session not found" }, { status: 404 });
-  }
-
-  if (session.attendance) {
-    const updated = await prisma.attendanceRecord.update({
-      where: { sessionId },
-      data: {
-        sessionOutcome,
-        studentAttendance: studentAttendance || "PRESENT",
-        topicCovered: topicCovered || "Class completed",
-        actualDurationMinutes: durationMinutes || session.durationMinutes || 60,
-      },
-    });
-    return NextResponse.json({ success: true, record: updated, message: "Attendance updated" });
-  }
-
-  const record = await prisma.attendanceRecord.create({
-    data: {
-      sessionId,
-      sessionOutcome,
-      studentAttendance: studentAttendance || "PRESENT",
-      topicCovered: topicCovered || "Class completed",
-      actualDurationMinutes: durationMinutes || session.durationMinutes || 60,
-      markedByName: "Admin",
-      markedByRole: "ADMIN",
-    },
-  });
-
-  await prisma.session.update({
-    where: { id: sessionId },
-    data: {
-      status: sessionOutcome === "COMPLETED" ? "COMPLETED" : "CANCELLED",
-      isCreditConsumed: sessionOutcome === "COMPLETED",
-    },
-  });
-
-  return NextResponse.json({ success: true, record, message: "Attendance marked successfully" });
+  const result = await submitSessionAttendance({ sessionId, ...parseAttendanceBody(body), user });
+  return NextResponse.json(result);
 });

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
 import { canAccessFinancial, requirePermission } from "@/lib/auth";
 import { requireMobileUser } from "@/lib/mobile-auth";
+import { istPeriods } from "@/lib/ist-periods";
 
 export const GET = withErrorHandling("GET /api/mobile/admin/payouts", async (req) => {
   const user = await requireMobileUser(req);
@@ -19,35 +20,28 @@ export const GET = withErrorHandling("GET /api/mobile/admin/payouts", async (req
     orderBy: { name: "asc" },
   });
 
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
-
-  const monthRecords = await prisma.attendanceRecord.findMany({
-    where: {
-      markedAt: { gte: startOfMonth },
-      sessionOutcome: "COMPLETED",
-    },
-    include: {
-      session: { select: { teacherId: true, durationMinutes: true } },
-    },
+  // This month's earnings from the pay records the website's Payouts page uses:
+  // each class keeps the rate for the student's grade at the time it was marked.
+  const { month } = istPeriods();
+  const monthItems = await prisma.payoutItem.findMany({
+    where: { sessionDate: month, status: { not: "CANCELLED" } },
+    select: { teacherId: true, durationMinutes: true, amount: true },
   });
 
   const teacherStats = teachers.map((teacher) => {
-    const teacherSessions = monthRecords.filter((r) => r.session.teacherId === teacher.id);
-    const totalMinutes = teacherSessions.reduce((acc, curr) => acc + (curr.actualDurationMinutes || 60), 0);
+    const items = monthItems.filter((i) => i.teacherId === teacher.id);
+    const totalMinutes = items.reduce((acc, curr) => acc + curr.durationMinutes, 0);
     const hours = Number((totalMinutes / 60).toFixed(1));
-    const rate = teacher.defaultRate || 250;
-    const estimatedPayout = Math.round(hours * rate);
 
     return {
       teacherId: teacher.id,
       teacherName: teacher.name,
       email: teacher.email,
       phone: teacher.phone,
-      hourlyRate: rate,
-      completedClassesCount: teacherSessions.length,
+      hourlyRate: teacher.defaultRate,
+      completedClassesCount: items.length,
       completedHours: hours,
-      estimatedPayout,
+      estimatedPayout: items.reduce((acc, curr) => acc + curr.amount, 0),
     };
   });
 

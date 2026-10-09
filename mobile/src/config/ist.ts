@@ -31,3 +31,9 @@ export function formatIstDate(value: string | number | Date, withYear = true): s
 export function istWeekdayToday(): number {
   return istFields(Date.now()).getUTCDay();
 }
+
+/** Today's date in IST as YYYY-MM-DD (the class date the website uses). */
+export function istTodayDate(): string {
+  const d = istFields(Date.now());
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}

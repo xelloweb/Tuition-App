@@ -8,9 +8,10 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { apiRequest } from "../../config/api";
+import { API_BASE_URL, apiRequest } from "../../config/api";
 import { useReloadOnReturn } from "../../config/useReloadOnReturn";
 import { formatIstDate } from "../../config/ist";
 import { theme } from "../../config/theme";
@@ -51,30 +52,11 @@ export function AdminBillingScreen() {
     fetchBilling();
   };
 
-  const handleMarkPaid = (invoiceId: string, invoiceNumber: string) => {
-    Alert.alert(
-      "Confirm Payment",
-      `Mark invoice ${invoiceNumber} as fully paid?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Mark Paid",
-          onPress: async () => {
-            try {
-              const res = await apiRequest("/api/mobile/admin/billing", {
-                method: "POST",
-                body: JSON.stringify({ invoiceId, action: "MARK_PAID" }),
-              });
-              if (res.success) {
-                Alert.alert("Success", "Invoice marked as paid!");
-                fetchBilling();
-              }
-            } catch (err: any) {
-              Alert.alert("Error", err.message || "Could not update invoice");
-            }
-          },
-        },
-      ]
+  // Payments are recorded on the website, where they wait for verification;
+  // the phone used to set invoices to Paid with no payment behind them.
+  const openRecordPayment = () => {
+    Linking.openURL(`${API_BASE_URL}/billing`).catch(() =>
+      Alert.alert("Record payment", "Open xellotuition.com → Invoices & payments → Record payment.")
     );
   };
 
@@ -115,11 +97,13 @@ export function AdminBillingScreen() {
           {isUnpaid && (
             <TouchableOpacity
               style={styles.markPaidBtn}
-              onPress={() => handleMarkPaid(item.id, item.invoiceNumber)}
+              onPress={openRecordPayment}
               activeOpacity={0.7}
+              accessibilityRole="link"
+              accessibilityLabel={`Record a payment for ${item.invoiceNumber} on the website`}
             >
               <CheckCircle2 size={14} color="#000" />
-              <Text style={styles.markPaidText}>Mark Paid</Text>
+              <Text style={styles.markPaidText}>Record on website</Text>
             </TouchableOpacity>
           )}
         </View>

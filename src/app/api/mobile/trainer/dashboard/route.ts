@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
 import { requireMobileUser, requireOwnTrainerProfile } from "@/lib/mobile-auth";
+import { istPeriods } from "@/lib/ist-periods";
 
 export const GET = withErrorHandling("GET /api/mobile/trainer/dashboard", async (req) => {
   const { searchParams } = new URL(req.url);
@@ -17,17 +18,14 @@ export const GET = withErrorHandling("GET /api/mobile/trainer/dashboard", async 
     return NextResponse.json({ success: false, message: "Teacher not found." }, { status: 404 });
   }
 
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+  // Days and months start at IST midnight, whatever clock the server uses.
+  const { today, month } = istPeriods();
 
   // 1. Today's sessions
   const todaySessions = await prisma.session.findMany({
     where: {
       teacherId,
-      scheduledStartTimeUtc: { gte: startOfDay, lte: endOfDay },
+      scheduledStartTimeUtc: today,
     },
     include: {
       student: { select: { id: true, name: true, studentCode: true, grade: true } },
@@ -44,17 +42,14 @@ export const GET = withErrorHandling("GET /api/mobile/trainer/dashboard", async 
     distinct: ["studentId"],
   });
 
-  // 3. Completed classes and hours this month
-  const monthCompleted = await prisma.attendanceRecord.findMany({
-    where: {
-      session: { teacherId },
-      markedAt: { gte: startOfMonth },
-      sessionOutcome: "COMPLETED",
-    },
-    select: { actualDurationMinutes: true },
+  // 3. Classes and hours this month: the trainer's pay records, the same source as
+  // the website's working hours and payouts (cancelled ones excluded).
+  const monthCompleted = await prisma.payoutItem.findMany({
+    where: { teacherId, sessionDate: month, status: { not: "CANCELLED" } },
+    select: { durationMinutes: true },
   });
 
-  const totalMinutesThisMonth = monthCompleted.reduce((acc, curr) => acc + (curr.actualDurationMinutes || 60), 0);
+  const totalMinutesThisMonth = monthCompleted.reduce((acc, curr) => acc + curr.durationMinutes, 0);
   const totalHoursThisMonth = (totalMinutesThisMonth / 60).toFixed(1);
 
   return NextResponse.json({
