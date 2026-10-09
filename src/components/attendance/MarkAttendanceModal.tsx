@@ -107,8 +107,9 @@ export function MarkAttendanceModal({
   }, [activePreStudent, activePreSubject, allStudents]);
 
   // Find active student object
-  const currentStudent = preSelectedStudent?.id === studentId
-    ? preSelectedStudent
+  // Either prop spelling (the trainer screens pass `preselectedStudent`) selects the student.
+  const currentStudent = activePreStudent?.id === studentId
+    ? activePreStudent
     : allStudents.find((s) => s.id === studentId);
 
   // Available subjects for selected student
@@ -268,12 +269,12 @@ export function MarkAttendanceModal({
           <label className="block text-xs font-semibold text-slate-300 mb-1">
             Student Name
           </label>
-          {preSelectedStudent ? (
+          {activePreStudent ? (
             <div className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm font-bold text-white">
-              <span>{preSelectedStudent.name}</span>
-              {preSelectedStudent.grade && (
+              <span>{activePreStudent.name}</span>
+              {activePreStudent.grade && (
                 <span className="text-xs text-slate-400 font-normal">
-                  {preSelectedStudent.grade}
+                  {activePreStudent.grade}
                 </span>
               )}
             </div>
