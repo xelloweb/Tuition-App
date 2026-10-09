@@ -17,6 +17,7 @@ import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../config/api";
+import { useReloadOnReturn } from "../../config/useReloadOnReturn";
 import { Search, Phone, MessageSquare, ChevronRight, BookOpen, Layers } from "lucide-react-native";
 
 interface StudentItem {
@@ -72,6 +73,7 @@ export function TrainerStudentsScreen({ navigation }: any) {
   useEffect(() => {
     fetchStudents();
   }, [trainer?.teacherId]);
+  useReloadOnReturn(fetchStudents);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -295,7 +297,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.cardBorder,
   },
   creditText: {
-    fontSize: 11,
+    fontSize: 12,
     color: Colors.textSecondary,
     fontWeight: "600",
   },
@@ -311,7 +313,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xs,
   },
   contactText: {
-    fontSize: 11,
+    fontSize: 12,
     color: Colors.textMuted,
   },
   whatsappButton: {
@@ -325,7 +327,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   whatsappButtonText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
     color: "#25D366",
     marginLeft: 4,

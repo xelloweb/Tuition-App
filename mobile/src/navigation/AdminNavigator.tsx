@@ -1,6 +1,7 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "../config/theme";
 import { canOpenScreen } from "../config/access";
 import { useAuth } from "../context/AuthContext";
@@ -28,6 +29,8 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 function AdminTabs() {
+  // Room for the iPhone home indicator / Android gesture bar below the tabs.
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const show = (screen: string) => canOpenScreen(user?.role, screen);
   return (
@@ -38,14 +41,14 @@ function AdminTabs() {
           backgroundColor: theme.colors.card,
           borderTopColor: theme.colors.border,
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,
+          paddingBottom: 8 + insets.bottom,
           paddingTop: 8,
         },
         tabBarActiveTintColor: theme.colors.brandCyan,
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarLabelStyle: {
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: "700",
         },
       }}

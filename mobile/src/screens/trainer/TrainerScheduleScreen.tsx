@@ -8,12 +8,14 @@ import {
   RefreshControl,
 } from "react-native";
 import { Colors, BorderRadius, Spacing } from "../../config/theme";
+import { istWeekdayToday } from "../../config/ist";
 import { Header } from "../../components/Header";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../config/api";
+import { useReloadOnReturn } from "../../config/useReloadOnReturn";
 import { Calendar, Clock, GraduationCap } from "lucide-react-native";
 
 interface ScheduleSlot {
@@ -31,7 +33,7 @@ interface ScheduleSlot {
 export function TrainerScheduleScreen() {
   const { trainer, token } = useAuth();
   const [slots, setSlots] = useState<ScheduleSlot[]>([]);
-  const [selectedDay, setSelectedDay] = useState(new Date().getDay()); // Default to today (0 = Sun, 1 = Mon...)
+  const [selectedDay, setSelectedDay] = useState(istWeekdayToday()); // Default to today in IST (0 = Sun, 1 = Mon...)
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -73,6 +75,7 @@ export function TrainerScheduleScreen() {
   useEffect(() => {
     fetchSchedule();
   }, [trainer?.teacherId]);
+  useReloadOnReturn(fetchSchedule);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -218,7 +221,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   countText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "800",
     color: Colors.textMuted,
   },

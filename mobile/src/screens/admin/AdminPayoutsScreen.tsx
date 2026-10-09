@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiRequest } from "../../config/api";
+import { useReloadOnReturn } from "../../config/useReloadOnReturn";
 import { theme } from "../../config/theme";
 import { Header } from "../../components/Header";
 import { EmptyState } from "../../components/EmptyState";
@@ -38,6 +39,7 @@ export function AdminPayoutsScreen() {
   useEffect(() => {
     fetchPayouts();
   }, []);
+  useReloadOnReturn(fetchPayouts);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -137,7 +139,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 12,
     color: theme.colors.textMuted,
     marginTop: 2,
   },
@@ -183,7 +185,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   hoursLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: theme.colors.textMuted,
   },
   hoursVal: {

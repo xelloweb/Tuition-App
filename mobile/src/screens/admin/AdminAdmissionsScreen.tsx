@@ -12,6 +12,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiRequest } from "../../config/api";
+import { useReloadOnReturn } from "../../config/useReloadOnReturn";
+import { formatIstDate } from "../../config/ist";
 import { theme } from "../../config/theme";
 import { Header } from "../../components/Header";
 import { Badge } from "../../components/Badge";
@@ -44,6 +46,7 @@ export function AdminAdmissionsScreen() {
   useEffect(() => {
     fetchAdmissions();
   }, []);
+  useReloadOnReturn(fetchAdmissions);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -97,7 +100,7 @@ export function AdminAdmissionsScreen() {
             <Text style={styles.contactText}>{item.guardianName} ({item.whatsappNumber})</Text>
           </View>
           <Text style={styles.dateText}>
-            {new Date(item.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+            {formatIstDate(item.createdAt, false)}
           </Text>
         </View>
       </View>
@@ -181,7 +184,7 @@ const styles = StyleSheet.create({
     marginRight: theme.spacing.sm,
   },
   linkTitle: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "700",
     color: theme.colors.brandCyan,
     letterSpacing: 0.5,
@@ -226,7 +229,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 12,
     color: theme.colors.textMuted,
     marginTop: 2,
   },
@@ -252,7 +255,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
   },
   refCode: {
-    fontSize: 11,
+    fontSize: 12,
     color: theme.colors.textMuted,
     marginTop: 2,
   },
@@ -293,7 +296,7 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
   },
   dateText: {
-    fontSize: 11,
+    fontSize: 12,
     color: theme.colors.textMuted,
   },
 });

@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   label: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
     color: Colors.textSecondary,
     textTransform: "uppercase",
@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   subtext: {
-    fontSize: 10,
+    fontSize: 12,
     color: Colors.textMuted,
   },
 });

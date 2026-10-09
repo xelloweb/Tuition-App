@@ -1,6 +1,7 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "../config/theme";
 import { TrainerDashboardScreen } from "../screens/trainer/TrainerDashboardScreen";
 import { TrainerStudentsScreen } from "../screens/trainer/TrainerStudentsScreen";
@@ -14,6 +15,8 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 function TrainerTabs() {
+  // Room for the iPhone home indicator / Android gesture bar below the tabs.
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={{
@@ -21,14 +24,14 @@ function TrainerTabs() {
         tabBarStyle: {
           backgroundColor: Colors.surface,
           borderTopColor: Colors.cardBorder,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,
+          paddingBottom: 8 + insets.bottom,
           paddingTop: 8,
         },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: "700",
         },
       }}

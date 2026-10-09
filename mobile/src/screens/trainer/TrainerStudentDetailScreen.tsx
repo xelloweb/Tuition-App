@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "700",
     color: Colors.textMuted,
     textTransform: "uppercase",
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   statSub: {
-    fontSize: 10,
+    fontSize: 12,
     color: Colors.textSecondary,
   },
   slotCard: {

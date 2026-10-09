@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "800",
     color: theme.colors.brandCyan,
     letterSpacing: 1.5,
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
   },
   itemDesc: {
-    fontSize: 11,
+    fontSize: 12,
     color: theme.colors.textMuted,
     marginTop: 2,
   },

@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiRequest } from "../../config/api";
+import { useReloadOnReturn } from "../../config/useReloadOnReturn";
 import { theme } from "../../config/theme";
 import { Header } from "../../components/Header";
 import { Card } from "../../components/Card";
@@ -42,6 +43,7 @@ export function AdminStudentsScreen() {
     }, 300);
     return () => clearTimeout(timer);
   }, [search]);
+  useReloadOnReturn(fetchStudents);
 
   const openWhatsApp = (phone: string, studentName: string) => {
     const cleanPhone = phone.replace(/[^0-9]/g, "");
@@ -205,7 +207,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.08)",
   },
   subjectChipText: {
-    fontSize: 11,
+    fontSize: 12,
     color: theme.colors.textSecondary,
   },
   footerRow: {
@@ -232,7 +234,7 @@ const styles = StyleSheet.create({
   },
   waButtonText: {
     color: "#fff",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
   },
 });

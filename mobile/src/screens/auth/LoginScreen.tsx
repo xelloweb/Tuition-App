@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   footerText: {
-    fontSize: 11,
+    fontSize: 12,
     color: theme.colors.textMuted,
     textAlign: "center",
   },

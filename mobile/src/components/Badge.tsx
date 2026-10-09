@@ -83,12 +83,12 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   text: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   textSm: {
-    fontSize: 10,
+    fontSize: 12,
   },
 });

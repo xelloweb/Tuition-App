@@ -12,6 +12,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
 import { canOpenScreen } from "../../config/access";
 import { apiRequest } from "../../config/api";
+import { useReloadOnReturn } from "../../config/useReloadOnReturn";
+import { formatIstTime } from "../../config/ist";
 import { theme } from "../../config/theme";
 import { Header } from "../../components/Header";
 import { StatCard } from "../../components/StatCard";
@@ -51,6 +53,7 @@ export function AdminDashboardScreen({ navigation }: any) {
   useEffect(() => {
     fetchDashboard();
   }, []);
+  useReloadOnReturn(fetchDashboard);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -217,7 +220,7 @@ export function AdminDashboardScreen({ navigation }: any) {
                   </View>
                   <View style={styles.sessionBottom}>
                     <Text style={styles.sessionTime}>
-                      {new Date(session.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {formatIstTime(session.startTime)} IST
                     </Text>
                     {session.isAttendanceMarked ? (
                       <View style={styles.attendanceDone}>
@@ -382,7 +385,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   tileLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
     color: theme.colors.text,
   },

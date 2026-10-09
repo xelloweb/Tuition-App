@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiRequest } from "../../config/api";
+import { useReloadOnReturn } from "../../config/useReloadOnReturn";
 import { theme } from "../../config/theme";
 import { Header } from "../../components/Header";
 import { Card } from "../../components/Card";
@@ -42,6 +43,7 @@ export function AdminTeachersScreen() {
     }, 300);
     return () => clearTimeout(timer);
   }, [search]);
+  useReloadOnReturn(fetchTeachers);
 
   const callPhone = (phone: string) => {
     Linking.openURL(`tel:${phone}`);
@@ -205,7 +207,7 @@ const styles = StyleSheet.create({
   },
   callButtonText: {
     color: "#fff",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
   },
 });

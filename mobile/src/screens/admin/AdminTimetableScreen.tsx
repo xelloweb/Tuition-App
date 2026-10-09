@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiRequest } from "../../config/api";
+import { useReloadOnReturn } from "../../config/useReloadOnReturn";
 import { theme } from "../../config/theme";
 import { Header } from "../../components/Header";
 import { EmptyState } from "../../components/EmptyState";
@@ -38,6 +39,7 @@ export function AdminTimetableScreen() {
   useEffect(() => {
     fetchTimetable();
   }, []);
+  useReloadOnReturn(fetchTimetable);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -174,7 +176,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.brandCyan,
   },
   dayBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "700",
     color: theme.colors.textMuted,
   },

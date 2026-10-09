@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiRequest } from "../../config/api";
+import { useReloadOnReturn } from "../../config/useReloadOnReturn";
+import { formatIstTime } from "../../config/ist";
 import { theme } from "../../config/theme";
 import { Header } from "../../components/Header";
 import { Badge } from "../../components/Badge";
@@ -42,6 +44,7 @@ export function AdminAttendanceScreen() {
   useEffect(() => {
     fetchAttendance();
   }, [filter]);
+  useReloadOnReturn(fetchAttendance);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -118,7 +121,7 @@ export function AdminAttendanceScreen() {
         <View style={styles.metaRow}>
           <Text style={styles.subjectText}>{item.subjectName}</Text>
           <Text style={styles.timeText}>
-            {new Date(item.startTime).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} (IST)
+            {formatIstTime(item.startTime)} (IST)
           </Text>
         </View>
 
@@ -270,7 +273,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.sm,
   },
   topicLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "700",
     color: theme.colors.textMuted,
     textTransform: "uppercase",

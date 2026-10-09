@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiRequest } from "../../config/api";
+import { useReloadOnReturn } from "../../config/useReloadOnReturn";
 import { theme } from "../../config/theme";
 import { Header } from "../../components/Header";
 import { BarChart3, Users, BookOpen, Receipt, DollarSign } from "lucide-react-native";
@@ -35,6 +36,7 @@ export function AdminReportsScreen() {
   useEffect(() => {
     fetchReports();
   }, []);
+  useReloadOnReturn(fetchReports);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -132,7 +134,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
   },
   cardSectionTitle: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "800",
     color: theme.colors.brandCyan,
     letterSpacing: 1,
@@ -147,7 +149,7 @@ const styles = StyleSheet.create({
     width: "50%",
   },
   gridLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: theme.colors.textMuted,
   },
   gridValue: {

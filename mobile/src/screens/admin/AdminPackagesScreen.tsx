@@ -9,6 +9,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiRequest } from "../../config/api";
+import { useReloadOnReturn } from "../../config/useReloadOnReturn";
+import { formatIstDate } from "../../config/ist";
 import { theme } from "../../config/theme";
 import { Header } from "../../components/Header";
 import { Badge } from "../../components/Badge";
@@ -39,6 +41,7 @@ export function AdminPackagesScreen() {
   useEffect(() => {
     fetchPackages();
   }, []);
+  useReloadOnReturn(fetchPackages);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -88,7 +91,7 @@ export function AdminPackagesScreen() {
 
         <View style={styles.footerRow}>
           <Text style={styles.expiryText}>
-            {item.expiryDate ? `Expires: ${new Date(item.expiryDate).toLocaleDateString("en-IN")}` : "No Expiry Date"}
+            {item.expiryDate ? `Expires: ${formatIstDate(item.expiryDate)}` : "No Expiry Date"}
           </Text>
         </View>
       </View>
@@ -165,7 +168,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 12,
     color: theme.colors.textMuted,
     marginTop: 2,
   },
@@ -206,7 +209,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   creditLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: theme.colors.textMuted,
   },
   creditValue: {
@@ -223,7 +226,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   allocationsTitle: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "700",
     color: theme.colors.textMuted,
     textTransform: "uppercase",
@@ -246,7 +249,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
   },
   expiryText: {
-    fontSize: 11,
+    fontSize: 12,
     color: theme.colors.textMuted,
   },
 });

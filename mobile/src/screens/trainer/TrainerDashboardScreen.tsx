@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { Colors, BorderRadius, Spacing } from "../../config/theme";
+import { formatIstTime } from "../../config/ist";
 import { Header } from "../../components/Header";
 import { StatCard } from "../../components/StatCard";
 import { Card } from "../../components/Card";
@@ -16,6 +17,7 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../config/api";
+import { useReloadOnReturn } from "../../config/useReloadOnReturn";
 import {
   Users,
   Calendar,
@@ -86,6 +88,7 @@ export function TrainerDashboardScreen({ navigation }: any) {
   useEffect(() => {
     fetchDashboard();
   }, [trainer?.teacherId]);
+  useReloadOnReturn(fetchDashboard);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -93,8 +96,7 @@ export function TrainerDashboardScreen({ navigation }: any) {
   };
 
   const formatTime = (isoString: string) => {
-    const d = new Date(isoString);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return formatIstTime(isoString);
   };
 
   return (
@@ -327,7 +329,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   durationText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
     color: Colors.textMuted,
   },
@@ -350,7 +352,7 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   topicText: {
-    fontSize: 11,
+    fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 4,
   },
@@ -391,7 +393,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   shortcutSub: {
-    fontSize: 11,
+    fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 2,
   },

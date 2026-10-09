@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiRequest } from "../../config/api";
+import { useReloadOnReturn } from "../../config/useReloadOnReturn";
+import { formatIstDate } from "../../config/ist";
 import { theme } from "../../config/theme";
 import { Header } from "../../components/Header";
 import { Badge } from "../../components/Badge";
@@ -42,6 +44,7 @@ export function AdminBillingScreen() {
   useEffect(() => {
     fetchBilling();
   }, [filter]);
+  useReloadOnReturn(fetchBilling);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -107,7 +110,7 @@ export function AdminBillingScreen() {
 
         <View style={styles.footerRow}>
           <Text style={styles.dateText}>
-            Due: {new Date(item.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+            Due: {formatIstDate(item.dueDate)}
           </Text>
           {isUnpaid && (
             <TouchableOpacity
@@ -215,7 +218,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.border,
   },
   statLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: "700",
     color: theme.colors.textSecondary,
     letterSpacing: 0.5,
@@ -275,7 +278,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   invoiceNumber: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
     color: theme.colors.brandCyan,
     letterSpacing: 0.5,
@@ -298,7 +301,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   amountLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: theme.colors.textMuted,
   },
   amountValue: {
