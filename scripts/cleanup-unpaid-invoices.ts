@@ -1,9 +1,12 @@
 /**
  * Cleanup script to remove unwanted / accidental unpaid invoices:
- * - Specifically addresses INV-2026-002 (Mridul. S) and INV-2026-003 (Slaine)
+ * - Specifically addresses INV-2026-002 and INV-2026-003
  * - Also checks for any duplicate UNPAID invoices for students XST-131 and XST-132
  *   that have zero payments received and an existing paid invoice.
- * Runs idempotently during build.
+ * One-time clean-up (9 Oct 2026). Not part of the build any more: invoice numbers
+ * can be issued again after a deletion, and new unpaid invoices for these students
+ * are legitimate, so running it on every deploy could delete real invoices.
+ * Run manually only after checking the targets: npm run cleanup-unpaid-invoices
  */
 import { PrismaClient } from "@prisma/client";
 

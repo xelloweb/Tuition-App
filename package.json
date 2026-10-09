@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push --skip-generate && npm run seed && npm run secure-accounts && npm run cleanup-unpaid-invoices && next build --webpack",
+    "build": "prisma generate && prisma db push --skip-generate && npm run seed && npm run secure-accounts && next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "seed": "npx tsx prisma/seed.ts",
