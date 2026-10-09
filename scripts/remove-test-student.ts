@@ -5,8 +5,8 @@
  * attendance, timetable, parent record if unused).
  *
  * Deletes nothing unless every check matches, and stops if the student has
- * more records than a test would. Run again it finds nothing. It runs during
- * one deploy only and is then removed from the build.
+ * more records than a test would. Ran once, in the deploy of 9 Oct 2026
+ * 23:46 IST, and is no longer part of the build. Kept as a record.
  */
 import { PrismaClient } from "@prisma/client";
 
