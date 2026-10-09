@@ -236,7 +236,8 @@ describe("weekly timetable", () => {
     await makePackage(student.id, [{ subjectId: maths.id, credits: 40 }], { expiryDate: expiry });
     const plan = await saveTimetable(student.id, { timeZone: "Asia/Kolkata", slots: [slot(em.id, MON, "18:00", "19:00"), slot(em.id, THU, "18:00", "19:00")] }, coordinator);
     const sessions = await prisma.session.findMany({ where: { studentId: student.id } });
-    const limit = expiry.toISOString().slice(0, 10);
+    // Package expiry is an IST date (a UTC date is a day behind between 00:00 and 05:30 IST).
+    const limit = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(expiry);
     assert.ok(sessions.every((s) => s.occurrenceDate! <= limit), "nothing booked after expiry");
     assert.ok(plan.issues.some((i) => i.reason === "EXPIRED"), "expiry reported");
   });
