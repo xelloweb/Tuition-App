@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
+import { canManageStudents, requirePermission } from "@/lib/auth";
+import { requireMobileUser } from "@/lib/mobile-auth";
 
-export const GET = withErrorHandling("GET /api/mobile/admin/admissions", async () => {
+export const GET = withErrorHandling("GET /api/mobile/admin/admissions", async (req) => {
+  const user = await requireMobileUser(req);
+  requirePermission(canManageStudents(user.role));
   const [submissions, newCount, convertedCount] = await Promise.all([
     prisma.parentSubmission.findMany({
       orderBy: { createdAt: "desc" },

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
+import { canReallocatePackages, requirePermission } from "@/lib/auth";
+import { requireMobileUser } from "@/lib/mobile-auth";
 
-export const GET = withErrorHandling("GET /api/mobile/admin/packages", async () => {
+export const GET = withErrorHandling("GET /api/mobile/admin/packages", async (req) => {
+  const user = await requireMobileUser(req);
+  requirePermission(canReallocatePackages(user.role));
   const packages = await prisma.studentPackage.findMany({
     include: {
       student: { select: { id: true, name: true, studentCode: true, grade: true } },

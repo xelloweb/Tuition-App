@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
+import { canOpenScreen } from "../../config/access";
 import { apiRequest } from "../../config/api";
 import { theme } from "../../config/theme";
 import { Header } from "../../components/Header";
@@ -121,60 +122,70 @@ export function AdminDashboardScreen({ navigation }: any) {
             <View style={styles.quickActionsSection}>
               <Text style={styles.sectionTitle}>QUICK OPERATIONS</Text>
               <View style={styles.quickGrid}>
-                <TouchableOpacity
-                  style={styles.quickTile}
-                  onPress={() => navigation.navigate("AdminBilling")}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.tileIconWrap, { backgroundColor: "rgba(203, 220, 66, 0.15)" }]}>
-                    <Receipt size={18} color={theme.colors.brandLime} />
-                  </View>
-                  <Text style={styles.tileLabel}>Invoices</Text>
-                </TouchableOpacity>
+                {canOpenScreen(user?.role, "AdminBilling") && (
+                  <TouchableOpacity
+                    style={styles.quickTile}
+                    onPress={() => navigation.navigate("AdminBilling")}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.tileIconWrap, { backgroundColor: "rgba(203, 220, 66, 0.15)" }]}>
+                      <Receipt size={18} color={theme.colors.brandLime} />
+                    </View>
+                    <Text style={styles.tileLabel}>Invoices</Text>
+                  </TouchableOpacity>
+                )}
 
-                <TouchableOpacity
-                  style={styles.quickTile}
-                  onPress={() => navigation.navigate("AdminTimetable")}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.tileIconWrap, { backgroundColor: "rgba(64, 174, 227, 0.15)" }]}>
-                    <Calendar size={18} color={theme.colors.brandCyan} />
-                  </View>
-                  <Text style={styles.tileLabel}>Timetable</Text>
-                </TouchableOpacity>
+                {canOpenScreen(user?.role, "AdminTimetable") && (
+                  <TouchableOpacity
+                    style={styles.quickTile}
+                    onPress={() => navigation.navigate("AdminTimetable")}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.tileIconWrap, { backgroundColor: "rgba(64, 174, 227, 0.15)" }]}>
+                      <Calendar size={18} color={theme.colors.brandCyan} />
+                    </View>
+                    <Text style={styles.tileLabel}>Timetable</Text>
+                  </TouchableOpacity>
+                )}
 
-                <TouchableOpacity
-                  style={styles.quickTile}
-                  onPress={() => navigation.navigate("AdminAttendance")}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.tileIconWrap, { backgroundColor: "rgba(16, 185, 129, 0.15)" }]}>
-                    <CheckCircle2 size={18} color={theme.colors.success} />
-                  </View>
-                  <Text style={styles.tileLabel}>Attendance</Text>
-                </TouchableOpacity>
+                {canOpenScreen(user?.role, "AdminAttendance") && (
+                  <TouchableOpacity
+                    style={styles.quickTile}
+                    onPress={() => navigation.navigate("AdminAttendance")}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.tileIconWrap, { backgroundColor: "rgba(16, 185, 129, 0.15)" }]}>
+                      <CheckCircle2 size={18} color={theme.colors.success} />
+                    </View>
+                    <Text style={styles.tileLabel}>Attendance</Text>
+                  </TouchableOpacity>
+                )}
 
-                <TouchableOpacity
-                  style={styles.quickTile}
-                  onPress={() => navigation.navigate("AdminAdmissions")}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.tileIconWrap, { backgroundColor: "rgba(245, 158, 11, 0.15)" }]}>
-                    <Inbox size={18} color={theme.colors.warning} />
-                  </View>
-                  <Text style={styles.tileLabel}>Admissions</Text>
-                </TouchableOpacity>
+                {canOpenScreen(user?.role, "AdminAdmissions") && (
+                  <TouchableOpacity
+                    style={styles.quickTile}
+                    onPress={() => navigation.navigate("AdminAdmissions")}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.tileIconWrap, { backgroundColor: "rgba(245, 158, 11, 0.15)" }]}>
+                      <Inbox size={18} color={theme.colors.warning} />
+                    </View>
+                    <Text style={styles.tileLabel}>Admissions</Text>
+                  </TouchableOpacity>
+                )}
 
-                <TouchableOpacity
-                  style={styles.quickTile}
-                  onPress={() => navigation.navigate("AdminPayouts")}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.tileIconWrap, { backgroundColor: "rgba(139, 92, 246, 0.15)" }]}>
-                    <DollarSign size={18} color={theme.colors.purple} />
-                  </View>
-                  <Text style={styles.tileLabel}>Payouts</Text>
-                </TouchableOpacity>
+                {canOpenScreen(user?.role, "AdminPayouts") && (
+                  <TouchableOpacity
+                    style={styles.quickTile}
+                    onPress={() => navigation.navigate("AdminPayouts")}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.tileIconWrap, { backgroundColor: "rgba(139, 92, 246, 0.15)" }]}>
+                      <DollarSign size={18} color={theme.colors.purple} />
+                    </View>
+                    <Text style={styles.tileLabel}>Payouts</Text>
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
                   style={styles.quickTile}

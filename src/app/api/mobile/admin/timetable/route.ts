@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
+import { canScheduleSessions, requirePermission } from "@/lib/auth";
+import { requireMobileUser } from "@/lib/mobile-auth";
 
 function formatMinutes(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -11,7 +13,9 @@ function formatMinutes(minutes: number): string {
   return `${displayH}:${displayM} ${period}`;
 }
 
-export const GET = withErrorHandling("GET /api/mobile/admin/timetable", async () => {
+export const GET = withErrorHandling("GET /api/mobile/admin/timetable", async (req) => {
+  const user = await requireMobileUser(req);
+  requirePermission(canScheduleSessions(user.role));
   const slots = await prisma.timetableSlot.findMany({
     where: { active: true },
     include: {

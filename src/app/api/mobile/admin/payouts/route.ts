@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
+import { canAccessFinancial, requirePermission } from "@/lib/auth";
+import { requireMobileUser } from "@/lib/mobile-auth";
 
-export const GET = withErrorHandling("GET /api/mobile/admin/payouts", async () => {
+export const GET = withErrorHandling("GET /api/mobile/admin/payouts", async (req) => {
+  const user = await requireMobileUser(req);
+  requirePermission(canAccessFinancial(user.role));
   const teachers = await prisma.teacher.findMany({
     where: { active: true },
     select: {

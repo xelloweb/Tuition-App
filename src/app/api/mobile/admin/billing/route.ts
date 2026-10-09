@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
+import { canAccessFinancial, canVerifyPayments, requirePermission } from "@/lib/auth";
+import { requireMobileUser } from "@/lib/mobile-auth";
 
 export const GET = withErrorHandling("GET /api/mobile/admin/billing", async (req) => {
+  const user = await requireMobileUser(req);
+  requirePermission(canAccessFinancial(user.role));
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
 
@@ -54,6 +58,8 @@ export const GET = withErrorHandling("GET /api/mobile/admin/billing", async (req
 });
 
 export const POST = withErrorHandling("POST /api/mobile/admin/billing", async (req) => {
+  const user = await requireMobileUser(req);
+  requirePermission(canVerifyPayments(user.role));
   const body = await req.json();
   const { invoiceId, action } = body;
 

@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
+import { canAccessFinancial, requirePermission } from "@/lib/auth";
+import { requireMobileUser } from "@/lib/mobile-auth";
 
-export const GET = withErrorHandling("GET /api/mobile/admin/reports", async () => {
+export const GET = withErrorHandling("GET /api/mobile/admin/reports", async (req) => {
+  const user = await requireMobileUser(req);
+  // Same roles as the website's Reports page; money figures only for owner and accounts.
+  requirePermission(user.role === "OWNER" || user.role === "COORDINATOR" || user.role === "ACCOUNTS");
+  const showFinancial = canAccessFinancial(user.role);
   const [
     totalStudents,
     activeStudents,
@@ -28,10 +34,14 @@ export const GET = withErrorHandling("GET /api/mobile/admin/reports", async () =
       activeStudents,
       totalTrainers,
       totalCompletedClasses: totalSessions,
-      totalInvoicedRevenue: totalInvoices._sum.totalAmount || 0,
-      totalCollectedRevenue: totalInvoices._sum.paidAmount || 0,
-      totalPendingDues: totalInvoices._sum.balanceDue || 0,
-      unpaidInvoicesCount: unpaidInvoices,
+      ...(showFinancial
+        ? {
+            totalInvoicedRevenue: totalInvoices._sum.totalAmount || 0,
+            totalCollectedRevenue: totalInvoices._sum.paidAmount || 0,
+            totalPendingDues: totalInvoices._sum.balanceDue || 0,
+            unpaidInvoicesCount: unpaidInvoices,
+          }
+        : {}),
       totalAdmissionsReceived: totalSubmissions,
     },
   });

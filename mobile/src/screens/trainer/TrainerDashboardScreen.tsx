@@ -57,6 +57,7 @@ export function TrainerDashboardScreen({ navigation }: any) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchDashboard = async () => {
     if (!trainer?.teacherId) {
@@ -70,62 +71,12 @@ export function TrainerDashboardScreen({ navigation }: any) {
       );
       if (res.success) {
         setData(res);
+        setLoadError(null);
       }
     } catch (err) {
-      console.log("Error loading dashboard data, using local mock data", err);
-      // Fallback sample data for demo preview
-      setData({
-        stats: {
-          assignedStudentsCount: 6,
-          todayClassesCount: 3,
-          completedClassesThisMonth: 18,
-          totalHoursThisMonth: 18.0,
-        },
-        todaySessions: [
-          {
-            id: "sess-1",
-            studentId: "s-1",
-            studentName: "Slaine",
-            studentCode: "XST-131",
-            grade: "10th Grade",
-            subjectName: "Mathematics",
-            subjectColor: "#14b8a6",
-            startTime: new Date(new Date().setHours(17, 30, 0, 0)).toISOString(),
-            endTime: new Date(new Date().setHours(18, 30, 0, 0)).toISOString(),
-            durationMinutes: 60,
-            isAttendanceMarked: false,
-          },
-          {
-            id: "sess-2",
-            studentId: "s-2",
-            studentName: "Mridul. S",
-            studentCode: "XST-132",
-            grade: "6th Grade",
-            subjectName: "Mathematics",
-            subjectColor: "#14b8a6",
-            startTime: new Date(new Date().setHours(20, 0, 0, 0)).toISOString(),
-            endTime: new Date(new Date().setHours(21, 0, 0, 0)).toISOString(),
-            durationMinutes: 60,
-            isAttendanceMarked: false,
-          },
-          {
-            id: "sess-3",
-            studentId: "s-3",
-            studentName: "Dharmika SA",
-            studentCode: "XST-121",
-            grade: "8th Grade",
-            subjectName: "Physics",
-            subjectColor: "#6366f1",
-            startTime: new Date(new Date().setHours(15, 0, 0, 0)).toISOString(),
-            endTime: new Date(new Date().setHours(16, 0, 0, 0)).toISOString(),
-            durationMinutes: 60,
-            isAttendanceMarked: true,
-            attendanceOutcome: "COMPLETED",
-            studentAttendance: "PRESENT",
-            topicCovered: "Linear Equations & Word Problems",
-          },
-        ],
-      });
+      // Never show sample data in place of the trainer's real classes.
+      setData(null);
+      setLoadError(err instanceof Error ? err.message : "Could not load your classes.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -193,7 +144,15 @@ export function TrainerDashboardScreen({ navigation }: any) {
         </View>
 
         {/* Classes List */}
-        {!data?.todaySessions || data.todaySessions.length === 0 ? (
+        {loadError ? (
+          <EmptyState
+            title="Could not load your classes"
+            message={loadError}
+            icon={<Calendar size={40} color={Colors.textMuted} />}
+            actionLabel="Try again"
+            onAction={onRefresh}
+          />
+        ) : !data?.todaySessions || data.todaySessions.length === 0 ? (
           <EmptyState
             title="No Classes Scheduled Today"
             message="You have no classes scheduled on your timetable for today."

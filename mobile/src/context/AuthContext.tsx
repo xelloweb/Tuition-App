@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState } from "react";
-import { apiRequest } from "../config/api";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { Alert } from "react-native";
+import { apiRequest, setSessionExpiredHandler, setSessionToken } from "../config/api";
 
 export type StaffRole = "OWNER" | "ADMIN" | "COORDINATOR" | "TRAINER" | null;
 
@@ -57,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!data.success) throw new Error(data.message || "Login failed");
 
+      setSessionToken(data.token);
       setToken(data.token);
       setUser(data.user);
 
@@ -75,70 +77,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Development builds only (the login screen hides the buttons otherwise): signs in
+  // with the local demo accounts. A failed sign-in is shown, never replaced by a fake session.
   const quickDemo = async (demoRole: "ADMIN" | "COORDINATOR" | "TRAINER") => {
-    setIsLoading(true);
-    try {
-      if (demoRole === "TRAINER") {
-        try {
-          await login("trainer@xellotuition.com", "demo123");
-          return;
-        } catch (e) {
-          setToken("demo-trainer-token");
-          setUser({
-            id: "demo-trainer-user",
-            name: "Sumi Varghese",
-            email: "trainer@xello.com",
-            role: "TEACHER",
-            teacherId: "demo-trainer-id",
-            teacher: {
-              id: "demo-trainer-id",
-              name: "Sumi Varghese",
-              email: "trainer@xello.com",
-              phone: "+91 9847000000",
-              assignedStudentsCount: 6,
-            },
-          });
-          setRole("TRAINER");
-        }
-      } else if (demoRole === "COORDINATOR") {
-        try {
-          await login("coordinator@xellotuition.com", "demo123");
-          return;
-        } catch (e) {
-          setToken("demo-coord-token");
-          setUser({
-            id: "demo-coord-user",
-            name: "Aisha Nair",
-            email: "coordinator@xellotuition.com",
-            role: "COORDINATOR",
-          });
-          setRole("COORDINATOR");
-        }
-      } else {
-        try {
-          await login("admin@xellotuition.com", "demo123");
-          return;
-        } catch (e) {
-          setToken("demo-admin-token");
-          setUser({
-            id: "demo-admin-user",
-            name: "Shamrood",
-            email: "admin@xellotuition.com",
-            role: "OWNER",
-          });
-          setRole("ADMIN");
-        }
-      }
-    } finally {
-      setIsLoading(false);
-    }
+    const email =
+      demoRole === "TRAINER"
+        ? "trainer@xellotuition.com"
+        : demoRole === "COORDINATOR"
+        ? "coordinator@xellotuition.com"
+        : "admin@xellotuition.com";
+    await login(email, "demo123");
   };
 
   const logout = () => {
+    setSessionToken(null);
     setRole(null);
     setUser(null);
     setToken(null);
   };
+
+  useEffect(() => {
+    setSessionExpiredHandler(() => {
+      logout();
+      Alert.alert("Please sign in again", "Your session has ended. Sign in again to continue.");
+    });
+    return () => setSessionExpiredHandler(null);
+  }, []);
 
   const trainer: TrainerProfile | null =
     user?.teacher

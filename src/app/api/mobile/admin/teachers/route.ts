@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
+import { canViewAllStudents, requirePermission } from "@/lib/auth";
+import { requireMobileUser } from "@/lib/mobile-auth";
 
 export const GET = withErrorHandling("GET /api/mobile/admin/teachers", async (req) => {
+  const user = await requireMobileUser(req);
+  requirePermission(canViewAllStudents(user.role));
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search")?.toLowerCase().trim() || "";
 

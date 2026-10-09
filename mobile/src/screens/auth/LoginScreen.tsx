@@ -34,6 +34,14 @@ export function LoginScreen() {
     }
   };
 
+  const handleDemo = async (demoRole: "ADMIN" | "COORDINATOR" | "TRAINER") => {
+    try {
+      await quickDemo(demoRole);
+    } catch (err: any) {
+      Alert.alert("Login Failed", err.message || "The demo account is not available on this server.");
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -99,7 +107,8 @@ export function LoginScreen() {
             />
           </View>
 
-          {/* One-Tap Quick Access Portals */}
+          {/* One-tap demo accounts: development builds only. Installed apps always sign in with a real account. */}
+          {__DEV__ && (
           <View style={styles.demoSection}>
             <Text style={styles.demoTitle}>STAFF PORTAL ACCESS</Text>
             <Text style={styles.demoSubtitle}>Select a role to preview instant operations:</Text>
@@ -107,7 +116,7 @@ export function LoginScreen() {
             <View style={styles.demoButtonsContainer}>
               <TouchableOpacity
                 style={styles.demoBtn}
-                onPress={() => quickDemo("ADMIN")}
+                onPress={() => handleDemo("ADMIN")}
                 disabled={isLoading}
                 activeOpacity={0.7}
               >
@@ -122,7 +131,7 @@ export function LoginScreen() {
 
               <TouchableOpacity
                 style={styles.demoBtn}
-                onPress={() => quickDemo("COORDINATOR")}
+                onPress={() => handleDemo("COORDINATOR")}
                 disabled={isLoading}
                 activeOpacity={0.7}
               >
@@ -137,7 +146,7 @@ export function LoginScreen() {
 
               <TouchableOpacity
                 style={[styles.demoBtn, styles.demoBtnTrainer]}
-                onPress={() => quickDemo("TRAINER")}
+                onPress={() => handleDemo("TRAINER")}
                 disabled={isLoading}
                 activeOpacity={0.7}
               >
@@ -151,6 +160,7 @@ export function LoginScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          )}
 
           <View style={styles.footerNote}>
             <Text style={styles.footerText}>

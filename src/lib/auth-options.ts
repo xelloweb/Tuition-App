@@ -50,6 +50,50 @@ function demoLoginAllowed(): boolean {
   return process.env.NODE_ENV !== "production" && process.env.ALLOW_DEMO_LOGIN === "true";
 }
 
+/**
+ * Email + password check shared by the website login and the phone app login,
+ * so both apply exactly the same rules. Throws an Error whose message can be
+ * shown to the person signing in.
+ */
+export async function verifyCredentials(emailInput: string | undefined, passwordInput: string | undefined) {
+  const email = emailInput?.trim().toLowerCase();
+  const password = passwordInput ?? "";
+  if (!email || !password) {
+    throw new Error("Enter your email and password.");
+  }
+  // Checked before the account lookup, so the answer reveals nothing about which emails exist.
+  if (process.env.NODE_ENV === "production" && isPublishedPassword(password)) {
+    throw new Error(
+      "This password was published with the old demo setup and no longer works. Ask the owner for a password reset link."
+    );
+  }
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user || !user.active) {
+    throw new Error("Invalid email or password.");
+  }
+  const signedIn = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    teacherId: user.teacherId,
+    sessionVersion: user.sessionVersion,
+  };
+
+  if (!user.passwordHash) {
+    if (demoLoginAllowed() && password === "demo123" && user.role !== "TEACHER") return signedIn;
+    throw new Error("This account has no password yet. Use your invitation or reset link to set one.");
+  }
+
+  const isValid = await bcrypt.compare(password, user.passwordHash);
+  if (!isValid) {
+    throw new Error("Invalid email or password.");
+  }
+
+  return signedIn;
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -59,42 +103,7 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email = credentials?.email?.trim().toLowerCase();
-        const password = credentials?.password ?? "";
-        if (!email || !password) {
-          throw new Error("Enter your email and password.");
-        }
-        // Checked before the account lookup, so the answer reveals nothing about which emails exist.
-        if (process.env.NODE_ENV === "production" && isPublishedPassword(password)) {
-          throw new Error(
-            "This password was published with the old demo setup and no longer works. Ask the owner for a password reset link."
-          );
-        }
-
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user || !user.active) {
-          throw new Error("Invalid email or password.");
-        }
-        const signedIn = {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          teacherId: user.teacherId,
-          sessionVersion: user.sessionVersion,
-        };
-
-        if (!user.passwordHash) {
-          if (demoLoginAllowed() && password === "demo123" && user.role !== "TEACHER") return signedIn;
-          throw new Error("This account has no password yet. Use your invitation or reset link to set one.");
-        }
-
-        const isValid = await bcrypt.compare(password, user.passwordHash);
-        if (!isValid) {
-          throw new Error("Invalid email or password.");
-        }
-
-        return signedIn;
+        return verifyCredentials(credentials?.email, credentials?.password);
       },
     }),
   ],

@@ -2,6 +2,8 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { theme } from "../config/theme";
+import { canOpenScreen } from "../config/access";
+import { useAuth } from "../context/AuthContext";
 import { AdminDashboardScreen } from "../screens/admin/AdminDashboardScreen";
 import { AdminStudentsScreen } from "../screens/admin/AdminStudentsScreen";
 import { AdminTimetableScreen } from "../screens/admin/AdminTimetableScreen";
@@ -26,6 +28,8 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 function AdminTabs() {
+  const { user } = useAuth();
+  const show = (screen: string) => canOpenScreen(user?.role, screen);
   return (
     <Tab.Navigator
       screenOptions={{
@@ -46,46 +50,54 @@ function AdminTabs() {
         },
       }}
     >
-      <Tab.Screen
-        name="AdminDashboard"
-        component={AdminDashboardScreen}
-        options={{
-          tabBarLabel: "Dashboard",
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
-            <LayoutDashboard size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="AdminStudents"
-        component={AdminStudentsScreen}
-        options={{
-          tabBarLabel: "Students",
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
-            <Users size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="AdminTimetable"
-        component={AdminTimetableScreen}
-        options={{
-          tabBarLabel: "Timetable",
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
-            <Calendar size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="AdminBilling"
-        component={AdminBillingScreen}
-        options={{
-          tabBarLabel: "Invoices",
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
-            <Receipt size={size} color={color} />
-          ),
-        }}
-      />
+      {show("AdminDashboard") && (
+        <Tab.Screen
+          name="AdminDashboard"
+          component={AdminDashboardScreen}
+          options={{
+            tabBarLabel: "Dashboard",
+            tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+              <LayoutDashboard size={size} color={color} />
+            ),
+          }}
+        />
+      )}
+      {show("AdminStudents") && (
+        <Tab.Screen
+          name="AdminStudents"
+          component={AdminStudentsScreen}
+          options={{
+            tabBarLabel: "Students",
+            tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+              <Users size={size} color={color} />
+            ),
+          }}
+        />
+      )}
+      {show("AdminTimetable") && (
+        <Tab.Screen
+          name="AdminTimetable"
+          component={AdminTimetableScreen}
+          options={{
+            tabBarLabel: "Timetable",
+            tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+              <Calendar size={size} color={color} />
+            ),
+          }}
+        />
+      )}
+      {show("AdminBilling") && (
+        <Tab.Screen
+          name="AdminBilling"
+          component={AdminBillingScreen}
+          options={{
+            tabBarLabel: "Invoices",
+            tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+              <Receipt size={size} color={color} />
+            ),
+          }}
+        />
+      )}
       <Tab.Screen
         name="AdminMoreMenu"
         component={AdminMoreMenuScreen}

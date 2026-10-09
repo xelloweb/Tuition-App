@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
+import { requireMobileUser, requireOwnTrainerProfile } from "@/lib/mobile-auth";
 
 function formatMinutes(min: number): string {
   const h = Math.floor(min / 60);
@@ -10,11 +11,8 @@ function formatMinutes(min: number): string {
 
 export const GET = withErrorHandling("GET /api/mobile/trainer/students", async (req) => {
   const { searchParams } = new URL(req.url);
-  const teacherId = searchParams.get("teacherId");
-
-  if (!teacherId) {
-    return NextResponse.json({ success: false, message: "Teacher ID required." }, { status: 400 });
-  }
+  // Always the signed-in trainer's own profile, whatever the app asks for.
+  const teacherId = requireOwnTrainerProfile(await requireMobileUser(req), searchParams.get("teacherId"));
 
   // Find all active subject enrolments for this teacher
   const enrolments = await prisma.subjectEnrollment.findMany({

@@ -36,22 +36,29 @@ export function MarkAttendanceScreen({ route, navigation }: any) {
       return;
     }
 
+    if (!sessionId) {
+      // Opened without a scheduled class (e.g. from a student profile): there is nothing to save against.
+      Alert.alert(
+        "Choose the class first",
+        "Attendance is saved against a scheduled class. Open today's class from your Dashboard and mark it there."
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
-      if (sessionId) {
-        await apiRequest(`/api/sessions/${sessionId}/attendance`, {
-          method: "POST",
-          token,
-          body: JSON.stringify({
-            sessionOutcome,
-            studentAttendance,
-            actualDurationMinutes: parseInt(actualDurationMinutes, 10) || 60,
-            topicCovered: topicCovered.trim(),
-            homework: homework.trim() || undefined,
-            studentProgressNote: progressNote.trim() || undefined,
-          }),
-        });
-      }
+      await apiRequest(`/api/sessions/${sessionId}/attendance`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          sessionOutcome,
+          studentAttendance,
+          actualDurationMinutes: parseInt(actualDurationMinutes, 10) || 60,
+          topicCovered: topicCovered.trim(),
+          homework: homework.trim() || undefined,
+          studentProgressNote: progressNote.trim() || undefined,
+        }),
+      });
 
       Alert.alert(
         "Attendance Marked!",
@@ -67,15 +74,10 @@ export function MarkAttendanceScreen({ route, navigation }: any) {
         ]
       );
     } catch (err: any) {
+      // Stay on the form so nothing typed is lost; never report a failed save as saved.
       Alert.alert(
-        "Saved (Demo Mode)",
-        `Attendance recorded successfully for ${studentName || "student"}.`,
-        [
-          {
-            text: "Done",
-            onPress: () => navigation.goBack(),
-          },
-        ]
+        "Attendance not saved",
+        `${err?.message || "The server did not accept the attendance."}\n\nYou can mark this class on the website instead.`
       );
     } finally {
       setSubmitting(false);

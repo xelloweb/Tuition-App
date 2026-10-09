@@ -52,7 +52,8 @@ export function AdminReportsScreen() {
           contentContainerStyle={styles.scrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.brandCyan} />}
         >
-          {/* Revenue Card */}
+          {/* Revenue Card: owner and accounts only (the server omits these figures for other roles) */}
+          {metrics?.totalInvoicedRevenue !== undefined && (
           <View style={styles.metricCard}>
             <Text style={styles.cardSectionTitle}>FINANCIAL PERFORMANCE</Text>
             <View style={styles.metricGrid}>
@@ -80,6 +81,7 @@ export function AdminReportsScreen() {
               </View>
             </View>
           </View>
+          )}
 
           {/* Academic Operations Card */}
           <View style={styles.metricCard}>

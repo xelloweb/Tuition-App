@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
+import { canCorrectAttendance, requirePermission } from "@/lib/auth";
+import { requireMobileUser } from "@/lib/mobile-auth";
 
 export const GET = withErrorHandling("GET /api/mobile/admin/attendance", async (req) => {
+  const user = await requireMobileUser(req);
+  requirePermission(canCorrectAttendance(user.role));
   const { searchParams } = new URL(req.url);
   const filter = searchParams.get("filter") || "RECENT"; // "MISSING" | "TODAY" | "RECENT"
 
@@ -71,6 +75,8 @@ export const GET = withErrorHandling("GET /api/mobile/admin/attendance", async (
 });
 
 export const POST = withErrorHandling("POST /api/mobile/admin/attendance", async (req) => {
+  const user = await requireMobileUser(req);
+  requirePermission(canCorrectAttendance(user.role));
   const body = await req.json();
   const { sessionId, sessionOutcome, studentAttendance, topicCovered, durationMinutes } = body;
 

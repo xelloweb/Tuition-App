@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
+import { requireMobileUser, requireOwnTrainerProfile } from "@/lib/mobile-auth";
 
 export const GET = withErrorHandling("GET /api/mobile/trainer/dashboard", async (req) => {
   const { searchParams } = new URL(req.url);
-  const teacherId = searchParams.get("teacherId");
-
-  if (!teacherId) {
-    return NextResponse.json({ success: false, message: "Teacher ID required." }, { status: 400 });
-  }
+  // Always the signed-in trainer's own profile, whatever the app asks for.
+  const teacherId = requireOwnTrainerProfile(await requireMobileUser(req), searchParams.get("teacherId"));
 
   const teacher = await prisma.teacher.findUnique({
     where: { id: teacherId },

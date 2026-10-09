@@ -25,6 +25,7 @@ import {
   LogOut,
 } from "lucide-react-native";
 import { useAuth } from "../../context/AuthContext";
+import { canOpenScreen } from "../../config/access";
 
 export function AdminMoreMenuScreen({ navigation }: any) {
   const { logout, user } = useAuth();
@@ -38,6 +39,7 @@ export function AdminMoreMenuScreen({ navigation }: any) {
           desc: "Active profiles, grades & admissions",
           icon: Users,
           color: theme.colors.brandCyan,
+          screen: "AdminStudents",
           onPress: () => navigation.navigate("AdminStudents"),
         },
         {
@@ -45,6 +47,7 @@ export function AdminMoreMenuScreen({ navigation }: any) {
           desc: "Academic faculty, subjects & hourly rates",
           icon: GraduationCap,
           color: theme.colors.brandLime,
+          screen: "AdminTeachers",
           onPress: () => navigation.navigate("AdminTeachers"),
         },
         {
@@ -52,6 +55,7 @@ export function AdminMoreMenuScreen({ navigation }: any) {
           desc: "Parent applications & public apply link",
           icon: Inbox,
           color: "#f59e0b",
+          screen: "AdminAdmissions",
           onPress: () => navigation.navigate("AdminAdmissions"),
         },
         {
@@ -59,6 +63,7 @@ export function AdminMoreMenuScreen({ navigation }: any) {
           desc: "Class schedules by day and week (IST)",
           icon: Calendar,
           color: theme.colors.brandCyan,
+          screen: "AdminTimetable",
           onPress: () => navigation.navigate("AdminTimetable"),
         },
         {
@@ -66,6 +71,7 @@ export function AdminMoreMenuScreen({ navigation }: any) {
           desc: "Review logs, missing attendance & record",
           icon: CheckCircle2,
           color: "#10b981",
+          screen: "AdminAttendance",
           onPress: () => navigation.navigate("AdminAttendance"),
         },
         {
@@ -73,6 +79,7 @@ export function AdminMoreMenuScreen({ navigation }: any) {
           desc: "Class credit balances and expiry tracking",
           icon: Layers,
           color: "#8b5cf6",
+          screen: "AdminPackages",
           onPress: () => navigation.navigate("AdminPackages"),
         },
       ],
@@ -85,6 +92,7 @@ export function AdminMoreMenuScreen({ navigation }: any) {
           desc: "Student invoices, receipts & mark paid",
           icon: Receipt,
           color: theme.colors.brandLime,
+          screen: "AdminBilling",
           onPress: () => navigation.navigate("AdminBilling"),
         },
         {
@@ -92,6 +100,7 @@ export function AdminMoreMenuScreen({ navigation }: any) {
           desc: "Monthly teaching hours & earnings",
           icon: DollarSign,
           color: theme.colors.brandCyan,
+          screen: "AdminPayouts",
           onPress: () => navigation.navigate("AdminPayouts"),
         },
       ],
@@ -104,6 +113,7 @@ export function AdminMoreMenuScreen({ navigation }: any) {
           desc: "Revenue totals, teaching hours & metrics",
           icon: BarChart3,
           color: theme.colors.brandCyan,
+          screen: "AdminReports",
           onPress: () => navigation.navigate("AdminReports"),
         },
         {
@@ -111,6 +121,7 @@ export function AdminMoreMenuScreen({ navigation }: any) {
           desc: "Account details & center operations",
           icon: Shield,
           color: theme.colors.brandLime,
+          screen: "AdminProfile",
           onPress: () => navigation.navigate("AdminProfile"),
         },
       ],
@@ -122,7 +133,12 @@ export function AdminMoreMenuScreen({ navigation }: any) {
       <Header title="All Modules" subtitle="Complete tuition operations hub" />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {MODULE_SECTIONS.map((section) => (
+        {MODULE_SECTIONS.map((section) => ({
+          ...section,
+          items: section.items.filter((item) => canOpenScreen(user?.role, item.screen)),
+        }))
+          .filter((section) => section.items.length > 0)
+          .map((section) => (
           <View key={section.title} style={styles.section}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
             <View style={styles.sectionCard}>

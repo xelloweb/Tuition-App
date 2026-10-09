@@ -34,6 +34,7 @@ export function TrainerScheduleScreen() {
   const [selectedDay, setSelectedDay] = useState(new Date().getDay()); // Default to today (0 = Sun, 1 = Mon...)
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const days = [
     { value: 0, label: "Sun" },
@@ -57,66 +58,12 @@ export function TrainerScheduleScreen() {
       );
       if (res.success) {
         setSlots(res.slots);
+        setLoadError(null);
       }
     } catch (err) {
-      console.log("Error loading timetable, using demo mock schedule", err);
-      setSlots([
-        {
-          id: "ts-1",
-          weekday: 0, // Sunday
-          start: "20:00:00",
-          end: "21:00:00",
-          studentName: "Slaine",
-          studentCode: "XST-131",
-          grade: "10th Grade",
-          subjectName: "Mathematics",
-          subjectColor: "#14b8a6",
-        },
-        {
-          id: "ts-2",
-          weekday: 1, // Monday
-          start: "19:00:00",
-          end: "20:00:00",
-          studentName: "Mridul. S",
-          studentCode: "XST-132",
-          grade: "6th Grade",
-          subjectName: "Mathematics",
-          subjectColor: "#14b8a6",
-        },
-        {
-          id: "ts-3",
-          weekday: 2, // Tuesday
-          start: "17:30:00",
-          end: "18:30:00",
-          studentName: "Slaine",
-          studentCode: "XST-131",
-          grade: "10th Grade",
-          subjectName: "Mathematics",
-          subjectColor: "#14b8a6",
-        },
-        {
-          id: "ts-4",
-          weekday: 3, // Wednesday
-          start: "20:00:00",
-          end: "21:00:00",
-          studentName: "Mridul. S",
-          studentCode: "XST-132",
-          grade: "6th Grade",
-          subjectName: "Mathematics",
-          subjectColor: "#14b8a6",
-        },
-        {
-          id: "ts-5",
-          weekday: 5, // Friday
-          start: "20:00:00",
-          end: "21:00:00",
-          studentName: "Mridul. S",
-          studentCode: "XST-132",
-          grade: "6th Grade",
-          subjectName: "Mathematics",
-          subjectColor: "#14b8a6",
-        },
-      ]);
+      // Never show a sample timetable in place of the trainer's real one.
+      setSlots([]);
+      setLoadError(err instanceof Error ? err.message : "Could not load your timetable.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -184,7 +131,15 @@ export function TrainerScheduleScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
         }
       >
-        {daySlots.length === 0 ? (
+        {loadError ? (
+          <EmptyState
+            title="Could not load your timetable"
+            message={loadError}
+            icon={<Calendar size={40} color={Colors.textMuted} />}
+            actionLabel="Try again"
+            onAction={onRefresh}
+          />
+        ) : daySlots.length === 0 ? (
           <EmptyState
             title={`No Classes on ${days.find((d) => d.value === selectedDay)?.label}`}
             message="You have no scheduled tuition slots for this day."

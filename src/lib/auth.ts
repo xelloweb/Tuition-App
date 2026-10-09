@@ -52,9 +52,17 @@ export async function getSessionUser(): Promise<CurrentUser | null> {
   const session = await getServerSession(authOptions);
   const sessionUser = session?.user as { id?: string; sv?: number } | undefined;
   if (!sessionUser?.id) return null;
-  const user = await prisma.user.findUnique({ where: { id: sessionUser.id } });
+  return userForSession(sessionUser.id, sessionUser.sv ?? 0);
+}
+
+/**
+ * The account behind a signed session (website cookie or phone app token), or
+ * null when it was deactivated or signed out everywhere since the token was issued.
+ */
+export async function userForSession(userId: string, sessionVersion: number): Promise<CurrentUser | null> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || !user.active) return null;
-  if (user.sessionVersion !== (sessionUser.sv ?? 0)) return null;
+  if (user.sessionVersion !== sessionVersion) return null;
   return {
     id: user.id,
     name: user.name,

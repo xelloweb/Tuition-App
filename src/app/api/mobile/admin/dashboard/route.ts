@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api-errors";
+import { canManageStudents, requirePermission } from "@/lib/auth";
+import { requireMobileUser } from "@/lib/mobile-auth";
 
-export const GET = withErrorHandling("GET /api/mobile/admin/dashboard", async () => {
+export const GET = withErrorHandling("GET /api/mobile/admin/dashboard", async (req) => {
+  const user = await requireMobileUser(req);
+  requirePermission(canManageStudents(user.role));
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);

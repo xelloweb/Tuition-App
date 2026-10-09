@@ -43,6 +43,7 @@ export function TrainerStudentsScreen({ navigation }: any) {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchStudents = async () => {
     if (!trainer?.teacherId) {
@@ -56,68 +57,12 @@ export function TrainerStudentsScreen({ navigation }: any) {
       );
       if (res.success) {
         setStudents(res.students);
+        setLoadError(null);
       }
     } catch (err) {
-      console.log("Error fetching students, using demo mock list", err);
-      setStudents([
-        {
-          id: "s-1",
-          name: "Slaine",
-          studentCode: "XST-131",
-          grade: "10th Grade",
-          board: "CBSE",
-          whatsappNumber: "+965 9446511500",
-          assignedSubjects: [
-            {
-              enrolmentId: "e-1",
-              subjectId: "sub-1",
-              subjectName: "Mathematics",
-              subjectColor: "#14b8a6",
-              allocatedCredits: 12,
-              consumedCredits: 3,
-              remainingCredits: 9,
-            },
-          ],
-        },
-        {
-          id: "s-2",
-          name: "Mridul. S",
-          studentCode: "XST-132",
-          grade: "6th Grade",
-          board: "CBSE",
-          whatsappNumber: "+91 9048475778",
-          assignedSubjects: [
-            {
-              enrolmentId: "e-2",
-              subjectId: "sub-1",
-              subjectName: "Mathematics",
-              subjectColor: "#14b8a6",
-              allocatedCredits: 12,
-              consumedCredits: 2,
-              remainingCredits: 10,
-            },
-          ],
-        },
-        {
-          id: "s-3",
-          name: "Dharmika SA",
-          studentCode: "XST-121",
-          grade: "8th Grade",
-          board: "CBSE",
-          whatsappNumber: "+91 9447123456",
-          assignedSubjects: [
-            {
-              enrolmentId: "e-3",
-              subjectId: "sub-2",
-              subjectName: "Physics",
-              subjectColor: "#6366f1",
-              allocatedCredits: 10,
-              consumedCredits: 8,
-              remainingCredits: 2,
-            },
-          ],
-        },
-      ]);
+      // Never show sample students in place of the trainer's real list.
+      setStudents([]);
+      setLoadError(err instanceof Error ? err.message : "Could not load your students.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -239,6 +184,15 @@ export function TrainerStudentsScreen({ navigation }: any) {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
         }
         ListEmptyComponent={
+          loadError ? (
+            <EmptyState
+              title="Could not load your students"
+              message={loadError}
+              icon={<BookOpen size={40} color={Colors.textMuted} />}
+              actionLabel="Try again"
+              onAction={onRefresh}
+            />
+          ) : (
           <EmptyState
             title="No Assigned Students Found"
             message={
@@ -248,6 +202,7 @@ export function TrainerStudentsScreen({ navigation }: any) {
             }
             icon={<BookOpen size={40} color={Colors.textMuted} />}
           />
+          )
         }
       />
     </View>
