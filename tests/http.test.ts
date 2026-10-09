@@ -446,13 +446,16 @@ describe("parent admission form (public) over HTTP", { skip: !BASE }, () => {
   });
 });
 
-describe("assign package using existing payment (owner only) over HTTP", { skip: !BASE }, () => {
-  test("only the owner can see or use a student's existing payments", async () => {
+// Owner, coordinator and accounts may use it (owner's decision, 9 Oct 2026); trainers may not.
+describe("assign package using existing payment (owner, coordinator, accounts) over HTTP", { skip: !BASE }, () => {
+  test("owner, coordinator and accounts can see and use a student's existing payments; trainers cannot", async () => {
     const students = await call("admin", "GET", "/api/students");
     const id = (students.json!.students as { id: string }[])[0].id;
     assert.equal((await call(null, "GET", `/api/students/${id}/existing-payment`)).status, 401);
-    assert.equal((await call("coordinator", "GET", `/api/students/${id}/existing-payment`)).status, 403);
-    assert.equal((await call("accounts", "POST", `/api/students/${id}/existing-payment`, {})).status, 403);
+    assert.equal((await call("coordinator", "GET", `/api/students/${id}/existing-payment`)).status, 200);
+    assert.equal((await call("accounts", "GET", `/api/students/${id}/existing-payment`)).status, 200);
+    // Accounts reaches the form's own checks (an empty request is refused as invalid, not forbidden).
+    assert.equal((await call("accounts", "POST", `/api/students/${id}/existing-payment`, {})).status, 400);
     assert.equal((await call("teacher_rahul", "GET", `/api/students/${id}/existing-payment`)).status, 403);
     const own = await call("admin", "GET", `/api/students/${id}/existing-payment`);
     assert.equal(own.status, 200);
