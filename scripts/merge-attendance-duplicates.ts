@@ -10,7 +10,8 @@
  * trainer's pay record onto the booked class, marks that class completed, and
  * removes the extra record. Attendance, hours and pay are unchanged; nothing
  * is merged unless the booked class has no attendance of its own. Running it
- * again finds nothing. It runs during one deploy and is then removed from the build.
+ * again finds nothing. Ran once, in the deploy of 10 Oct 2026 01:04 IST; no
+ * longer part of the build (kept as a record and for the tests).
  */
 import { PrismaClient, Prisma } from "@prisma/client";
 
