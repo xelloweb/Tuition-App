@@ -5,15 +5,17 @@ import { Colors, Spacing } from "../config/theme";
 interface EmptyStateProps {
   title: string;
   message?: string;
+  description?: string;
   icon?: React.ReactNode;
 }
 
-export function EmptyState({ title, message, icon }: EmptyStateProps) {
+export function EmptyState({ title, message, description, icon }: EmptyStateProps) {
+  const displayMessage = message || description;
   return (
     <View style={styles.container}>
       {icon && <View style={styles.iconContainer}>{icon}</View>}
       <Text style={styles.title}>{title}</Text>
-      {message && <Text style={styles.message}>{message}</Text>}
+      {displayMessage && <Text style={styles.message}>{displayMessage}</Text>}
     </View>
   );
 }

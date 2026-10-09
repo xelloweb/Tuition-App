@@ -12,7 +12,7 @@ import { Colors, BorderRadius, Spacing } from "../config/theme";
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: "primary" | "secondary" | "danger" | "ghost";
+  variant?: "primary" | "secondary" | "danger" | "ghost" | "outline";
   size?: "sm" | "md" | "lg";
   loading?: boolean;
   disabled?: boolean;
@@ -33,7 +33,7 @@ export function Button({
   icon,
 }: ButtonProps) {
   const isPrimary = variant === "primary";
-  const isSecondary = variant === "secondary";
+  const isSecondary = variant === "secondary" || variant === "outline";
   const isDanger = variant === "danger";
   const isGhost = variant === "ghost";
 

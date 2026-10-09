@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
@@ -40,12 +41,20 @@ export function LoginScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          {/* Logo & Header */}
+          {/* Official Xello Brand Header */}
           <View style={styles.header}>
             <View style={styles.logoBadge}>
-              <GraduationCap size={40} color={theme.colors.teal} />
+              <Image
+                source={require("../../../assets/icon.png")}
+                style={styles.brandIcon}
+                resizeMode="contain"
+              />
             </View>
-            <Text style={styles.title}>XELLO TUITION</Text>
+            <Image
+              source={require("../../../assets/xello-logo.png")}
+              style={styles.brandWordmark}
+              resizeMode="contain"
+            />
             <Text style={styles.subtitle}>Staff & Academic Trainer Operations</Text>
           </View>
 
@@ -90,9 +99,9 @@ export function LoginScreen() {
             />
           </View>
 
-          {/* One-Tap Quick Demo Portals */}
+          {/* One-Tap Quick Access Portals */}
           <View style={styles.demoSection}>
-            <Text style={styles.demoTitle}>QUICK ACCESS DEMO</Text>
+            <Text style={styles.demoTitle}>STAFF PORTAL ACCESS</Text>
             <Text style={styles.demoSubtitle}>Select a role to preview instant operations:</Text>
 
             <View style={styles.demoButtonsContainer}>
@@ -100,8 +109,11 @@ export function LoginScreen() {
                 style={styles.demoBtn}
                 onPress={() => quickDemo("ADMIN")}
                 disabled={isLoading}
+                activeOpacity={0.7}
               >
-                <Shield size={18} color={theme.colors.primary} />
+                <View style={[styles.roleIconWrap, { backgroundColor: "rgba(64, 174, 227, 0.15)" }]}>
+                  <Shield size={20} color={theme.colors.brandCyan} />
+                </View>
                 <View style={styles.demoBtnTextWrapper}>
                   <Text style={styles.demoBtnTitle}>Admin / Owner</Text>
                   <Text style={styles.demoBtnDesc}>Full platform operations & metrics</Text>
@@ -112,8 +124,11 @@ export function LoginScreen() {
                 style={styles.demoBtn}
                 onPress={() => quickDemo("COORDINATOR")}
                 disabled={isLoading}
+                activeOpacity={0.7}
               >
-                <UserCheck size={18} color={theme.colors.purple} />
+                <View style={[styles.roleIconWrap, { backgroundColor: "rgba(139, 92, 246, 0.15)" }]}>
+                  <UserCheck size={20} color={theme.colors.purple} />
+                </View>
                 <View style={styles.demoBtnTextWrapper}>
                   <Text style={styles.demoBtnTitle}>Academic Coordinator</Text>
                   <Text style={styles.demoBtnDesc}>Students, timetables & attendance</Text>
@@ -124,14 +139,23 @@ export function LoginScreen() {
                 style={[styles.demoBtn, styles.demoBtnTrainer]}
                 onPress={() => quickDemo("TRAINER")}
                 disabled={isLoading}
+                activeOpacity={0.7}
               >
-                <GraduationCap size={18} color={theme.colors.teal} />
+                <View style={[styles.roleIconWrap, { backgroundColor: "rgba(203, 220, 66, 0.15)" }]}>
+                  <GraduationCap size={20} color={theme.colors.brandLime} />
+                </View>
                 <View style={styles.demoBtnTextWrapper}>
                   <Text style={styles.demoBtnTitle}>Academic Trainer</Text>
                   <Text style={styles.demoBtnDesc}>Assigned classes & subject tracking</Text>
                 </View>
               </TouchableOpacity>
             </View>
+          </View>
+
+          <View style={styles.footerNote}>
+            <Text style={styles.footerText}>
+              Xello Tuition Management Platform • Confidential Staff Access
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -145,36 +169,46 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   scrollContent: {
-    padding: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
+    flexGrow: 1,
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing.lg,
     justifyContent: "center",
   },
   header: {
     alignItems: "center",
-    marginTop: theme.spacing.lg,
     marginBottom: theme.spacing.xl,
   },
   logoBadge: {
-    width: 80,
-    height: 80,
-    borderRadius: theme.borderRadius.xl,
-    backgroundColor: "rgba(20, 184, 166, 0.12)",
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: "#16194f",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "rgba(20, 184, 166, 0.35)",
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+    borderWidth: 2,
+    borderColor: "rgba(64, 174, 227, 0.35)",
+    shadowColor: "#40aee3",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  title: {
-    fontSize: theme.fontSize["2xl"],
-    fontWeight: "800",
-    color: theme.colors.text,
-    letterSpacing: 2,
+  brandIcon: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+  },
+  brandWordmark: {
+    width: 150,
+    height: 44,
+    marginTop: 4,
   },
   subtitle: {
     fontSize: theme.fontSize.sm,
-    color: theme.colors.textMuted,
-    marginTop: 4,
+    color: theme.colors.textSecondary,
+    marginTop: 6,
+    fontWeight: "500",
   },
   formCard: {
     backgroundColor: theme.colors.card,
@@ -220,8 +254,8 @@ const styles = StyleSheet.create({
   },
   demoTitle: {
     fontSize: theme.fontSize.xs,
-    fontWeight: "700",
-    color: theme.colors.teal,
+    fontWeight: "800",
+    color: theme.colors.brandCyan,
     letterSpacing: 1.5,
     textAlign: "center",
   },
@@ -229,7 +263,7 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xs,
     color: theme.colors.textMuted,
     textAlign: "center",
-    marginTop: 2,
+    marginTop: 3,
     marginBottom: theme.spacing.md,
   },
   demoButtonsContainer: {
@@ -243,12 +277,21 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.lg,
     borderWidth: 1,
     borderColor: theme.colors.border,
+    minHeight: 56,
   },
   demoBtnTrainer: {
-    borderColor: "rgba(20, 184, 166, 0.4)",
+    borderColor: "rgba(203, 220, 66, 0.35)",
+  },
+  roleIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
   demoBtnTextWrapper: {
     marginLeft: theme.spacing.md,
+    flex: 1,
   },
   demoBtnTitle: {
     fontSize: theme.fontSize.sm,
@@ -259,5 +302,14 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xs,
     color: theme.colors.textMuted,
     marginTop: 2,
+  },
+  footerNote: {
+    marginTop: theme.spacing.xl,
+    alignItems: "center",
+  },
+  footerText: {
+    fontSize: 11,
+    color: theme.colors.textMuted,
+    textAlign: "center",
   },
 });

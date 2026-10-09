@@ -25,6 +25,11 @@ export const metadata: Metadata = {
   title: "Xello Tuition | Operations & Credit Management",
   description:
     "Internal Operations Portal for Xello Tuition: Multi-subject package allocation, credit ledger, scheduling, billing, and teacher payouts for Kerala & GCC students.",
+  icons: {
+    icon: "/brand/xello-mark.png",
+    shortcut: "/brand/xello-mark.png",
+    apple: "/brand/xello-mark.png",
+  },
 };
 
 

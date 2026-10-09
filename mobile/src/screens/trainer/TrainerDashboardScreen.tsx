@@ -27,6 +27,7 @@ import {
 } from "lucide-react-native";
 
 interface DashboardData {
+  success?: boolean;
   stats: {
     assignedStudentsCount: number;
     todayClassesCount: number;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { CheckCircle2, Clock, GraduationCap, Pencil, Plus, Search, Send, Trash2, UserPlus } from "lucide-react";
 import { ALL_GRADES } from "@/lib/grades";
 import { BOARD_OPTIONS, MEDIUM_OPTIONS } from "@/lib/constants";
@@ -264,10 +265,15 @@ export function IntakeForm({ subjects, formToken, privacyUrl, preview, todayIst 
     <main className="min-h-screen bg-canvas text-ink">
       <div className="mx-auto max-w-2xl px-4 pb-16 pt-6 sm:pt-10">
         <header className="mb-6">
-          <p className="flex items-center gap-2 text-base font-bold">
-            <span className="flex h-9 w-9 items-center justify-center rounded-control bg-brand text-brand-ink" aria-hidden="true">
-              <GraduationCap className="h-5 w-5" />
-            </span>
+          <p className="flex items-center gap-2.5 text-base font-bold">
+            <Image
+              src="/brand/xello-mark.png"
+              alt="Xello Logo"
+              width={36}
+              height={36}
+              className="rounded-full shadow-sm"
+              priority
+            />
             Xello Tuition
           </p>
           <h1 className="mt-5 text-2xl font-bold sm:text-3xl">Student admission form</h1>

@@ -3,7 +3,8 @@ import { View, Text, StyleSheet } from "react-native";
 import { Colors, BorderRadius, Spacing } from "../config/theme";
 
 interface StatCardProps {
-  label: string;
+  label?: string;
+  title?: string;
   value: string | number;
   icon?: React.ReactNode;
   color?: string;
@@ -12,15 +13,17 @@ interface StatCardProps {
 
 export function StatCard({
   label,
+  title,
   value,
   icon,
   color = Colors.primary,
   subtext,
 }: StatCardProps) {
+  const displayLabel = label || title || "";
   return (
     <View style={styles.card}>
       <View style={styles.topRow}>
-        <Text style={styles.label}>{label}</Text>
+        <Text style={styles.label}>{displayLabel}</Text>
         {icon && (
           <View style={[styles.iconContainer, { backgroundColor: `${color}15`, borderColor: `${color}30` }]}>
             {icon}

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { signOut } from "next-auth/react";
-import { GraduationCap, LogOut } from "lucide-react";
+import Image from "next/image";
+import { LogOut } from "lucide-react";
 import { CurrentUser } from "@/lib/types";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -21,9 +22,14 @@ export function Header({ currentUser, istToday }: { currentUser: CurrentUser; is
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between gap-3 border-b border-line bg-surface px-3 sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <Link href="/" className="flex items-center gap-2 rounded-control lg:hidden">
-          <span className="flex h-9 w-9 items-center justify-center rounded-control bg-brand text-brand-ink" aria-hidden="true">
-            <GraduationCap className="h-5 w-5" />
-          </span>
+          <Image
+            src="/brand/xello-mark.png"
+            alt="Xello Logo"
+            width={30}
+            height={30}
+            className="rounded-full shadow-sm"
+            priority
+          />
           <span className="text-base font-bold text-ink">Xello</span>
         </Link>
         <p className="truncate text-sm text-ink-muted">

@@ -18,9 +18,20 @@ export interface AppUser {
   } | null;
 }
 
+export interface TrainerProfile {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  teacherId?: string | null;
+  assignedStudentsCount?: number;
+}
+
 interface AuthContextType {
   role: StaffRole;
   user: AppUser | null;
+  trainer: TrainerProfile | null;
+  student?: any;
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -129,11 +140,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
   };
 
+  const trainer: TrainerProfile | null =
+    user?.teacher
+      ? {
+          id: user.teacher.id,
+          teacherId: user.teacher.id,
+          name: user.teacher.name,
+          email: user.teacher.email,
+          phone: user.teacher.phone,
+          assignedStudentsCount: user.teacher.assignedStudentsCount,
+        }
+      : user?.teacherId
+      ? {
+          id: user.teacherId,
+          teacherId: user.teacherId,
+          name: user.name,
+          email: user.email,
+        }
+      : role === "TRAINER" && user
+      ? {
+          id: user.id,
+          teacherId: user.id,
+          name: user.name,
+          email: user.email,
+        }
+      : null;
+
   return (
     <AuthContext.Provider
       value={{
         role,
         user,
+        trainer,
+        student: null,
         token,
         isLoading,
         login,

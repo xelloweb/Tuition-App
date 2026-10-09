@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { Colors, Spacing } from "../config/theme";
 import { LogOut } from "lucide-react-native";
 import { useAuth } from "../context/AuthContext";
@@ -17,22 +17,29 @@ export function Header({
   showLogout = true,
   rightElement,
 }: HeaderProps) {
-  const { logout, role, trainer, student } = useAuth();
+  const { logout, role, user, trainer } = useAuth();
 
-  const userBadge = role === "TRAINER" ? "Trainer" : "Student";
-  const userName = role === "TRAINER" ? trainer?.name : student?.name;
+  const userBadge = role === "TRAINER" ? "Trainer" : role === "COORDINATOR" ? "Coordinator" : "Admin";
+  const userName = trainer?.name || user?.name;
 
   return (
     <View style={styles.container}>
-      <View style={styles.textContainer}>
-        <View style={styles.badgeRow}>
-          <View style={styles.dot} />
-          <Text style={styles.badgeText}>
-            {userBadge} {userName ? `• ${userName}` : ""}
-          </Text>
+      <View style={styles.brandingRow}>
+        <Image
+          source={require("../../assets/icon.png")}
+          style={styles.brandIcon}
+          resizeMode="contain"
+        />
+        <View style={styles.textContainer}>
+          <View style={styles.badgeRow}>
+            <View style={styles.dot} />
+            <Text style={styles.badgeText}>
+              {userBadge} {userName ? `• ${userName}` : ""}
+            </Text>
+          </View>
+          <Text style={styles.title} numberOfLines={1}>{title}</Text>
+          {subtitle && <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>}
         </View>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
       </View>
 
       <View style={styles.actions}>
@@ -42,6 +49,7 @@ export function Header({
             style={styles.logoutButton}
             onPress={logout}
             activeOpacity={0.7}
+            accessibilityLabel="Sign out"
           >
             <LogOut size={18} color={Colors.textSecondary} />
           </TouchableOpacity>
@@ -62,6 +70,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     borderBottomWidth: 1,
     borderBottomColor: Colors.cardBorder,
+  },
+  brandingRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  brandIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    marginRight: 10,
+    borderWidth: 1.5,
+    borderColor: "rgba(64, 174, 227, 0.4)",
   },
   textContainer: {
     flex: 1,
@@ -86,7 +107,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   title: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: "800",
     color: Colors.text,
     letterSpacing: -0.3,
@@ -107,5 +128,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.cardBorder,
     marginLeft: Spacing.sm,
+    minHeight: 40,
+    minWidth: 40,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

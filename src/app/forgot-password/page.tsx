@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowLeft, GraduationCap } from "lucide-react";
+import Image from "next/image";
+import { ArrowLeft } from "lucide-react";
 
 /**
  * Explains how to get a new password. Nothing here changes an account: a public
@@ -11,9 +12,14 @@ export default function ForgotPasswordPage() {
     <main className="min-h-screen bg-[#070a12] text-slate-100 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:p-8">
         <div className="flex items-center gap-3 mb-8">
-          <div className="rounded-xl bg-teal-500/10 p-2 border border-teal-500/30">
-            <GraduationCap className="h-6 w-6 text-teal-300" aria-hidden="true" />
-          </div>
+          <Image
+            src="/brand/xello-mark.png"
+            alt="Xello Logo"
+            width={40}
+            height={40}
+            className="rounded-full shadow-sm"
+            priority
+          />
           <div>
             <p className="text-lg font-bold text-white">Xello Tuition</p>
             <p className="text-sm text-slate-300">Staff and trainer sign-in</p>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { GraduationCap } from "lucide-react";
+import Image from "next/image";
 import { isActivePath, navGroupsFor } from "./navigation";
 import { NavBadge } from "./NavBadge";
 
@@ -14,11 +14,16 @@ export function Sidebar({ currentRole, badges = {} }: { currentRole: string; bad
   return (
     <aside className="hidden lg:flex lg:w-64 lg:shrink-0 lg:flex-col border-r border-line bg-surface">
       <div className="flex h-16 items-center border-b border-line px-5">
-        <Link href="/" className="flex items-center gap-3 rounded-control">
-          <span className="flex h-9 w-9 items-center justify-center rounded-control bg-brand text-brand-ink" aria-hidden="true">
-            <GraduationCap className="h-5 w-5" />
-          </span>
-          <span className="text-base font-bold text-ink">Xello Tuition</span>
+        <Link href="/" className="flex items-center gap-2.5 rounded-control">
+          <Image
+            src="/brand/xello-mark.png"
+            alt="Xello Logo"
+            width={32}
+            height={32}
+            className="rounded-full shadow-sm"
+            priority
+          />
+          <span className="text-base font-bold tracking-tight text-ink">Xello Tuition</span>
         </Link>
       </div>
 

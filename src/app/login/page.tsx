@@ -4,7 +4,8 @@ import { signIn } from "next-auth/react";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { GraduationCap, ArrowRight, AlertTriangle, CheckCircle2 } from "lucide-react";
+import Image from "next/image";
+import { ArrowRight, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 /** Only same-site paths: a crafted ?callbackUrl= must not send staff to another website. */
 function safeCallback(raw: string | null): string {
@@ -54,13 +55,25 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-[#070a12] text-slate-100 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:p-8">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="rounded-xl bg-teal-500/10 p-2 border border-teal-500/30">
-            <GraduationCap className="h-6 w-6 text-teal-300" aria-hidden="true" />
-          </div>
+        <div className="flex items-center gap-3.5 mb-8">
+          <Image
+            src="/brand/xello-mark.png"
+            alt="Xello Logo"
+            width={48}
+            height={48}
+            className="rounded-full shadow-md"
+            priority
+          />
           <div>
-            <p className="text-lg font-bold text-white">Xello Tuition</p>
-            <p className="text-sm text-slate-300">Staff and trainer sign-in</p>
+            <Image
+              src="/brand/xello-logo.png"
+              alt="Xello"
+              width={110}
+              height={32}
+              className="h-7 w-auto object-contain"
+              priority
+            />
+            <p className="text-xs text-slate-400 mt-0.5">Staff and trainer sign-in</p>
           </div>
         </div>
 

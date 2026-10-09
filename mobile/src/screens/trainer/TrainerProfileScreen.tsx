@@ -30,10 +30,10 @@ export function TrainerProfileScreen() {
               <Text style={styles.infoText}>{trainer?.email || "No email"}</Text>
             </View>
 
-            {trainer?.teacher?.phone && (
+            {trainer?.phone && (
               <View style={styles.infoRow}>
                 <Phone size={16} color={Colors.textMuted} style={styles.infoIcon} />
-                <Text style={styles.infoText}>{trainer.teacher.phone}</Text>
+                <Text style={styles.infoText}>{trainer.phone}</Text>
               </View>
             )}
 
