@@ -63,3 +63,6 @@ private-data/
 /mobile/android/
 /mobile/ios/
 *.apk
+*.tar.gz
+*.ipa
+*.app
