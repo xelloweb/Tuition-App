@@ -802,14 +802,27 @@ export async function findGuardiansByPhone(rawPhone: string) {
 }
 
 export async function listStudentsFor(user: CurrentUser) {
-  const where: Prisma.StudentWhereInput =
-    user.role === "TEACHER"
-      ? {
-          OR: [
-            { enrolments: { some: { teacherId: user.teacherId ?? "__none__" } } },
-            { sessions: { some: { teacherId: user.teacherId ?? "__none__" } } },
-          ],
-        }
-      : {};
-  return prisma.student.findMany({ where, include: studentListInclude, orderBy: { createdAt: "desc" } });
+  if (user.role === "TEACHER") {
+    const teacherId = user.teacherId ?? "__none__";
+    return prisma.student.findMany({
+      where: {
+        enrolments: { some: { teacherId, status: "ACTIVE" } },
+      },
+      include: {
+        ...studentListInclude,
+        packages: false,
+        enrolments: {
+          where: { teacherId, status: "ACTIVE" },
+          include: {
+            subject: true,
+            teacher: { select: teacherPublicSelect },
+            timetableSlots: { where: { active: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+  return prisma.student.findMany({ include: studentListInclude, orderBy: { createdAt: "desc" } });
 }

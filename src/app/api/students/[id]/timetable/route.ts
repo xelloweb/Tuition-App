@@ -9,7 +9,20 @@ export const GET = withErrorHandling<Ctx>("GET /api/students/[id]/timetable", as
   const user = await requireUser();
   const { id } = await params;
   requirePermission(await canViewStudent(user, id), "You do not have access to this student's timetable.");
-  return NextResponse.json({ success: true, timetable: await getTimetableView(id) });
+  const timetable = await getTimetableView(id);
+
+  if (user.role === "TEACHER" && user.teacherId) {
+    const teacherId = user.teacherId;
+    const allowedEnrolmentIds = new Set(
+      timetable.enrolments.filter((e) => e.teacherId === teacherId).map((e) => e.id)
+    );
+    timetable.enrolments = timetable.enrolments.filter((e) => e.teacherId === teacherId);
+    timetable.slots = timetable.slots.filter((s) => allowedEnrolmentIds.has(s.enrolmentId) || s.teacherId === teacherId);
+    timetable.upcoming = timetable.upcoming.filter((u) => u.teacherName === user.name);
+    timetable.issues = timetable.issues.filter((iss) => iss.message.includes(user.name));
+  }
+
+  return NextResponse.json({ success: true, timetable });
 });
 
 /**

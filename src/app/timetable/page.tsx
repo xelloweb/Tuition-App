@@ -30,15 +30,21 @@ export default async function TimetablePage() {
     orderBy: { scheduledStartTimeUtc: "asc" },
   });
 
+  const isTeacher = user.role === "TEACHER" && Boolean(user.teacherId);
   const students = await prisma.student.findMany({
-    where: { status: "ACTIVE" },
+    where: isTeacher
+      ? { status: "ACTIVE", enrolments: { some: { teacherId: user.teacherId!, status: "ACTIVE" } } }
+      : { status: "ACTIVE" },
     select: {
       id: true,
       name: true,
       studentCode: true,
       grade: true,
       country: true,
-      enrolments: { where: { status: "ACTIVE" }, select: { subjectId: true, teacherId: true } },
+      enrolments: {
+        where: isTeacher ? { teacherId: user.teacherId!, status: "ACTIVE" } : { status: "ACTIVE" },
+        select: { subjectId: true, teacherId: true },
+      },
       packages: {
         where: { status: "ACTIVE" },
         select: {
@@ -56,7 +62,7 @@ export default async function TimetablePage() {
   });
 
   const teachers = await prisma.teacher.findMany({
-    where: { active: true },
+    where: isTeacher ? { id: user.teacherId!, active: true } : { active: true },
     orderBy: { name: "asc" },
     select: { id: true, name: true, subjects: true },
   });

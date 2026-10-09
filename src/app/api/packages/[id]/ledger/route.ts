@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { canViewStudent, requirePermission, requireUser } from "@/lib/auth";
+import { canManageStudents, requirePermission, requireUser } from "@/lib/auth";
 import { notFoundError, withErrorHandling } from "@/lib/api-errors";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -10,7 +10,7 @@ export const GET = withErrorHandling<Ctx>("GET /api/packages/[id]/ledger", async
   const { id } = await params;
   const pkg = await prisma.studentPackage.findUnique({ where: { id }, select: { studentId: true } });
   if (!pkg) throw notFoundError("Package not found.");
-  requirePermission(await canViewStudent(user, pkg.studentId), "You do not have access to this package.");
+  requirePermission(canManageStudents(user.role), "Only Admins and Academic Coordinators can view package ledgers.");
 
   const ledgers = await prisma.creditLedger.findMany({
     where: { packageId: id },

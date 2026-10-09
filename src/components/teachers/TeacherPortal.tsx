@@ -68,7 +68,7 @@ export function TeacherPortal({
   currentDate: string;
   todayDate: string;
   pendingCount: number;
-  myStudents?: TeacherPortalStudent[];
+  myStudents?: any[];
   workingHoursSummary?: WorkingHoursSummary;
 }) {
   const router = useRouter();
@@ -80,7 +80,10 @@ export function TeacherPortal({
   const [now] = useState(() => Date.now());
 
   // Modal state for manual attendance
-  const [markingStudent, setMarkingStudent] = useState<TeacherPortalStudent | null>(null);
+  const [markingSubject, setMarkingSubject] = useState<{
+    student: { id: string; name: string; grade?: string };
+    subject: { id: string; name: string };
+  } | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const handleAttendanceSuccess = (msg: string) => {
@@ -205,7 +208,7 @@ export function TeacherPortal({
             </h2>
           </div>
           <span className="text-xs text-slate-400">
-            Select a student to mark attendance for completed class hours
+            Assigned subjects, scheduled class timings, and package credits
           </span>
         </div>
 
@@ -214,57 +217,154 @@ export function TeacherPortal({
             No active students currently assigned to you.
           </p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {myStudents.map((stud) => (
-              <div
-                key={stud.id}
-                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-4 transition-colors hover:border-slate-700"
-              >
-                <div className="space-y-1.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="font-bold text-white text-sm">{stud.name}</h3>
-                      <span className="text-xs text-slate-400">{stud.grade}</span>
-                    </div>
-                    {stud.whatsappNumber && (
-                      <a
-                        href={`https://wa.me/${stud.whatsappNumber.replace(/\D/g, "")}?text=${encodeURIComponent(
-                          `Hello, this is ${teacherName} from Xello Tuition about ${stud.name}'s tuition classes.`
-                        )}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-white"
-                        title="WhatsApp parent"
-                      >
-                        <MessageCircle className="h-3.5 w-3.5 text-teal-400" /> WhatsApp
-                      </a>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {stud.assignedSubjects.map((sub) => (
-                      <span
-                        key={sub.id}
-                        className="rounded-md bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-xs font-semibold text-teal-300"
-                      >
-                        {sub.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {myStudents.map((stud: any) => {
+              const studentId = stud.studentId || stud.id;
+              const studentName = stud.studentName || stud.name;
 
-                <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
-                  <span className="text-[11px] text-slate-500">1 hr = 1 credit</span>
-                  <button
-                    type="button"
-                    onClick={() => setMarkingStudent(stud)}
-                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl bg-teal-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
-                  >
-                    <ClipboardList className="h-4 w-4" />
-                    Mark Attendance
-                  </button>
+              return (
+                <div
+                  key={studentId}
+                  className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/70 p-4 transition-colors hover:border-slate-700 space-y-3"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <Link
+                          href={`/students/${studentId}`}
+                          className="font-bold text-white text-base hover:text-teal-300 hover:underline transition-colors"
+                        >
+                          {studentName}
+                        </Link>
+                        <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                          <span>{stud.grade}</span>
+                          {stud.studentCode && (
+                            <span className="font-mono text-[11px] text-slate-500">
+                              • {stud.studentCode}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {stud.whatsappNumber && (
+                        <a
+                          href={`https://wa.me/${stud.whatsappNumber.replace(/\D/g, "")}?text=${encodeURIComponent(
+                            `Hello, this is ${teacherName} from Xello Tuition about ${studentName}'s tuition classes.`
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-white"
+                          title="WhatsApp parent"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5 text-teal-400" /> WhatsApp
+                        </a>
+                      )}
+                    </div>
+
+                    {/* Assigned Subjects with Timetables & Credit Allocations */}
+                    <div className="mt-3 space-y-2.5">
+                      {(stud.assignedSubjects || []).map((sub: any) => {
+                        const subId = sub.subjectId || sub.id;
+                        const subName = sub.subjectName || sub.name;
+
+                        return (
+                          <div
+                            key={subId}
+                            className="rounded-lg border border-slate-800/90 bg-slate-900/60 p-3 space-y-2"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span
+                                className="rounded-md border px-2 py-0.5 text-xs font-bold"
+                                style={{
+                                  backgroundColor: (sub.subjectColor || "#14b8a6") + "20",
+                                  borderColor: (sub.subjectColor || "#14b8a6") + "40",
+                                  color: sub.subjectColor || "#2dd4bf",
+                                }}
+                              >
+                                {subName}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setMarkingSubject({
+                                    student: {
+                                      id: studentId,
+                                      name: studentName,
+                                      grade: stud.grade,
+                                    },
+                                    subject: {
+                                      id: subId,
+                                      name: subName,
+                                    },
+                                  })
+                                }
+                                className="inline-flex items-center gap-1 rounded-lg bg-teal-400 px-2.5 py-1 text-xs font-bold text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
+                              >
+                                <ClipboardList className="h-3.5 w-3.5" /> Mark Attendance
+                              </button>
+                            </div>
+
+                            {/* Scheduled Class Days & Timings */}
+                            <div className="text-[11px] text-slate-300 flex items-start gap-1.5">
+                              <Clock className="h-3.5 w-3.5 text-teal-400 shrink-0 mt-0.5" />
+                              <div>
+                                {sub.schedules && sub.schedules.length > 0 ? (
+                                  <span className="text-slate-300">
+                                    {sub.schedules.map((s: any) => s.timeDisplay).join(" • ")}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-500">No scheduled timetable slots</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Class Credits Allocated, Completed, Remaining */}
+                            <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-800/60 text-center">
+                              <div className="bg-slate-950/60 rounded px-1.5 py-1">
+                                <span className="block text-[10px] text-slate-400">Allocated</span>
+                                <span className="text-xs font-bold text-white">
+                                  {sub.hasSubjectAllocation && sub.allocatedCredits !== null
+                                    ? `${sub.allocatedCredits} Cls`
+                                    : "Not Set"}
+                                </span>
+                              </div>
+                              <div className="bg-slate-950/60 rounded px-1.5 py-1">
+                                <span className="block text-[10px] text-slate-400">Completed</span>
+                                <span className="text-xs font-bold text-teal-300">
+                                  {sub.completedClasses ?? 0} Cls
+                                </span>
+                              </div>
+                              <div className="bg-slate-950/60 rounded px-1.5 py-1">
+                                <span className="block text-[10px] text-slate-400">Remaining</span>
+                                <span
+                                  className={`text-xs font-bold ${
+                                    sub.remainingCredits !== null && sub.remainingCredits <= 2
+                                      ? "text-rose-400"
+                                      : "text-emerald-400"
+                                  }`}
+                                >
+                                  {sub.hasSubjectAllocation && sub.remainingCredits !== null
+                                    ? `${sub.remainingCredits} Cls`
+                                    : "—"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                    <Link
+                      href={`/students/${studentId}`}
+                      className="text-xs font-bold text-teal-400 hover:text-teal-300 hover:underline"
+                    >
+                      View Subject Profile & Timetable →
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
@@ -391,18 +491,17 @@ export function TeacherPortal({
                       <button
                         type="button"
                         onClick={() => {
-                          if (matchedStudent) {
-                            setMarkingStudent(matchedStudent);
-                          } else {
-                            // Synthesize student option from session
-                            setMarkingStudent({
+                          setMarkingSubject({
+                            student: {
                               id: (s as any).studentId || "",
                               name: s.student.name,
                               grade: s.student.grade,
-                              whatsappNumber: s.student.whatsappNumber,
-                              assignedSubjects: [{ id: (s as any).subjectId || "", name: s.subject.name }],
-                            });
-                          }
+                            },
+                            subject: {
+                              id: (s as any).subjectId || "",
+                              name: s.subject.name,
+                            },
+                          });
                         }}
                         className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-teal-400 px-3 text-xs font-bold text-slate-950 hover:bg-teal-300 shadow-sm"
                       >
@@ -419,12 +518,18 @@ export function TeacherPortal({
       </section>
 
       {/* Manual Attendance Modal */}
-      {markingStudent && (
+      {markingSubject && (
         <MarkAttendanceModal
           isOpen={true}
-          onClose={() => setMarkingStudent(null)}
+          onClose={() => setMarkingSubject(null)}
           onSuccess={handleAttendanceSuccess}
-          preSelectedStudent={markingStudent}
+          preselectedStudent={{
+            id: markingSubject.student.id,
+            name: markingSubject.student.name,
+            grade: markingSubject.student.grade,
+            assignedSubjects: [markingSubject.subject],
+          }}
+          preselectedSubject={markingSubject.subject}
           isTrainer={true}
           currentTrainerId={teacherId}
           currentTrainerName={teacherName}

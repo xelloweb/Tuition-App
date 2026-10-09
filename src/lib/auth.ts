@@ -174,17 +174,17 @@ export function canMarkAttendance(
   return false;
 }
 
-/** A teacher may see a student they are assigned to or have a session with. */
+/** A teacher may only access a student they are currently actively assigned to teach. */
 export async function teacherCanAccessStudent(
   teacherId: string | null | undefined,
   studentId: string
 ): Promise<boolean> {
   if (!teacherId) return false;
-  const [enrolment, session] = await Promise.all([
-    prisma.subjectEnrollment.findFirst({ where: { studentId, teacherId }, select: { id: true } }),
-    prisma.session.findFirst({ where: { studentId, teacherId }, select: { id: true } }),
-  ]);
-  return Boolean(enrolment || session);
+  const enrolment = await prisma.subjectEnrollment.findFirst({
+    where: { studentId, teacherId, status: "ACTIVE" },
+    select: { id: true },
+  });
+  return Boolean(enrolment);
 }
 
 export async function canViewStudent(user: CurrentUser, studentId: string): Promise<boolean> {

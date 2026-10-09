@@ -29,6 +29,14 @@ interface MarkAttendanceModalProps {
     grade?: string;
     assignedSubjects: { id: string; name: string; teacherId?: string | null; teacherName?: string | null }[];
   } | null;
+  preselectedStudent?: {
+    id: string;
+    name: string;
+    grade?: string;
+    assignedSubjects: { id: string; name: string; teacherId?: string | null; teacherName?: string | null }[];
+  } | null;
+  preSelectedSubject?: { id: string; name: string } | null;
+  preselectedSubject?: { id: string; name: string } | null;
   // For staff selector
   allStudents?: StudentOption[];
   allTrainers?: TrainerOption[];
@@ -43,12 +51,18 @@ export function MarkAttendanceModal({
   onClose,
   onSuccess,
   preSelectedStudent,
+  preselectedStudent,
+  preSelectedSubject,
+  preselectedSubject,
   allStudents = [],
   allTrainers = [],
   isTrainer = false,
   currentTrainerId,
   currentTrainerName,
 }: MarkAttendanceModalProps) {
+  const activePreStudent = preSelectedStudent || preselectedStudent;
+  const activePreSubject = preSelectedSubject || preselectedSubject;
+
   // Today's date in IST format YYYY-MM-DD
   const getTodayIst = () => {
     try {
@@ -59,8 +73,8 @@ export function MarkAttendanceModal({
     }
   };
 
-  const [studentId, setStudentId] = useState(preSelectedStudent?.id ?? "");
-  const [subjectId, setSubjectId] = useState("");
+  const [studentId, setStudentId] = useState(activePreStudent?.id ?? "");
+  const [subjectId, setSubjectId] = useState(activePreSubject?.id ?? "");
   const [teacherId, setTeacherId] = useState(currentTrainerId ?? "");
   const [classDate, setClassDate] = useState(getTodayIst());
   const [durationOption, setDurationOption] = useState<"1" | "2" | "3" | "custom">("1");
@@ -77,18 +91,20 @@ export function MarkAttendanceModal({
 
   // Sync state if preSelectedStudent changes
   useEffect(() => {
-    if (preSelectedStudent) {
-      setStudentId(preSelectedStudent.id);
-      if (preSelectedStudent.assignedSubjects.length > 0) {
-        setSubjectId(preSelectedStudent.assignedSubjects[0].id);
-        if (!isTrainer && preSelectedStudent.assignedSubjects[0].teacherId) {
-          setTeacherId(preSelectedStudent.assignedSubjects[0].teacherId);
-        }
+    if (activePreStudent) {
+      setStudentId(activePreStudent.id);
+      if (activePreSubject) {
+        setSubjectId(activePreSubject.id);
+      } else if (activePreStudent.assignedSubjects.length > 0) {
+        setSubjectId(activePreStudent.assignedSubjects[0].id);
+      }
+      if (!isTrainer && activePreStudent.assignedSubjects[0]?.teacherId) {
+        setTeacherId(activePreStudent.assignedSubjects[0].teacherId);
       }
     } else if (allStudents.length > 0 && !studentId) {
       setStudentId(allStudents[0].id);
     }
-  }, [preSelectedStudent, allStudents]);
+  }, [activePreStudent, activePreSubject, allStudents]);
 
   // Find active student object
   const currentStudent = preSelectedStudent?.id === studentId

@@ -15,6 +15,8 @@ import { getTimetableView } from "@/lib/services/timetable";
 import { teacherPublicSelect } from "@/lib/services/students";
 import { existingPaymentOptions, hasExistingPaymentToUse } from "@/lib/services/existing-payment-packages";
 import { AccessDenied } from "@/components/ui/AccessDenied";
+import { getTrainerStudentProfile } from "@/lib/services/trainer-portal";
+import { TrainerStudentProfile } from "@/components/teachers/TrainerStudentProfile";
 import { StudentDetailClient } from "./StudentDetailClient";
 
 export const dynamic = "force-dynamic";
@@ -32,12 +34,32 @@ export default async function StudentDetailPage(props: { params: Promise<{ id: s
     return <StudentDetailClient notFound />;
   }
   if (!(await canViewStudent(user, id))) {
-    return <AccessDenied message="You can only open profiles of students assigned to you." />;
+    return <AccessDenied message="You can only open profiles of students currently assigned to you." />;
+  }
+
+  // Trainer view: simplified, subject-specific student profile
+  if (user.role === "TEACHER") {
+    if (!user.teacherId) {
+      return <AccessDenied message="Your account is not linked to an active trainer profile." />;
+    }
+    const profileData = await getTrainerStudentProfile(user.teacherId, id);
+    if (!profileData) {
+      return <AccessDenied message="You can only open profiles of students currently assigned to you." />;
+    }
+    return (
+      <TrainerStudentProfile
+        student={profileData.student}
+        assignedSubjects={profileData.assignedSubjects}
+        attendanceHistory={profileData.attendanceHistory}
+        teacherName={user.name}
+        teacherId={user.teacherId}
+      />
+    );
   }
 
   const canManage = canManageStudents(user.role);
   const showFinancial = canAccessFinancial(user.role) || user.role === "COORDINATOR";
-  const isTeacher = user.role === "TEACHER";
+  const isTeacher = false;
 
   const student = await prisma.student.findUniqueOrThrow({
     where: { id },

@@ -57,7 +57,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
       orderBy: { name: "asc" },
     }),
     prisma.teacher.findMany({
-      where: { active: true },
+      where: user.role === "TEACHER" && user.teacherId ? { id: user.teacherId, active: true } : { active: true },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

@@ -471,25 +471,39 @@ export function StudentsClient({ students, subjects, teachers, canAddStudent, dr
                               className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium text-slate-300 bg-slate-800/90 border border-slate-700/80"
                             >
                               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: enr.subject?.color || "#14b8a6" }} />
-                              {enr.subject?.name}{" "}
-                              {enr.teacher ? `(${enr.teacher.name?.split(" ")[0]})` : <em className="text-amber-300 not-italic">(no trainer yet)</em>}
+                              {enr.subject?.name}
+                              {!isTeacherView && (
+                                <>
+                                  {" "}
+                                  {enr.teacher ? `(${enr.teacher.name?.split(" ")[0]})` : <em className="text-amber-300 not-italic">(no trainer yet)</em>}
+                                </>
+                              )}
                             </span>
                           ))}
                         </div>
                       </div>
 
                       <div className={`flex items-center justify-between sm:justify-end gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/60 shrink-0 ${canAddStudent ? "pr-24 sm:pr-24" : ""}`}>
-                        {activePkg ? (
-                          <div className="text-left sm:text-right">
-                            <span className="text-xs uppercase font-bold text-slate-400 block">Classes Balance</span>
-                            <div className="text-sm font-bold text-white tabular-nums font-mono">
-                              <span className={isLowBalance ? "text-rose-400 font-bold" : "text-teal-400 font-bold"}>{remaining}</span> /{" "}
-                              {activePkg.totalCredits} Available
+                        {!isTeacherView ? (
+                          activePkg ? (
+                            <div className="text-left sm:text-right">
+                              <span className="text-xs uppercase font-bold text-slate-400 block">Classes Balance</span>
+                              <div className="text-sm font-bold text-white tabular-nums font-mono">
+                                <span className={isLowBalance ? "text-rose-400 font-bold" : "text-teal-400 font-bold"}>{remaining}</span> /{" "}
+                                {activePkg.totalCredits} Available
+                              </div>
+                              <div className="text-xs text-slate-400">{consumed} taught</div>
                             </div>
-                            <div className="text-xs text-slate-400">{consumed} taught</div>
-                          </div>
+                          ) : (
+                            <div className="text-xs text-slate-400 italic">No active package</div>
+                          )
                         ) : (
-                          <div className="text-xs text-slate-400 italic">No active package</div>
+                          <div className="text-left sm:text-right">
+                            <span className="text-xs uppercase font-bold text-slate-400 block">Trainer Access</span>
+                            <div className="text-xs font-semibold text-teal-300">
+                              Subject Profile →
+                            </div>
+                          </div>
                         )}
                         <div className="flex items-center gap-1 text-xs font-bold text-teal-300 bg-teal-500/15 px-3 py-1.5 rounded-xl border border-teal-500/30 sm:bg-transparent sm:border-0 sm:p-0">
                           <span className="sm:hidden">Profile</span>
