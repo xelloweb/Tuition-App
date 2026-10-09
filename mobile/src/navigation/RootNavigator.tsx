@@ -3,9 +3,9 @@ import { NavigationContainer } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 import { LoginScreen } from "../screens/auth/LoginScreen";
 import { TrainerNavigator } from "./TrainerNavigator";
-import { StudentNavigator } from "./StudentNavigator";
+import { AdminNavigator } from "./AdminNavigator";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
-import { Colors } from "../config/theme";
+import { theme } from "../config/theme";
 
 export function RootNavigator() {
   const { role, isLoading } = useAuth();
@@ -13,7 +13,7 @@ export function RootNavigator() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={theme.colors.teal} />
       </View>
     );
   }
@@ -22,8 +22,8 @@ export function RootNavigator() {
     <NavigationContainer>
       {role === "TRAINER" ? (
         <TrainerNavigator />
-      ) : role === "STUDENT" ? (
-        <StudentNavigator />
+      ) : role === "ADMIN" || role === "COORDINATOR" ? (
+        <AdminNavigator />
       ) : (
         <LoginScreen />
       )}
@@ -34,7 +34,7 @@ export function RootNavigator() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.colors.background,
     alignItems: "center",
     justifyContent: "center",
   },

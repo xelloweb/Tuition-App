@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState } from "react";
 import { apiRequest } from "../config/api";
 
-export type UserRole = "TRAINER" | "STUDENT" | null;
+export type StaffRole = "OWNER" | "ADMIN" | "COORDINATOR" | "TRAINER" | null;
 
-export interface TrainerUser {
+export interface AppUser {
   id: string;
   name: string;
   email: string;
@@ -18,53 +18,25 @@ export interface TrainerUser {
   } | null;
 }
 
-export interface StudentUser {
-  id: string;
-  name: string;
-  studentCode: string;
-  grade?: string;
-  board?: string;
-  medium?: string;
-  guardianName?: string;
-  whatsappNumber?: string;
-  country?: string;
-  timeZone?: string;
-  enrolledSubjects?: Array<{
-    subjectId: string;
-    subjectName: string;
-    subjectColor?: string;
-    teacherName?: string;
-  }>;
-  activePackage?: {
-    id: string;
-    name: string;
-    totalCredits: number;
-  } | null;
-}
-
 interface AuthContextType {
-  role: UserRole;
-  trainer: TrainerUser | null;
-  student: StudentUser | null;
+  role: StaffRole;
+  user: AppUser | null;
   token: string | null;
   isLoading: boolean;
-  loginTrainer: (email: string, password: string) => Promise<void>;
-  loginStudent: (studentCode: string, phone?: string) => Promise<void>;
-  quickDemoTrainer: () => Promise<void>;
-  quickDemoStudent: () => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  quickDemo: (demoRole: "ADMIN" | "COORDINATOR" | "TRAINER") => Promise<void>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRole] = useState<UserRole>(null);
-  const [trainer, setTrainer] = useState<TrainerUser | null>(null);
-  const [student, setStudent] = useState<StudentUser | null>(null);
+  const [role, setRole] = useState<StaffRole>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const loginTrainer = async (email: string, password: string) => {
+  const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
       const data = await apiRequest("/api/mobile/auth/login", {
@@ -75,99 +47,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!data.success) throw new Error(data.message || "Login failed");
 
       setToken(data.token);
-      setTrainer(data.user);
-      setStudent(null);
-      setRole("TRAINER");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      setUser(data.user);
 
-  const loginStudent = async (studentCode: string, phone?: string) => {
-    setIsLoading(true);
-    try {
-      const data = await apiRequest("/api/mobile/auth/student-login", {
-        method: "POST",
-        body: JSON.stringify({ studentCode, phone }),
-      });
-
-      if (!data.success) throw new Error(data.message || "Student login failed");
-
-      setToken(data.token);
-      setStudent(data.student);
-      setTrainer(null);
-      setRole("STUDENT");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Instant demo access for previewing Trainer experience
-  const quickDemoTrainer = async () => {
-    setIsLoading(true);
-    try {
-      // First try live endpoint or set demo state
-      try {
-        await loginTrainer("trainer@xellotuition.com", "demo123");
-        return;
-      } catch (e) {
-        // Fallback to local demo trainer
-        setToken("demo-trainer-token");
-        setTrainer({
-          id: "demo-trainer-user",
-          name: "Sumi Varghese",
-          email: "trainer@xello.com",
-          role: "TEACHER",
-          teacherId: "demo-trainer-id",
-          teacher: {
-            id: "demo-trainer-id",
-            name: "Sumi Varghese",
-            email: "trainer@xello.com",
-            phone: "+91 9847000000",
-            assignedStudentsCount: 6,
-          },
-        });
-        setStudent(null);
+      const userRole = data.user.role;
+      if (userRole === "TEACHER") {
         setRole("TRAINER");
+      } else if (userRole === "OWNER" || userRole === "ADMIN") {
+        setRole("ADMIN");
+      } else if (userRole === "COORDINATOR") {
+        setRole("COORDINATOR");
+      } else {
+        setRole("ADMIN");
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Instant demo access for previewing Student / Parent experience
-  const quickDemoStudent = async () => {
+  const quickDemo = async (demoRole: "ADMIN" | "COORDINATOR" | "TRAINER") => {
     setIsLoading(true);
     try {
-      try {
-        await loginStudent("XST-131");
-        return;
-      } catch (e) {
-        // Fallback to local demo student
-        setToken("demo-student-token");
-        setStudent({
-          id: "demo-student-id",
-          name: "Slaine",
-          studentCode: "XST-131",
-          grade: "10th Grade",
-          board: "CBSE",
-          medium: "English",
-          guardianName: "Parent of Slaine",
-          whatsappNumber: "+965 9446511500",
-          country: "Kuwait",
-          timeZone: "Asia/Kuwait",
-          enrolledSubjects: [
-            { subjectId: "sub-1", subjectName: "Mathematics", subjectColor: "#14b8a6", teacherName: "Sumi Varghese" },
-            { subjectId: "sub-2", subjectName: "Science", subjectColor: "#6366f1", teacherName: "Anu George" },
-          ],
-          activePackage: {
-            id: "pkg-1",
-            name: "12 Classes - Monthly Package",
-            totalCredits: 12,
-          },
-        });
-        setTrainer(null);
-        setRole("STUDENT");
+      if (demoRole === "TRAINER") {
+        try {
+          await login("trainer@xellotuition.com", "demo123");
+          return;
+        } catch (e) {
+          setToken("demo-trainer-token");
+          setUser({
+            id: "demo-trainer-user",
+            name: "Sumi Varghese",
+            email: "trainer@xello.com",
+            role: "TEACHER",
+            teacherId: "demo-trainer-id",
+            teacher: {
+              id: "demo-trainer-id",
+              name: "Sumi Varghese",
+              email: "trainer@xello.com",
+              phone: "+91 9847000000",
+              assignedStudentsCount: 6,
+            },
+          });
+          setRole("TRAINER");
+        }
+      } else if (demoRole === "COORDINATOR") {
+        try {
+          await login("coordinator@xellotuition.com", "demo123");
+          return;
+        } catch (e) {
+          setToken("demo-coord-token");
+          setUser({
+            id: "demo-coord-user",
+            name: "Aisha Nair",
+            email: "coordinator@xellotuition.com",
+            role: "COORDINATOR",
+          });
+          setRole("COORDINATOR");
+        }
+      } else {
+        try {
+          await login("admin@xellotuition.com", "demo123");
+          return;
+        } catch (e) {
+          setToken("demo-admin-token");
+          setUser({
+            id: "demo-admin-user",
+            name: "Shamrood",
+            email: "admin@xellotuition.com",
+            role: "OWNER",
+          });
+          setRole("ADMIN");
+        }
       }
     } finally {
       setIsLoading(false);
@@ -176,8 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     setRole(null);
-    setTrainer(null);
-    setStudent(null);
+    setUser(null);
     setToken(null);
   };
 
@@ -185,14 +133,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         role,
-        trainer,
-        student,
+        user,
         token,
         isLoading,
-        loginTrainer,
-        loginStudent,
-        quickDemoTrainer,
-        quickDemoStudent,
+        login,
+        quickDemo,
         logout,
       }}
     >
