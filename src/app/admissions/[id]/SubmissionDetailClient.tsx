@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, Link2, MessageSquarePlus, Save, Trash2, Unlink, UserPlus } from "lucide-react";
 import { ALL_GRADES } from "@/lib/grades";
-import { MANUAL_STATUSES, statusLabel, weekdayName } from "@/lib/intake";
+import { MANUAL_STATUSES, dayList, statusLabel, weekdayName } from "@/lib/intake";
 import { admissionPrefill } from "@/lib/intake-prefill";
 import { formatInTimeZone } from "@/lib/timezones";
 import { apiRequest, errorMessage } from "@/lib/client-api";
@@ -70,6 +70,7 @@ export function SubmissionDetailClient({
     ? {
         id: detail.id,
         reference: detail.reference,
+        preferredDays: s.preferredDays,
         preferences: s.preferences.map((p) => ({ subjectId: p.subjectId, subjectName: p.subjectName, weekday: p.weekday, start: p.start, end: p.end })),
       }
     : null;
@@ -233,15 +234,21 @@ export function SubmissionDetailClient({
                 ["Notes", s.notes],
               ]} />
               <div>
-                <h3 className="text-base font-semibold text-ink">Preferred class timings (IST, not confirmed)</h3>
-                {s.preferences.length === 0 ? (
+                <h3 className="text-base font-semibold text-ink">Preferred class days (not confirmed)</h3>
+                {s.preferredDays.length === 0 && s.preferences.length === 0 ? (
                   <p className="text-sm text-ink-muted">None given.</p>
                 ) : (
-                  <ul className="mt-1 space-y-1 text-sm text-ink">
-                    {s.preferences.map((p, i) => (
-                      <li key={i}>{p.subjectName}: {weekdayName(p.weekday)}, {displayTime(p.start)} to {displayTime(p.end)} IST</li>
-                    ))}
-                  </ul>
+                  <>
+                    {s.preferredDays.length > 0 && <p className="mt-1 text-sm text-ink">{dayList(s.preferredDays)}</p>}
+                    {s.preferences.length > 0 && (
+                      // The earlier form asked for a day and time (IST) per subject.
+                      <ul className="mt-1 space-y-1 text-sm text-ink">
+                        {s.preferences.map((p, i) => (
+                          <li key={i}>{p.subjectName}: {weekdayName(p.weekday)}, {displayTime(p.start)} to {displayTime(p.end)} IST</li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
                 )}
                 <p className="mt-1 text-xs text-ink-subtle">Preferences only: they create no classes, trainer bookings or package reservations.</p>
               </div>

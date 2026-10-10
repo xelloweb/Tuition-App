@@ -128,6 +128,34 @@ describe("student creation", () => {
     assert.equal(await prisma.invoice.count({ where: { studentId: result.id } }), 0);
   });
 
+  test("preferred class days are saved on admission and edit, book nothing, and leave an earlier timing note alone", async () => {
+    const { result } = await newStudent(
+      base({ enrolments: [{ subjectId: maths.id, teacherId: trainer.id }], preferredDays: [5, 1, "3"], preferredTimings: "Weekdays after 6 PM IST" })
+    );
+    const saved = await prisma.student.findUniqueOrThrow({ where: { id: result.id } });
+    assert.equal(saved.preferredDays, "[1,3,5]", "Monday, Wednesday, Friday");
+    assert.equal(saved.preferredTimings, "Weekdays after 6 PM IST");
+    assert.equal(await prisma.timetableSlot.count({ where: { enrolment: { studentId: result.id } } }), 0, "days alone create no weekly slots");
+    assert.equal(await prisma.session.count({ where: { studentId: result.id } }), 0, "and no classes");
+
+    await updateStudent(result.id, parseStudentFields({ preferredDays: [0, 6] }, { partial: true }), coordinator);
+    let edited = await prisma.student.findUniqueOrThrow({ where: { id: result.id } });
+    assert.equal(edited.preferredDays, "[6,0]");
+    assert.equal(edited.preferredTimings, "Weekdays after 6 PM IST", "the earlier note is kept");
+
+    // An edit that does not send days (an older screen) leaves them as they are.
+    await updateStudent(result.id, parseStudentFields({ learningGoals: "Algebra" }, { partial: true }), coordinator);
+    edited = await prisma.student.findUniqueOrThrow({ where: { id: result.id } });
+    assert.equal(edited.preferredDays, "[6,0]");
+
+    await updateStudent(result.id, parseStudentFields({ preferredDays: [] }, { partial: true }), coordinator);
+    assert.equal((await prisma.student.findUniqueOrThrow({ where: { id: result.id } })).preferredDays, null, "all days cleared");
+
+    await expectFieldError(newStudent(base({ preferredDays: [9] })), (fe) => /Monday to Sunday/.test(fe.preferredDays ?? ""));
+    // Students saved before this change have no days: none is not an error.
+    assert.equal((await newStudent(base())).result.preferredDays, null);
+  });
+
   test("multiple subjects with a package create allocations, ledger entries and an invoice", async () => {
     const { result } = await newStudent(
       base({

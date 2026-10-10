@@ -1,14 +1,21 @@
 /**
  * Parent admission form rules and safeguards: phone numbers from India and the
- * GCC, required fields, IST-only preferred times, form tokens, rate limits,
+ * GCC, required fields, preferred days (and the earlier form's IST-only
+ * preferred times), start dates for new and existing students, form tokens, rate limits,
  * references and the privacy-notice launch gate.
  */
 import { describe, test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { formatPhone, normalizeParentPhone, validateIntake } from "../src/lib/intake";
+import { dayList, formatPhone, normalizeParentPhone, startDateBounds, validateIntake } from "../src/lib/intake";
 import { allowSubmission, checkFormToken, intakeOpen, issueFormToken, newReference, privacyNoticeUrl, resetRateLimits } from "../src/lib/intake-server";
 
 const TODAY = "2026-10-08";
+/** What the earlier version of the form sent: a day and time per subject. */
+const EARLIER_FORM_TIMES = [
+  { subjectId: "s-math", weekday: 1, start: "17:00", end: "18:00" },
+  { subjectId: "s-math", weekday: 3, start: "17:00", end: "18:00" },
+  { subjectId: "s-phys", weekday: 5, start: "19:30", end: "20:30" },
+];
 
 function valid(extra: Record<string, unknown> = {}) {
   return {
@@ -29,11 +36,7 @@ function valid(extra: Record<string, unknown> = {}) {
     teachingLanguage: "English",
     startDate: "",
     notes: "",
-    preferences: [
-      { subjectId: "s-math", weekday: 1, start: "17:00", end: "18:00" },
-      { subjectId: "s-math", weekday: 3, start: "17:00", end: "18:00" },
-      { subjectId: "s-phys", weekday: 5, start: "19:30", end: "20:30" },
-    ],
+    preferredDays: [5, 1, 0],
     consent: true,
     ...extra,
   };
@@ -80,7 +83,8 @@ describe("parent form: fields", () => {
     const { data, errors } = check(valid());
     assert.deepEqual(errors, {});
     assert.equal(data!.email, "parent@example.test");
-    assert.equal(data!.preferences.length, 3, "several preferred times, including two for one subject");
+    assert.deepEqual(data!.preferredDays, [1, 5, 0], "Monday, Friday, Sunday");
+    assert.deepEqual(data!.preferences, [], "no times are asked for");
     assert.equal(data!.schoolName, null);
   });
 
@@ -91,6 +95,7 @@ describe("parent form: fields", () => {
       assert.ok(errors[field], `missing error for ${field}`);
     }
     assert.equal(errors.schoolName, undefined, "optional fields stay optional");
+    assert.equal(errors.preferredDays, undefined, "preferred days are optional");
   });
 
   test("only offered subjects, grades and boards are accepted", () => {
@@ -110,16 +115,45 @@ describe("parent form: fields", () => {
     assert.equal(check(valid({ studentName: "Name\u0000\u0007 Surname" })).data?.studentName, "Name   Surname");
   });
 
-  test("the preferred start date is today or later (IST)", () => {
-    assert.ok(check(valid({ startDate: "2026-10-07" })).errors.startDate);
+  test("the start date may be in the past for existing students (up to 10 years) and up to a year ahead", () => {
+    assert.equal(check(valid({ startDate: "2026-10-07" })).data?.startDate, "2026-10-07", "yesterday");
+    assert.equal(check(valid({ startDate: "2024-06-01" })).data?.startDate, "2024-06-01", "an existing student's first class");
     assert.equal(check(valid({ startDate: TODAY })).data?.startDate, TODAY);
-    assert.ok(check(valid({ startDate: "2028-01-01" })).errors.startDate);
+    assert.equal(check(valid({ startDate: "2027-10-08" })).data?.startDate, "2027-10-08", "a year ahead");
+    assert.match(check(valid({ startDate: "2016-01-01" })).errors.startDate, /last 10 years/);
+    assert.match(check(valid({ startDate: "2028-01-01" })).errors.startDate, /next year/);
+    assert.ok(check(valid({ startDate: "08/10/2026" })).errors.startDate);
+    assert.deepEqual(startDateBounds(TODAY), { min: "2016-10-10", max: "2027-10-08" });
   });
 });
 
-describe("parent form: preferred times (IST only)", () => {
+describe("parent form: preferred class days", () => {
+  test("days are optional and kept Monday first without repeats", () => {
+    assert.deepEqual(check(valid({ preferredDays: [] })).data!.preferredDays, []);
+    assert.deepEqual(check(valid({ preferredDays: undefined })).data!.preferredDays, []);
+    const { data } = check(valid({ preferredDays: [0, 3, 1, 3, "5"] }));
+    assert.deepEqual(data!.preferredDays, [1, 3, 5, 0]);
+    assert.equal(dayList(data!.preferredDays), "Monday, Wednesday, Friday, Sunday");
+    assert.deepEqual(check(valid({ preferredDays: [1, 2, 3, 4, 5, 6, 0] })).data!.preferredDays, [1, 2, 3, 4, 5, 6, 0], "every day");
+  });
+
+  test("only Monday to Sunday is accepted", () => {
+    for (const bad of [[7], [-1], [1.5], ["Monday"], [""], [null], "1,2", { 0: 1 }]) {
+      assert.match(check(valid({ preferredDays: bad })).errors.preferredDays, /Monday to Sunday/, JSON.stringify(bad));
+    }
+  });
+
+  test("a form opened before the change (times, no days) is still accepted; its days come from the times", () => {
+    const { data, errors } = check(valid({ preferredDays: undefined, preferences: EARLIER_FORM_TIMES }));
+    assert.deepEqual(errors, {});
+    assert.deepEqual(data!.preferredDays, [1, 3, 5]);
+    assert.equal(data!.preferences.length, 3, "the times are kept as sent");
+  });
+});
+
+describe("parent form: preferred times from the earlier form (IST only)", () => {
   test("times are kept exactly as typed: no time-zone conversion for GCC parents", () => {
-    const { data } = check(valid({ country: "Saudi Arabia", whatsappNumber: "+966 512345678" }));
+    const { data } = check(valid({ country: "Saudi Arabia", whatsappNumber: "+966 512345678", preferences: EARLIER_FORM_TIMES }));
     assert.deepEqual(data!.preferences[0], { subjectId: "s-math", weekday: 1, start: "17:00", end: "18:00" });
   });
 

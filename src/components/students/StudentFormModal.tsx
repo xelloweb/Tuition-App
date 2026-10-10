@@ -11,6 +11,7 @@ import type { AdmissionDraftItem, IntakeContext } from "@/lib/services/admission
 import type { AdmissionPrefill } from "@/lib/intake-prefill";
 import type { ExistingPaymentOptions } from "@/lib/services/existing-payment-packages";
 import { PACKAGE_PRESETS } from "@/lib/package-presets";
+import { dayList, readDays } from "@/lib/preferred-days";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { FormErrorSummary, focusField } from "@/components/ui/FormFeedback";
 import { Field, controlBorder, controlClass } from "@/components/ui/Field";
@@ -20,6 +21,7 @@ import { QuickAddSubjectModal } from "@/components/subjects/QuickAddSubjectModal
 import { Stepper, StepDef } from "./admission/Stepper";
 import { SlotDraft, WeeklyScheduleStep, toMinutes, fromMinutes, weekdayLabel } from "./admission/WeeklyScheduleStep";
 import { ReviewData, ReviewStep } from "./admission/ReviewStep";
+import { PreferredDaysField, PreferredDaysNote } from "./admission/PreferredDaysField";
 
 export interface SubjectOption {
   id: string;
@@ -49,6 +51,7 @@ export interface StudentFormRecord {
   country: string;
   timeZone: string;
   preferredTimings: string | null;
+  preferredDays?: string | null;
   learningGoals: string | null;
   coordinatorNotes: string | null;
   draftData?: string | null;
@@ -100,6 +103,7 @@ export interface AdmissionSnapshot {
   email: string;
   country: string;
   preferredTimings: string;
+  preferredDays: number[];
   learningGoals: string;
   coordinatorNotes: string;
   linkedGuardian: GuardianMatch | null;
@@ -149,6 +153,8 @@ const FIELD_LABELS: Record<string, string> = {
   guardianId: "Guardian",
   email: "Email",
   country: "Country",
+  preferredDays: "Preferred class days",
+  preferredTimings: "Timing note",
   status: "Status",
   enrolments: "Subjects",
   "package.name": "Package name",
@@ -274,6 +280,9 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
   const [email, setEmail] = useState(initial.email ?? student?.email ?? "");
   const [country, setCountry] = useState(initial.country ?? student?.country ?? "India");
   const [preferredTimings, setPreferredTimings] = useState(initial.preferredTimings ?? student?.preferredTimings ?? "");
+  // The old free-text timing note is shown only where one was saved, so it is never lost.
+  const [hasTimingNote] = useState(() => Boolean(preferredTimings.trim()));
+  const [preferredDays, setPreferredDays] = useState<number[]>(() => initial.preferredDays ?? readDays(student?.preferredDays));
   const [learningGoals, setLearningGoals] = useState(initial.learningGoals ?? student?.learningGoals ?? "");
   const [coordinatorNotes, setCoordinatorNotes] = useState(initial.coordinatorNotes ?? student?.coordinatorNotes ?? "");
 
@@ -441,7 +450,7 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
   const snapshot = (): AdmissionSnapshot => ({
     version: 1,
     step: currentStep.id,
-    name, grade, board, medium, guardianName, whatsappNumber, email, country, preferredTimings, learningGoals, coordinatorNotes,
+    name, grade, board, medium, guardianName, whatsappNumber, email, country, preferredTimings, preferredDays, learningGoals, coordinatorNotes,
     linkedGuardian, rows, includePackage, packageName, totalCredits, packagePrice, startDate, expiryDate, slots,
   });
   // Unsaved-change tracking ignores which step is open.
@@ -665,6 +674,7 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
       email: email.trim() || null,
       country,
       preferredTimings: preferredTimings.trim() || null,
+      preferredDays,
       learningGoals: learningGoals.trim() || null,
       coordinatorNotes: coordinatorNotes.trim() || null,
       enrolments,
@@ -814,7 +824,14 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
   };
 
   const reviewData: ReviewData = {
-    student: { name, grade, board, medium, status: isEdit && !legacyDraft ? STUDENT_STATUSES.find((s) => s.value === status)?.label ?? status : undefined },
+    student: {
+      name,
+      grade,
+      board,
+      medium,
+      preferredDays: dayList(preferredDays),
+      status: isEdit && !legacyDraft ? STUDENT_STATUSES.find((s) => s.value === status)?.label ?? status : undefined,
+    },
     guardian: {
       name: guardianName,
       whatsapp: whatsappNumber,
@@ -1045,9 +1062,17 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
                       </select>
                     )}
                   </Field>
-                  <Field label="Preferred class timings (optional)" name="preferredTimings" error={err("preferredTimings")} className="sm:col-span-2">
-                    {(p) => <input {...p} type="text" value={preferredTimings} onChange={(e) => setPreferredTimings(e.target.value)} placeholder="e.g. Weekdays after 6 PM IST" className={ctl(!!err("preferredTimings"))} />}
-                  </Field>
+                  <PreferredDaysField
+                    days={preferredDays}
+                    onChange={(days) => { setPreferredDays(days); clearFieldError("preferredDays"); }}
+                    error={err("preferredDays")}
+                    className="sm:col-span-2"
+                  />
+                  {hasTimingNote && (
+                    <Field label="Timing note (saved earlier, optional)" name="preferredTimings" error={err("preferredTimings")} className="sm:col-span-2" hint="Written before preferred days were added. Clear it if the days above replace it.">
+                      {(p) => <input {...p} type="text" value={preferredTimings} onChange={(e) => setPreferredTimings(e.target.value)} className={ctl(!!err("preferredTimings"))} />}
+                    </Field>
+                  )}
                   <Field label="Learning goals (optional)" name="learningGoals" error={err("learningGoals")} className="sm:col-span-2">
                     {(p) => <textarea {...p} rows={2} value={learningGoals} onChange={(e) => setLearningGoals(e.target.value)} className={ctl(!!err("learningGoals"))} />}
                   </Field>
@@ -1061,6 +1086,7 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
 
           {currentStep.id === "subjects" && (
             <div className="space-y-3" data-field="enrolments" tabIndex={-1}>
+              <PreferredDaysNote days={preferredDays} />
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-ink-muted">A trainer can be assigned later: choose “Assign later” if none is confirmed yet.</p>
                 <div className="flex flex-wrap gap-2">
@@ -1332,6 +1358,7 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
               clearSlotErrors={(index) => clearFieldError(`slots.${index}.weekday`, `slots.${index}.start`, `slots.${index}.end`, `slots.${index}.enrolmentId`)}
               classMinutes={CLASS_MINUTES}
               preferences={intakeInfo?.preferences}
+              preferredDays={preferredDays}
               studentId={isEdit ? student?.id : undefined}
               packageInfo={{
                 includePackage,

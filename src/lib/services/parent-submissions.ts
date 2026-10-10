@@ -91,7 +91,13 @@ export async function createParentSubmission(data: IntakeData, submissionKey: st
 export function readStored(json: string): StoredSubmission | null {
   try {
     const parsed = JSON.parse(json);
-    return parsed && typeof parsed === "object" ? (parsed as StoredSubmission) : null;
+    if (!parsed || typeof parsed !== "object") return null;
+    // Submissions from the earlier form have day + time preferences and no preferred days.
+    return {
+      ...parsed,
+      preferredDays: Array.isArray(parsed.preferredDays) ? parsed.preferredDays : [],
+      preferences: Array.isArray(parsed.preferences) ? parsed.preferences : [],
+    } as StoredSubmission;
   } catch {
     return null;
   }

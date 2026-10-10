@@ -28,6 +28,7 @@ import {
   zonedTimeToUtc,
 } from "../zoned-time";
 import { BUSINESS_TIME_ZONE } from "../constants";
+import { readDays } from "../preferred-days";
 
 type Tx = Prisma.TransactionClient;
 type Db = PrismaClient | Tx;
@@ -171,7 +172,7 @@ function occurrencesBetween(
 async function loadStudentContext(db: Db, studentId: string, now: Date) {
   const student = await db.student.findUnique({
     where: { id: studentId },
-    select: { id: true, name: true, status: true, timeZone: true },
+    select: { id: true, name: true, status: true, timeZone: true, preferredDays: true },
   });
   if (!student) throw notFoundError("This student no longer exists. Refresh the page.");
   const enrolments = await db.subjectEnrollment.findMany({
@@ -858,6 +859,8 @@ export async function getTimetableView(studentId: string) {
     timeZone: currentSlots[0]?.timeZone ?? BUSINESS_TIME_ZONE,
     studentTimeZone: student.timeZone,
     studentStatus: student.status,
+    /** Days that usually suit the student: shown while slots are chosen, never booked by themselves. */
+    preferredDays: readDays(student.preferredDays),
     windowDays: TIMETABLE_WINDOW_DAYS,
     enrolments: enrolments.map((e) => ({
       id: e.id,

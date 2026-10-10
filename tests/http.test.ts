@@ -328,7 +328,7 @@ describe("parent admission form (public) over HTTP", { skip: !BASE }, () => {
     relationship: "Mother",
     whatsappNumber: "050 765 4321",
     country: "UAE",
-    preferences: [{ subjectId, weekday: 6, start: "10:00", end: "11:00" }],
+    preferredDays: [6, 0],
     consent: true,
     ...extra,
   });
@@ -365,7 +365,9 @@ describe("parent admission form (public) over HTTP", { skip: !BASE }, () => {
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /Student admission form/);
-    assert.match(html, /All timings must be entered in Indian Standard Time \(IST\)\. These are preferences only\./);
+    assert.match(html, /Preferred class days/);
+    assert.match(html, /Tick the days that usually suit your child, for any subject\. These are preferences only\./);
+    assert.doesNotMatch(html, /Add a preferred time/);
     assert.doesNotMatch(html, /Sign out|Students Directory|Invoices &amp; payments/);
   });
 

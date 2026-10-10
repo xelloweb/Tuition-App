@@ -5,7 +5,7 @@ import { Notice } from "@/components/ui/Notice";
 import { displayTime } from "./WeeklyScheduleStep";
 
 export interface ReviewData {
-  student: { name: string; grade: string; board: string; medium: string; status?: string };
+  student: { name: string; grade: string; board: string; medium: string; preferredDays?: string; status?: string };
   guardian: { name: string; whatsapp: string; email: string; country: string; siblingOf?: string | null };
   subjects: { name: string; trainer: string | null }[];
   pkg: null | { name: string; totalCredits: number; price: number; startDate: string; expiryDate: string; allocations: { subject: string; credits: number }[] };
@@ -65,6 +65,7 @@ export function ReviewStep({ data, onEdit }: { data: ReviewData; onEdit: (stepId
           <Row label="Class / grade" value={data.student.grade} />
           <Row label="Board" value={data.student.board} />
           <Row label="Medium" value={data.student.medium} />
+          <Row label="Preferred days" value={data.student.preferredDays} />
           {data.student.status && <Row label="Status" value={data.student.status} />}
         </dl>
       </Section>

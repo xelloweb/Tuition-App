@@ -22,12 +22,13 @@ type DraftRow = {
   parentSubmission?: { id: string; reference: string; submittedData: string } | null;
 };
 
-/** Parent's preferred times shown (unconfirmed) on the schedule step. */
+/** Parent's preferred days (and, from the earlier form, times) shown unconfirmed on the schedule step. */
 export function intakeContext(s: { id: string; reference: string; submittedData: string }) {
   const stored = readStored(s.submittedData);
   return {
     id: s.id,
     reference: s.reference,
+    preferredDays: stored?.preferredDays ?? [],
     preferences: (stored?.preferences ?? []).map((p) => ({ subjectId: p.subjectId, subjectName: p.subjectName, weekday: p.weekday, start: p.start, end: p.end })),
   };
 }

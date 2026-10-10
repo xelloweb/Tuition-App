@@ -5,6 +5,7 @@ import { FieldCollector, checkInternationalPhone, phonesMatch } from "../validat
 import { BUSINESS_TIME_ZONE, COUNTRY_VALUES, STUDENT_STATUS_VALUES, findCountry } from "../constants";
 import { ApiError, notFoundError, relatedRecordError, validationError } from "../api-errors";
 import { nextCode, withCodeRetry } from "../codes";
+import { cleanDays, storeDays } from "../preferred-days";
 import { rememberIdempotentEntity, runIdempotent } from "../idempotency";
 import { applyTimetableInTransaction, retireEnrolmentSlots, SlotInput } from "./timetable";
 import { convertInTransaction, submissionForDraft } from "./parent-submissions";
@@ -76,6 +77,8 @@ export interface StudentFields {
   country?: string;
   timeZone?: string;
   preferredTimings?: string | null;
+  /** Stored form of the preferred days ("[1,3,5]"), or null for none. */
+  preferredDays?: string | null;
   learningGoals?: string | null;
   coordinatorNotes?: string | null;
   status?: string;
@@ -206,6 +209,11 @@ export function parseStudentFields(body: Record<string, unknown>, { partial }: {
   // India time only: every student is scheduled in IST.
   if (has("timeZone")) f.timeZone = "Asia/Kolkata";
   if (has("preferredTimings")) f.preferredTimings = v.optionalText("preferredTimings", body.preferredTimings, "Preferred timings", 300);
+  if (has("preferredDays")) {
+    const days = cleanDays(body.preferredDays);
+    if (days === null) v.add("preferredDays", "Choose days from Monday to Sunday.");
+    else f.preferredDays = storeDays(days);
+  }
   if (has("learningGoals")) f.learningGoals = v.optionalText("learningGoals", body.learningGoals, "Learning goals", 1000);
   if (has("coordinatorNotes")) f.coordinatorNotes = v.optionalText("coordinatorNotes", body.coordinatorNotes, "Coordinator notes", 2000);
 
@@ -428,6 +436,7 @@ async function saveAdmission(fields: StudentFields, user: CurrentUser, idempoten
               country: fields.country ?? "India",
               timeZone: fields.timeZone ?? "Asia/Kolkata",
               preferredTimings: fields.preferredTimings ?? null,
+              preferredDays: fields.preferredDays ?? null,
               learningGoals: fields.learningGoals ?? null,
               coordinatorNotes: fields.coordinatorNotes ?? null,
               status: fields.status ?? "ACTIVE",
@@ -552,7 +561,7 @@ export async function updateStudent(id: string, f: StudentFields, user: CurrentU
       const changes: Record<string, { from: unknown; to: unknown }> = {};
       const scalarKeys = [
         "name", "grade", "board", "medium", "email", "country", "timeZone",
-        "preferredTimings", "learningGoals", "coordinatorNotes", "status", "draftData"
+        "preferredTimings", "preferredDays", "learningGoals", "coordinatorNotes", "status", "draftData"
       ] as const;
       const data: Prisma.StudentUpdateInput = {};
       for (const key of scalarKeys) {

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, controlBorder, controlClass } from "@/components/ui/Field";
 import { TrainerAvailabilityPanel, useTrainerWeeks } from "@/components/teachers/TrainerWeekView";
 import { findWeeklyOverlap, overlapMessage } from "@/lib/trainer-week";
+import { PreferredDaysNote } from "./PreferredDaysField";
 
 export interface SlotDraft {
   key: string;
@@ -77,6 +78,7 @@ export function WeeklyScheduleStep({
   classMinutes,
   packageInfo,
   preferences,
+  preferredDays,
   studentId,
 }: {
   rows: SubjectRow[];
@@ -92,6 +94,8 @@ export function WeeklyScheduleStep({
   packageInfo?: PackageSummary | null;
   /** Times a parent suggested on the public form (IST). Shown for reference; never booked by themselves. */
   preferences?: { subjectId: string; subjectName: string; weekday: number; start: string; end: string }[] | null;
+  /** Days that usually suit the student (from the details step). Shown for reference; never booked by themselves. */
+  preferredDays?: number[];
   /** When editing an existing student: their own current slots are not clashes. */
   studentId?: string;
 }) {
@@ -181,6 +185,8 @@ export function WeeklyScheduleStep({
           </div>
         </div>
       )}
+
+      <PreferredDaysNote days={preferredDays ?? []} />
 
       {preferences && preferences.length > 0 && (
         <section aria-labelledby="parent-preferences-heading" className="space-y-2 rounded-card border border-info/40 bg-info/10 p-3 sm:p-4">

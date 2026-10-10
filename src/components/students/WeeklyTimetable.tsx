@@ -29,6 +29,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { TimetableView } from "@/lib/services/timetable";
 import type { TeacherOption } from "./StudentFormModal";
 import { TrainerAvailabilityPanel, useTrainerWeeks } from "@/components/teachers/TrainerWeekView";
+import { PreferredDaysNote } from "./admission/PreferredDaysField";
 import { findWeeklyOverlap, overlapMessage } from "@/lib/trainer-week";
 
 interface SlotDraft {
@@ -330,6 +331,8 @@ export function WeeklyTimetable({ studentId, view, teachers, canEdit, onSaved }:
           )}
         </div>
       </div>
+
+      <PreferredDaysNote days={view.preferredDays} />
 
       <p className="text-xs text-slate-400 leading-relaxed rounded-2xl border border-slate-800 bg-slate-900/50 p-3">
         The weekly timetable is a template: it does not use package credits. Classes are booked from it up to {view.windowDays} days

@@ -27,6 +27,7 @@ import {
   Link2,
 } from "lucide-react";
 import { formatInTimeZone, formatDateOnly } from "@/lib/timezones";
+import { dayList, readDays } from "@/lib/preferred-days";
 import { apiRequest, ClientApiError, errorMessage } from "@/lib/client-api";
 import { ReallocateModal } from "@/components/packages/ReallocateModal";
 import { CreditLedgerModal } from "@/components/packages/CreditLedgerModal";
@@ -519,9 +520,15 @@ export function StudentDetailClient({
               <h3 className="text-sm font-bold text-white border-b border-slate-800 pb-2">Learning Goals & Timings</h3>
               <div className="space-y-3 text-xs">
                 <div>
-                  <span className="font-bold text-slate-300">Preferred Class Timings:</span>
-                  <p className="mt-1 text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-slate-800">{student.preferredTimings || "Not recorded"}</p>
+                  <span className="font-bold text-slate-300">Preferred Class Days:</span>
+                  <p className="mt-1 text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-slate-800">{dayList(readDays(student.preferredDays)) || "Not recorded"}</p>
                 </div>
+                {student.preferredTimings && (
+                  <div>
+                    <span className="font-bold text-slate-300">Timing Note:</span>
+                    <p className="mt-1 text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-slate-800">{student.preferredTimings}</p>
+                  </div>
+                )}
                 <div>
                   <span className="font-bold text-slate-300">Learning Goals:</span>
                   <p className="mt-1 text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-slate-800">{student.learningGoals || "Not recorded"}</p>

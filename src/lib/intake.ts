@@ -7,25 +7,18 @@
 import { ALL_GRADES } from "./grades";
 import { BOARD_OPTIONS, COUNTRIES, COUNTRY_VALUES, MEDIUM_OPTIONS, PHONE_RULES, findCountry } from "./constants";
 import { checkInternationalPhone, isValidEmail, phoneKey } from "./validation";
+import { WEEKDAYS, cleanDays, dayList, sortDays, weekdayName } from "./preferred-days";
+
+export { WEEKDAYS, dayList, weekdayName };
 
 export const RELATIONSHIPS = ["Father", "Mother", "Guardian", "Grandparent", "Other"] as const;
 export const TEACHING_LANGUAGES = [...MEDIUM_OPTIONS, "Arabic"];
 
-/** Monday first, as parents read a week. Values match the timetable (0 = Sunday). */
-export const WEEKDAYS = [
-  { value: 1, label: "Monday" },
-  { value: 2, label: "Tuesday" },
-  { value: 3, label: "Wednesday" },
-  { value: 4, label: "Thursday" },
-  { value: 5, label: "Friday" },
-  { value: 6, label: "Saturday" },
-  { value: 0, label: "Sunday" },
-];
-export const weekdayName = (value: number) => WEEKDAYS.find((d) => d.value === value)?.label ?? "Day";
-
 export const INTAKE_LIMITS = {
   subjects: 12,
   preferences: 20,
+  /** How far back a start date may go (a student who already studies with Xello), in days. */
+  startDatePastDays: 3650,
   shortText: 120,
   textArea: 1000,
   /** Earliest and latest class time parents can suggest (IST). */
@@ -73,6 +66,9 @@ export interface IntakeInput {
   teachingLanguage: string;
   startDate: string;
   notes: string;
+  /** Days that usually suit the child, 0 = Sunday … 6 = Saturday (optional; the form asks for days only). */
+  preferredDays: number[];
+  /** Day and time per subject, sent by the earlier version of the form; still accepted and shown. */
   preferences: PreferenceInput[];
   consent: boolean;
 }
@@ -96,6 +92,7 @@ export interface IntakeData {
   teachingLanguage: string | null;
   startDate: string | null;
   notes: string | null;
+  preferredDays: number[];
   preferences: PreferenceInput[];
   consent: true;
 }
@@ -118,6 +115,7 @@ export const emptyIntake = (): IntakeInput => ({
   teachingLanguage: "",
   startDate: "",
   notes: "",
+  preferredDays: [],
   preferences: [],
   consent: false,
 });
@@ -170,6 +168,14 @@ function addDays(isoDate: string, days: number): string {
   const d = new Date(`${isoDate}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The start dates a parent may choose: up to 10 years back (a student who
+ * already studies with Xello gives the date they started) and a year ahead.
+ */
+export function startDateBounds(todayIst: string) {
+  return { min: addDays(todayIst, -INTAKE_LIMITS.startDatePastDays), max: addDays(todayIst, 365) };
 }
 
 export const GRADE_VALUES = ALL_GRADES.map((g) => g.value);
@@ -264,9 +270,9 @@ export function validateIntake(
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || Number.isNaN(new Date(`${startDate}T00:00:00Z`).getTime())) {
       add("startDate", "Enter a valid date.");
       startDate = null;
-    } else if (startDate < todayIst) {
-      add("startDate", "Choose today or a later date.");
-    } else if (startDate > addDays(todayIst, 365)) {
+    } else if (startDate < startDateBounds(todayIst).min) {
+      add("startDate", "Choose a date within the last 10 years.");
+    } else if (startDate > startDateBounds(todayIst).max) {
       add("startDate", "Choose a date within the next year.");
     }
   }
@@ -297,6 +303,15 @@ export function validateIntake(
     preferences.push({ subjectId, weekday, start, end });
   });
 
+  let preferredDays = cleanDays(body.preferredDays);
+  if (preferredDays === null) {
+    add("preferredDays", "Choose days from Monday to Sunday.");
+    preferredDays = [];
+  } else if (preferredDays.length === 0 && preferences.length > 0) {
+    // A form opened before the change sends days with times instead.
+    preferredDays = sortDays(preferences.map((p) => p.weekday));
+  }
+
   if (body.consent !== true) add("consent", "Tick the box to agree, so Xello can contact you about this application.");
 
   if (Object.keys(errors).length) return { data: null, errors };
@@ -319,6 +334,7 @@ export function validateIntake(
       teachingLanguage,
       startDate,
       notes,
+      preferredDays,
       preferences,
       consent: true,
     },

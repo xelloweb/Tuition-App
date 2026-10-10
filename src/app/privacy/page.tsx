@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 /** Date of the version the owner approved; change it whenever the text changes. */
-const LAST_UPDATED = "8 October 2026";
+const LAST_UPDATED = "10 October 2026";
 
 /**
  * Plain-English privacy notice for the parent admission form. It describes only
@@ -36,7 +36,7 @@ export default function PrivacyNoticePage() {
           <ul className="list-disc space-y-1 pl-5">
             <li>About your child: name, class or grade, board, subjects, and if you choose to tell us, school, medium of instruction and the help they need.</li>
             <li>About you: your name, your relationship to the child, WhatsApp number and country, and if you choose to tell us, another phone number, email and city.</li>
-            <li>Your preferences: teaching language, start date, preferred class times and any notes you add.</li>
+            <li>Your preferences: teaching language, start date, preferred class days and any notes you add.</li>
           </ul>
           <p>We do not ask for identity documents, payment details or passwords in this form.</p>
         </Section>

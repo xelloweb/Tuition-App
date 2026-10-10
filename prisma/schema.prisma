@@ -60,6 +60,8 @@ model Student {
   timeZone          String              @default("Asia/Kolkata")
   joiningDate       DateTime            @default(now())
   preferredTimings  String?
+  /// Days that usually suit the student, as JSON ("[1,3,5]", 0 = Sunday). A preference only: never books a class.
+  preferredDays     String?
   learningGoals     String?
   coordinatorNotes  String?
   status            String              @default("ACTIVE")

@@ -13,8 +13,10 @@ import {
   deleteSubmission,
   getSubmissionDetail,
   listSubmissions,
+  readStored,
   updateSubmission,
 } from "../src/lib/services/parent-submissions";
+import { admissionPrefill } from "../src/lib/intake-prefill";
 import { checkAdmission, createStudent, parseStudentFields } from "../src/lib/services/students";
 import { createDraft, deleteDraft } from "../src/lib/services/admission-drafts";
 import { ApiError } from "../src/lib/api-errors";
@@ -42,6 +44,7 @@ function intake(subjectIds: string[], extra: Partial<IntakeData> = {}): IntakeDa
     teachingLanguage: null,
     startDate: null,
     notes: null,
+    preferredDays: [2, 6],
     preferences: [{ subjectId: subjectIds[0], weekday: 2, start: "18:00", end: "19:00" }],
     consent: true,
     ...extra,
@@ -217,6 +220,28 @@ describe("parent submissions", () => {
     assert.equal(after.convertedStudentId, result.id);
     assert.equal(after.admissionDraftId, null);
     assert.equal(await prisma.admissionDraft.count({ where: { id: draft.id } }), 0);
+  });
+
+  test("the parent's preferred days reach staff in the draft and the admission form; older submissions still read", async () => {
+    const subject = await makeSubject("Botany");
+    const { reference } = await createParentSubmission(intake([subject.id], { preferredDays: [1, 4], preferences: [] }), uid("days-dddddddddddd"));
+    const row = await prisma.parentSubmission.findUniqueOrThrow({ where: { reference } });
+    assert.deepEqual(JSON.parse(row.submittedData).preferredDays, [1, 4]);
+    const draft = await createDraft({ data: { name: "Days Draft" }, submissionId: row.id }, coordinator);
+    assert.deepEqual(draft.submission?.preferredDays, [1, 4]);
+    const prefill = admissionPrefill(readStored(row.submittedData)!, reference, "10 Oct 2026, 10:00 AM");
+    assert.deepEqual(prefill.preferredDays, [1, 4]);
+    assert.equal(prefill.preferredTimings, "", "no times to carry over");
+
+    // Saved by the earlier form: a day and time per subject, no days list.
+    const older = JSON.parse(row.submittedData);
+    delete older.preferredDays;
+    older.preferences = [{ subjectId: subject.id, subjectName: subject.name, weekday: 3, start: "18:00", end: "19:00" }];
+    const stored = readStored(JSON.stringify(older))!;
+    assert.deepEqual(stored.preferredDays, []);
+    const olderPrefill = admissionPrefill(stored, reference, "8 Oct 2026, 9:00 AM");
+    assert.deepEqual(olderPrefill.preferredDays, [3], "Wednesday, from the time given");
+    assert.match(olderPrefill.preferredTimings, /Wed 18:00–19:00/, "the times are kept as a note");
   });
 
   test("deleting a linked draft frees the submission for a new start", async () => {

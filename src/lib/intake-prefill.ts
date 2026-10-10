@@ -5,6 +5,7 @@
  */
 import type { StoredSubmission } from "./services/parent-submissions";
 import { weekdayName } from "./intake";
+import { sortDays } from "./preferred-days";
 
 /** Same shape as the admission form's draft snapshot (subset). */
 export interface AdmissionPrefill {
@@ -19,6 +20,7 @@ export interface AdmissionPrefill {
   email: string;
   country: string;
   preferredTimings: string;
+  preferredDays: number[];
   learningGoals: string;
   coordinatorNotes: string;
   rows: { key: string; subjectId: string; teacherId: string; credits: string }[];
@@ -28,7 +30,7 @@ const DEFAULT_TOTAL = 12;
 const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
 export function admissionPrefill(s: StoredSubmission, reference: string, submittedAtIst: string): AdmissionPrefill {
-  const prefs = s.preferences.map((p) => `${p.subjectName} ${weekdayName(p.weekday).slice(0, 3)} ${p.start}–${p.end}`).join("; ");
+  const prefs = (s.preferences ?? []).map((p) => `${p.subjectName} ${weekdayName(p.weekday).slice(0, 3)} ${p.start}–${p.end}`).join("; ");
   const notes = [
     `From parent form ${reference} (submitted ${submittedAtIst} IST).`,
     `Relationship to student: ${s.relationship}.`,
@@ -53,7 +55,9 @@ export function admissionPrefill(s: StoredSubmission, reference: string, submitt
     whatsappNumber: s.whatsappNumber,
     email: s.email ?? "",
     country: s.country,
+    // Times only come from the earlier form; the days carry over as the student's preferred days.
     preferredTimings: prefs ? clip(`Parent's preferences (IST, not confirmed): ${prefs}`, 300) : "",
+    preferredDays: s.preferredDays?.length ? s.preferredDays : sortDays((s.preferences ?? []).map((p) => p.weekday)),
     learningGoals: clip(s.helpAreas ?? "", 1000),
     coordinatorNotes: clip(notes, 2000),
     rows: s.subjects.map((subject, i) => ({

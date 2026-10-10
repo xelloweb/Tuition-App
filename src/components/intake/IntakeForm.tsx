@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { CheckCircle2, Clock, GraduationCap, Pencil, Plus, Search, Send, Trash2, UserPlus } from "lucide-react";
+import { CalendarDays, CheckCircle2, Pencil, Search, Send, UserPlus } from "lucide-react";
 import { ALL_GRADES } from "@/lib/grades";
 import { BOARD_OPTIONS, MEDIUM_OPTIONS } from "@/lib/constants";
 import {
@@ -12,9 +12,10 @@ import {
   RELATIONSHIPS,
   TEACHING_LANGUAGES,
   WEEKDAYS,
+  dayList,
   emptyIntake,
+  startDateBounds,
   validateIntake,
-  weekdayName,
 } from "@/lib/intake";
 import { Field, controlBorder, controlClass } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
@@ -29,10 +30,9 @@ interface Props {
 }
 
 type Phase = "form" | "review" | "done";
-type PrefRow = { key: string; subjectId: string; weekday: string; start: string; end: string };
 
-const IST_NOTICE =
-  "All timings must be entered in Indian Standard Time (IST). These are preferences only. Xello will confirm the final timetable after checking trainer availability.";
+const DAYS_NOTICE =
+  "Tick the days that usually suit your child, for any subject. These are preferences only. Xello will confirm the final days and class times (IST) after checking trainer availability.";
 const SUCCESS =
   "Thank you! Your details have been submitted. The Xello Tuition team will contact you to confirm the next steps.";
 
@@ -42,16 +42,6 @@ function randomKey() {
   const bytes = new Uint8Array(18);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-let prefCounter = 0;
-const prefKey = () => `pref-${(prefCounter++).toString(36)}`;
-
-/** "17:30" → "5:30 PM" (the value itself is IST wall-clock time). */
-function time12(value: string) {
-  const m = /^(\d{2}):(\d{2})$/.exec(value);
-  if (!m) return value;
-  const h = Number(m[1]);
-  return `${h % 12 || 12}:${m[2]} ${h < 12 ? "AM" : "PM"}`;
 }
 
 function formatDate(iso: string) {
@@ -63,7 +53,7 @@ function formatDate(iso: string) {
 const FIELD_ORDER = [
   "studentName", "grade", "board", "schoolName", "medium", "subjectIds",
   "guardianName", "relationship", "country", "whatsappNumber", "altPhone", "email", "city",
-  "helpAreas", "teachingLanguage", "startDate", "notes", "preferences", "consent",
+  "helpAreas", "teachingLanguage", "startDate", "notes", "preferredDays", "consent",
 ];
 const FIELD_LABELS: Record<string, string> = {
   studentName: "Student's full name",
@@ -83,13 +73,10 @@ const FIELD_LABELS: Record<string, string> = {
   teachingLanguage: "Preferred teaching language",
   startDate: "Preferred start date",
   notes: "Additional notes",
-  preferences: "Preferred class timings",
+  preferredDays: "Preferred class days",
   consent: "Agreement",
 };
-const labelFor = (key: string) => {
-  const pref = /^preferences\.(\d+)\./.exec(key);
-  return pref ? `Preferred time ${Number(pref[1]) + 1}` : FIELD_LABELS[key] ?? key;
-};
+const labelFor = (key: string) => FIELD_LABELS[key] ?? key;
 const orderOf = (key: string) => {
   const base = key.split(".")[0];
   const i = FIELD_ORDER.indexOf(base);
@@ -98,7 +85,6 @@ const orderOf = (key: string) => {
 
 export function IntakeForm({ subjects, formToken, privacyUrl, preview, todayIst }: Props) {
   const [values, setValues] = useState<IntakeInput>(emptyIntake);
-  const [prefs, setPrefs] = useState<PrefRow[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [phase, setPhase] = useState<Phase>("form");
   const [submitting, setSubmitting] = useState(false);
@@ -114,7 +100,6 @@ export function IntakeForm({ subjects, formToken, privacyUrl, preview, todayIst 
   const doneHeadingRef = useRef<HTMLHeadingElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const subjectName = (id: string) => subjects.find((s) => s.id === id)?.name ?? "Subject";
   const chosenSubjects = subjects.filter((s) => values.subjectIds.includes(s.id));
   const visibleSubjects = useMemo(() => {
     const q = subjectQuery.trim().toLowerCase();
@@ -145,29 +130,16 @@ export function IntakeForm({ subjects, formToken, privacyUrl, preview, todayIst 
 
   const toggleSubject = (id: string, checked: boolean) => {
     setValues((v) => ({ ...v, subjectIds: checked ? [...v.subjectIds, id] : v.subjectIds.filter((s) => s !== id) }));
-    if (!checked) setPrefs((rows) => rows.filter((r) => r.subjectId !== id));
     clearError("subjectIds");
   };
 
-  const addPref = () => {
-    const first = values.subjectIds[0] ?? "";
-    setPrefs((rows) => [...rows, { key: prefKey(), subjectId: first, weekday: "1", start: "17:00", end: "18:00" }]);
-    clearError("preferences");
+  const toggleDay = (day: number, checked: boolean) => {
+    setValues((v) => ({ ...v, preferredDays: checked ? [...v.preferredDays, day] : v.preferredDays.filter((d) => d !== day) }));
+    clearError("preferredDays");
   };
-  const updatePref = (key: string, patch: Partial<PrefRow>) => {
-    setPrefs((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
-    const i = prefs.findIndex((r) => r.key === key);
-    if (i >= 0) clearError(`preferences.${i}.subjectId`, `preferences.${i}.weekday`, `preferences.${i}.start`, `preferences.${i}.end`);
-  };
-  const removePref = (key: string) => {
-    setPrefs((rows) => rows.filter((r) => r.key !== key));
-    setErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith("preferences."))));
-  };
+  const startBounds = startDateBounds(todayIst);
 
-  const payload = () => ({
-    ...values,
-    preferences: prefs.map((p) => ({ subjectId: p.subjectId, weekday: Number(p.weekday), start: p.start, end: p.end })),
-  });
+  const payload = () => values;
 
   const showErrors = (found: Record<string, string>, message = "Please check the answers marked below.") => {
     setErrors(found);
@@ -245,7 +217,6 @@ export function IntakeForm({ subjects, formToken, privacyUrl, preview, todayIst 
   /** Keeps the parent's details for a brother or sister; the student section starts empty. */
   const anotherChild = () => {
     setValues((v) => ({ ...emptyIntake(), guardianName: v.guardianName, relationship: v.relationship, whatsappNumber: v.whatsappNumber, altPhone: v.altPhone, email: v.email, country: v.country, city: v.city }));
-    setPrefs([]);
     setErrors({});
     setServerError("");
     setReference("");
@@ -370,19 +341,11 @@ export function IntakeForm({ subjects, formToken, privacyUrl, preview, todayIst 
                 <Row label="Notes" value={values.notes} />
               </dl>
             </ReviewBlock>
-            <ReviewBlock title="Preferred class timings (IST)" onEdit={() => { setPhase("form"); requestAnimationFrame(() => focusField("preferences")); }}>
-              {prefs.length === 0 ? (
-                <p className="text-base text-ink-muted">No preferred times added.</p>
-              ) : (
-                <ul className="space-y-1 text-base">
-                  {prefs.map((p) => (
-                    <li key={p.key}>
-                      {subjectName(p.subjectId)}: {weekdayName(Number(p.weekday))}, {time12(p.start)} to {time12(p.end)} IST
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <p className="mt-2 text-sm text-ink-muted">These are preferences only. Xello will confirm the final timetable after checking trainer availability.</p>
+            <ReviewBlock title="Preferred class days" onEdit={() => { setPhase("form"); requestAnimationFrame(() => focusField("preferredDays")); }}>
+              <p className={`text-base ${values.preferredDays.length ? "text-ink" : "text-ink-subtle"}`}>
+                {values.preferredDays.length ? dayList(values.preferredDays) : "No days chosen"}
+              </p>
+              <p className="mt-2 text-sm text-ink-muted">These are preferences only. Xello will confirm the final days and class times (IST) after checking trainer availability.</p>
             </ReviewBlock>
             <p className="text-base text-ink-muted">
               You agreed that Xello Tuition may use these details to contact you and to process this tuition application.
@@ -546,8 +509,8 @@ export function IntakeForm({ subjects, formToken, privacyUrl, preview, todayIst 
                     </select>
                   )}
                 </Field>
-                <Field label="Preferred start date (optional)" name="startDate" error={err("startDate")}>
-                  {(p) => <input {...p} type="date" min={todayIst} value={values.startDate} onChange={(e) => set("startDate", e.target.value)} className={ctl("startDate")} />}
+                <Field label="Preferred start date (optional)" name="startDate" error={err("startDate")} hint="Already studying with Xello? Choose the date your child started.">
+                  {(p) => <input {...p} type="date" min={startBounds.min} max={startBounds.max} value={values.startDate} onChange={(e) => set("startDate", e.target.value)} className={ctl("startDate")} />}
                 </Field>
               </div>
               <Field label="Additional notes (optional)" name="notes" error={err("notes")}>
@@ -555,54 +518,31 @@ export function IntakeForm({ subjects, formToken, privacyUrl, preview, todayIst 
               </Field>
             </fieldset>
 
-            <fieldset className="space-y-4 rounded-card border border-line bg-surface p-4 sm:p-5" data-field="preferences" tabIndex={-1}>
-              <legend className="px-1"><h2 className="text-lg font-bold">Preferred class timings (optional)</h2></legend>
-              <p className="flex items-start gap-2 rounded-control border border-info/40 bg-info/10 p-3 text-base text-ink">
-                <Clock className="mt-1 h-4 w-4 shrink-0 text-info" aria-hidden="true" />
-                <span>{IST_NOTICE}</span>
+            <fieldset
+              className="space-y-4 rounded-card border border-line bg-surface p-4 focus:outline-none sm:p-5"
+              data-field="preferredDays"
+              tabIndex={-1}
+              aria-describedby={err("preferredDays") ? "days-notice days-error" : "days-notice"}
+            >
+              <legend className="px-1"><h2 className="text-lg font-bold">Preferred class days (optional)</h2></legend>
+              <p id="days-notice" className="flex items-start gap-2 rounded-control border border-info/40 bg-info/10 p-3 text-base text-ink">
+                <CalendarDays className="mt-1 h-4 w-4 shrink-0 text-info" aria-hidden="true" />
+                <span>{DAYS_NOTICE}</span>
               </p>
-              {err("preferences") && <p className="text-sm font-medium text-danger">{err("preferences")}</p>}
-              {prefs.length > 0 && (
-                <ul className="space-y-3">
-                  {prefs.map((row, i) => (
-                    <li key={row.key} className="rounded-control border border-line-strong p-3">
-                      <p className="mb-2 text-sm font-semibold text-ink-muted">Preferred time {i + 1}</p>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <Field label="Subject" name={`preferences.${i}.subjectId`} error={err(`preferences.${i}.subjectId`)}>
-                          {(p) => (
-                            <select {...p} value={row.subjectId} onChange={(e) => updatePref(row.key, { subjectId: e.target.value })} className={ctl(`preferences.${i}.subjectId`)}>
-                              <option value="">Choose…</option>
-                              {chosenSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                          )}
-                        </Field>
-                        <Field label="Day" name={`preferences.${i}.weekday`} error={err(`preferences.${i}.weekday`)}>
-                          {(p) => (
-                            <select {...p} value={row.weekday} onChange={(e) => updatePref(row.key, { weekday: e.target.value })} className={ctl(`preferences.${i}.weekday`)}>
-                              {WEEKDAYS.map((d) => <option key={d.value} value={String(d.value)}>{d.label}</option>)}
-                            </select>
-                          )}
-                        </Field>
-                        <Field label="Starts (IST)" name={`preferences.${i}.start`} error={err(`preferences.${i}.start`)}>
-                          {(p) => <input {...p} type="time" step={900} value={row.start} onChange={(e) => updatePref(row.key, { start: e.target.value })} className={ctl(`preferences.${i}.start`)} />}
-                        </Field>
-                        <Field label="Ends (IST)" name={`preferences.${i}.end`} error={err(`preferences.${i}.end`)}>
-                          {(p) => <input {...p} type="time" step={900} value={row.end} onChange={(e) => updatePref(row.key, { end: e.target.value })} className={ctl(`preferences.${i}.end`)} />}
-                        </Field>
-                      </div>
-                      <div className="mt-2 flex justify-end">
-                        <Button type="button" variant="ghost" icon={Trash2} onClick={() => removePref(row.key)} aria-label={`Remove preferred time ${i + 1}`}>
-                          Remove
-                        </Button>
-                      </div>
+              <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {WEEKDAYS.map((d) => {
+                  const checked = values.preferredDays.includes(d.value);
+                  return (
+                    <li key={d.value}>
+                      <label className={`flex min-h-[48px] cursor-pointer items-center gap-3 rounded-control border px-3 py-2 text-base ${checked ? "border-brand bg-brand/10" : errors.preferredDays ? "border-rose-400 bg-raised" : "border-line-strong bg-raised"}`}>
+                        <input type="checkbox" checked={checked} onChange={(e) => toggleDay(d.value, e.target.checked)} className="h-5 w-5 shrink-0 accent-teal-400" />
+                        {d.label}
+                      </label>
                     </li>
-                  ))}
-                </ul>
-              )}
-              <Button type="button" variant="outline" size="lg" icon={Plus} onClick={addPref} disabled={values.subjectIds.length === 0 || prefs.length >= INTAKE_LIMITS.preferences}>
-                {prefs.length ? "Add another preferred time" : "Add a preferred time"}
-              </Button>
-              {values.subjectIds.length === 0 && <p className="text-sm text-ink-muted">Choose the subjects first.</p>}
+                  );
+                })}
+              </ul>
+              {err("preferredDays") && <p id="days-error" className="text-sm font-medium text-danger">{err("preferredDays")}</p>}
             </fieldset>
 
             <fieldset className="space-y-3 rounded-card border border-line bg-surface p-4 sm:p-5">
