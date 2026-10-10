@@ -497,3 +497,23 @@ describe("permanent student deletion (owner only) over HTTP", { skip: !BASE }, (
     assert.equal((await call("admin", "GET", path)).status, 200, "the student is still there");
   });
 });
+
+describe("automatically created packages (owner only) over HTTP", { skip: !BASE }, () => {
+  test("only the owner can review, back up or remove them; a wrong confirmation removes nothing", async () => {
+    const path = "/api/packages/auto-created";
+    assert.equal((await call(null, "GET", path)).status, 401);
+    assert.equal((await call(null, "POST", path, { confirm: "REMOVE" })).status, 401);
+    for (const persona of ["coordinator", "accounts", "teacher_rahul"]) {
+      assert.equal((await call(persona, "GET", path)).status, 403, persona);
+      assert.equal((await call(persona, "POST", path, { confirm: "REMOVE" })).status, 403, persona);
+    }
+    const review = await call("admin", "GET", path);
+    assert.equal(review.status, 200);
+    assert.ok(Array.isArray(review.json!.removable) && Array.isArray(review.json!.kept));
+    const backup = await fetch(`${BASE}${path}?backup=1`, { headers: { Cookie: await sessionFor("admin") } });
+    assert.equal(backup.status, 200);
+    assert.match(backup.headers.get("content-disposition") ?? "", /attachment; filename="xello-auto-packages-backup-/);
+    assert.equal(((await backup.json()) as { format: string }).format, "xello-auto-package-backup");
+    assert.equal((await call("admin", "POST", path, { confirm: "yes" })).status, 400);
+  });
+});

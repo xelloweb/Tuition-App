@@ -20,6 +20,7 @@ import { ReallocateModal } from "@/components/packages/ReallocateModal";
 import { CreditLedgerModal } from "@/components/packages/CreditLedgerModal";
 import { EditPackageModal } from "@/components/packages/EditPackageModal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { AutoPackageCleanupDialog } from "@/components/packages/AutoPackageCleanupDialog";
 
 interface PackagesClientProps {
   packages: (PackageBalanceBreakdown & {
@@ -34,10 +35,13 @@ interface PackagesClientProps {
   /** Owner only: paid money not yet set up as a working package. */
   needsSetup?: { id: string; name: string; studentCode: string; reasons: string[] }[];
   canEdit?: boolean;
+  /** Owner only: packages created automatically from payment records. */
+  autoPackages?: { removable: number; kept: number } | null;
 }
 
-export function PackagesClient({ packages, templates, needsSetup = [], canEdit = false }: PackagesClientProps) {
+export function PackagesClient({ packages, templates, needsSetup = [], canEdit = false, autoPackages = null }: PackagesClientProps) {
   const router = useRouter();
+  const [autoOpen, setAutoOpen] = useState(false);
   const [selectedForEdit, setSelectedForEdit] = useState<any | null>(null);
   const [selectedForRealloc, setSelectedForRealloc] = useState<PackageBalanceBreakdown | null>(null);
   const [selectedForLedger, setSelectedForLedger] = useState<{
@@ -68,6 +72,35 @@ export function PackagesClient({ packages, templates, needsSetup = [], canEdit =
           </p>
         </div>
       </div>
+
+      {autoPackages && autoPackages.removable + autoPackages.kept > 0 && (
+        <section aria-labelledby="auto-packages-heading" className="flex flex-col gap-3 rounded-card border border-warning/50 bg-surface p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div>
+            <h2 id="auto-packages-heading" className="text-lg font-semibold text-ink">Packages created automatically ({autoPackages.removable + autoPackages.kept})</h2>
+            <p className="text-sm text-ink-muted">
+              Made from payment records by the student import or the edit form, not by staff. {autoPackages.removable} can be removed; payments are not
+              changed.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAutoOpen(true)}
+            className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-control border border-line-strong px-4 text-sm font-semibold text-ink hover:bg-raised"
+          >
+            Review and remove
+          </button>
+        </section>
+      )}
+
+      {autoOpen && (
+        <AutoPackageCleanupDialog
+          onClose={() => setAutoOpen(false)}
+          onDone={() => {
+            setAutoOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
 
       {needsSetup.length > 0 && (
         <section id="paid-not-set-up" aria-labelledby="paid-not-set-up-heading" className="space-y-3 rounded-card border border-warning/50 bg-surface p-4 sm:p-5">

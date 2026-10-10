@@ -50,8 +50,8 @@ async function existingCodes(db: Db, kind: CodeKind, prefix: string): Promise<st
   }
 }
 
-/** Numbers of permanently deleted students' records stay retired: the deletion's audit entry names them. */
-export const RETIRING_ACTIONS = ["PURGE_STUDENT"];
+/** Numbers of permanently deleted records stay retired: the deletion's audit entry names them. */
+export const RETIRING_ACTIONS = ["PURGE_STUDENT", "AUTO_PACKAGE_REMOVED"];
 
 async function retiredCodes(db: Db, prefix: string): Promise<string[]> {
   const rows = await db.auditLog.findMany({ where: { action: { in: RETIRING_ACTIONS }, details: { contains: prefix } }, select: { details: true } });

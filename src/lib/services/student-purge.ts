@@ -318,6 +318,22 @@ export async function purgeStudent(studentId: string, body: Record<string, unkno
   );
 }
 
+/** Inserts backed-up rows that do not exist yet (dates come back from JSON as text). */
+export async function insertMissingRows(db: Db, table: PurgeTable, rows: Row[]): Promise<number> {
+  if (!rows.length) return 0;
+  const key = idField(table);
+  const dates = modelOf(table).fields.filter((f) => f.kind === "scalar" && f.type === "DateTime").map((f) => f.name);
+  const existing = new Set(ids(await delegate(db, table).findMany({ where: { [key]: { in: ids(rows, key) } }, select: { [key]: true } }), key));
+  const data = rows
+    .filter((r) => !existing.has(r[key] as string))
+    .map((r) => {
+      const out: Row = { ...r };
+      for (const f of dates) if (typeof out[f] === "string") out[f] = new Date(out[f] as string);
+      return out;
+    });
+  return data.length ? (await delegate(db, table).createMany({ data })).count : 0;
+}
+
 /** Puts a backup back (rows that already exist are skipped). For use by a one-time script if ever needed. */
 export async function restoreStudentBackup(backup: StudentBackup, actorName: string, db: PrismaClient = prisma) {
   if (backup?.format !== "xello-student-backup" || backup.version !== 1 || !backup.tables) {
@@ -327,20 +343,8 @@ export async function restoreStudentBackup(backup: StudentBackup, actorName: str
     async (tx) => {
       const restored: Record<string, number> = {};
       for (const table of PURGE_TABLES) {
-        const rows = backup.tables[table] ?? [];
-        if (!rows.length) continue;
-        const model = modelOf(table);
-        const key = idField(table);
-        const dates = model.fields.filter((f) => f.kind === "scalar" && f.type === "DateTime").map((f) => f.name);
-        const existing = new Set(ids(await delegate(tx, table).findMany({ where: { [key]: { in: ids(rows, key) } }, select: { [key]: true } }), key));
-        const data = rows
-          .filter((r) => !existing.has(r[key] as string))
-          .map((r) => {
-            const out: Row = { ...r };
-            for (const f of dates) if (typeof out[f] === "string") out[f] = new Date(out[f] as string);
-            return out;
-          });
-        if (data.length) restored[table] = (await delegate(tx, table).createMany({ data })).count;
+        const count = await insertMissingRows(tx, table, backup.tables[table] ?? []);
+        if (count) restored[table] = count;
       }
       await tx.auditLog.create({
         data: {

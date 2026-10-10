@@ -378,7 +378,7 @@ export function StudentDetailClient({
                 <div className="rounded-xl bg-slate-900/80 p-3 border border-slate-800">
                   <span className="text-xs text-slate-400 font-medium">Current Package</span>
                   <div className="text-lg font-bold text-amber-300">
-                    {balances.length > 0 ? "Setup Pending" : "Not Assigned"}
+                    {balances.length > 0 ? "Setup Pending" : "No Active Package"}
                   </div>
                 </div>
                 <div className="rounded-xl bg-slate-900/80 p-3 border border-slate-800">

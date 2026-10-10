@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, canReallocatePackages, canAssignExistingPayments, canEditPackages } from "@/lib/auth";
 import { studentsNeedingPackageSetup } from "@/lib/services/existing-payment-packages";
+import { reviewAutoPackages } from "@/lib/services/auto-package-cleanup";
 import { calculatePackageBalances } from "@/lib/package-calculations";
 import { AccessDenied } from "@/components/ui/AccessDenied";
 import { PackagesClient } from "./PackagesClient";
@@ -44,5 +45,17 @@ export default async function PackagesPage() {
   // Owner only: students whose money already paid is not yet a working package.
   const needsSetup = canAssignExistingPayments(user.role) ? await studentsNeedingPackageSetup() : [];
 
-  return <PackagesClient packages={detailedPackages} templates={templates} needsSetup={needsSetup} canEdit={canEditPackages(user.role)} />;
+  // Owner only: packages created automatically from payment records, to review and remove.
+  const auto = user.role === "OWNER" ? await reviewAutoPackages() : null;
+  const autoPackages = auto ? { removable: auto.removable.length, kept: auto.kept.length } : null;
+
+  return (
+    <PackagesClient
+      packages={detailedPackages}
+      templates={templates}
+      needsSetup={needsSetup}
+      canEdit={canEditPackages(user.role)}
+      autoPackages={autoPackages}
+    />
+  );
 }

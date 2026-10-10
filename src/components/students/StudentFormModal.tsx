@@ -225,9 +225,8 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
               res.options.unlinkedInvoices.length > 0 ||
               res.options.unusedTotal > 0
             );
+            // Prefill only: a package is added only when staff choose it on the package step.
             if (usable && !res.options.hasActiveWorkingPackage) {
-              setPackageMode("EXISTING_PAYMENT");
-              setIncludePackage(true);
               if (res.options.unsetPackages[0]?.name) setPackageName(res.options.unsetPackages[0].name);
               if (res.options.unsetPackages[0]?.totalCredits) setTotalCredits(String(res.options.unsetPackages[0].totalCredits));
               if (res.options.unsetPackages[0]?.price) setPackagePrice(String(res.options.unsetPackages[0].price));
@@ -248,12 +247,8 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
      activeExistingPayment.unusedTotal > 0)
   );
 
-  const [packageMode, setPackageMode] = useState<"EXISTING_PAYMENT" | "NEW_PURCHASE">(() => {
-    if (isEdit && hasUsableExistingPayment && !activeExistingPayment?.hasActiveWorkingPackage) {
-      return "EXISTING_PAYMENT";
-    }
-    return "NEW_PURCHASE";
-  });
+  // Editing never adds a package by itself: "NONE" until staff choose one.
+  const [packageMode, setPackageMode] = useState<"NONE" | "EXISTING_PAYMENT" | "NEW_PURCHASE">(() => (isEdit ? "NONE" : "NEW_PURCHASE"));
 
   const steps: (StepDef & { id: StepId })[] = useMemo(
     () => [
@@ -307,7 +302,6 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
   // 3. Package & fees
   const [includePackage, setIncludePackage] = useState(() => {
     if (initial.includePackage !== undefined) return initial.includePackage;
-    if (isEdit && hasUsableExistingPayment && !activeExistingPayment?.hasActiveWorkingPackage) return true;
     return !isEdit;
   });
   const [packageName, setPackageName] = useState(() => {
@@ -1174,7 +1168,23 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
                       </p>
                     </div>
                   </div>
-                  <div className="grid gap-2.5 sm:grid-cols-2 pt-1">
+                  <div className="grid gap-2.5 sm:grid-cols-3 pt-1">
+                    <label className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-xs transition-all ${packageMode === "NONE" ? "border-teal-400 bg-teal-500/20 text-white" : "border-slate-800 bg-slate-900/60 text-slate-400"}`}>
+                      <input
+                        type="radio"
+                        name="packageMode"
+                        checked={packageMode === "NONE"}
+                        onChange={() => {
+                          setPackageMode("NONE");
+                          setIncludePackage(false);
+                        }}
+                        className="mt-0.5 accent-teal-400"
+                      />
+                      <div>
+                        <span className="block font-bold text-white">Keep packages as they are</span>
+                        <span className="block text-slate-300 mt-0.5">No package or invoice is added.</span>
+                      </div>
+                    </label>
                     <label className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-xs transition-all ${packageMode === "EXISTING_PAYMENT" ? "border-teal-400 bg-teal-500/20 text-white" : "border-slate-800 bg-slate-900/60 text-slate-400"}`}>
                       <input
                         type="radio"
@@ -1196,7 +1206,10 @@ export function StudentFormModal({ mode, student, draft, prefill, intake, startS
                         type="radio"
                         name="packageMode"
                         checked={packageMode === "NEW_PURCHASE"}
-                        onChange={() => setPackageMode("NEW_PURCHASE")}
+                        onChange={() => {
+                          setPackageMode("NEW_PURCHASE");
+                          setIncludePackage(true);
+                        }}
                         className="mt-0.5 accent-teal-400"
                       />
                       <div>
