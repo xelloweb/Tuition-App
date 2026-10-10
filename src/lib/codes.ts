@@ -4,7 +4,7 @@ import { BUSINESS_TIME_ZONE } from "./constants";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
-export type CodeKind = "student" | "package" | "invoice" | "payment" | "payoutRun";
+export type CodeKind = "student" | "package" | "invoice" | "payment" | "payoutRun" | "expense";
 
 const PREFIX: Record<CodeKind, string> = {
   student: "XEL",
@@ -12,6 +12,7 @@ const PREFIX: Record<CodeKind, string> = {
   invoice: "INV",
   payment: "PAY",
   payoutRun: "PAYOUT",
+  expense: "EXP",
 };
 
 const UNIQUE_FIELD: Record<CodeKind, string> = {
@@ -20,6 +21,7 @@ const UNIQUE_FIELD: Record<CodeKind, string> = {
   invoice: "invoiceNumber",
   payment: "paymentNumber",
   payoutRun: "runNumber",
+  expense: "expenseNumber",
 };
 
 const PAD: Record<CodeKind, number> = {
@@ -28,6 +30,7 @@ const PAD: Record<CodeKind, number> = {
   invoice: 3,
   payment: 3,
   payoutRun: 2,
+  expense: 3,
 };
 
 export function businessYear(now = new Date()): string {
@@ -47,11 +50,13 @@ async function existingCodes(db: Db, kind: CodeKind, prefix: string): Promise<st
       return (await db.payment.findMany({ where: { paymentNumber: where }, select: { paymentNumber: true } })).map((r) => r.paymentNumber);
     case "payoutRun":
       return (await db.payoutRun.findMany({ where: { runNumber: where }, select: { runNumber: true } })).map((r) => r.runNumber);
+    case "expense":
+      return (await db.expense.findMany({ where: { expenseNumber: where }, select: { expenseNumber: true } })).map((r) => r.expenseNumber);
   }
 }
 
 /** Numbers of permanently deleted records stay retired: the deletion's audit entry names them. */
-export const RETIRING_ACTIONS = ["PURGE_STUDENT", "AUTO_PACKAGE_REMOVED"];
+export const RETIRING_ACTIONS = ["PURGE_STUDENT", "AUTO_PACKAGE_REMOVED", "DELETE_EXPENSE"];
 
 async function retiredCodes(db: Db, prefix: string): Promise<string[]> {
   const rows = await db.auditLog.findMany({ where: { action: { in: RETIRING_ACTIONS }, details: { contains: prefix } }, select: { details: true } });

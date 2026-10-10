@@ -517,3 +517,34 @@ describe("automatically created packages (owner only) over HTTP", { skip: !BASE 
     assert.equal((await call("admin", "POST", path, { confirm: "yes" })).status, 400);
   });
 });
+
+describe("accounts: expenses and profit & loss (owner and Accounts) over HTTP", { skip: !BASE }, () => {
+  test("only the owner and Accounts can open the page, change expenses or download the statement", async () => {
+    const body = { spentOn: "2026-10-01", category: "Rent", description: "HTTP test rent", amount: 2500, paymentMethod: "UPI" };
+    assert.equal((await call(null, "POST", "/api/expenses", body)).status, 401);
+    assert.equal((await call(null, "GET", "/api/accounts/export")).status, 401);
+    for (const persona of ["coordinator", "teacher_rahul"]) {
+      assert.equal((await call(persona, "POST", "/api/expenses", body)).status, 403, persona);
+      assert.equal((await call(persona, "GET", "/api/accounts/export")).status, 403, persona);
+      assert.match(await (await page(persona, "/accounts")).text(), /Access restricted/, persona);
+    }
+    const created = await call("accounts", "POST", "/api/expenses", body);
+    assert.equal(created.status, 201);
+    const id = (created.json!.expense as { id: string }).id;
+    assert.equal((await call("coordinator", "PATCH", `/api/expenses/${id}`, { ...body, amount: 1 })).status, 403);
+    assert.equal((await call("admin", "PATCH", `/api/expenses/${id}`, { ...body, amount: 2600 })).status, 200);
+    const invalid = await call("admin", "POST", "/api/expenses", { ...body, amount: 12.5, category: "?" });
+    assert.equal(invalid.status, 400);
+    assert.ok((invalid.json!.fieldErrors as Record<string, string>).amount);
+
+    const csv = await fetch(`${BASE}/api/accounts/export?from=2026-10-01&to=2026-10-01&basis=CASH`, { headers: { Cookie: await sessionFor("admin") } });
+    assert.equal(csv.status, 200);
+    assert.match(csv.headers.get("content-type") ?? "", /text\/csv/);
+    const text = await csv.text();
+    assert.match(text, /"Expense","2026-10-01","EXP-\d{4}-\d{3,}","Rent: HTTP test rent","UPI","","2600","INR"/);
+    assert.match(await (await page("admin", "/accounts?from=2026-10-01&to=2026-10-01")).text(), /HTTP test rent/);
+    assert.equal((await call("teacher_rahul", "DELETE", `/api/expenses/${id}`)).status, 403);
+    assert.equal((await call("accounts", "DELETE", `/api/expenses/${id}`)).status, 200);
+    assert.equal((await call("admin", "GET", "/api/accounts/export?from=2026-02-01&to=2026-01-01")).status, 400);
+  });
+});

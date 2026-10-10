@@ -6,6 +6,7 @@
 import {
   AlertCircle,
   BarChart3,
+  Calculator,
   CalendarDays,
   CheckCircle2,
   DollarSign,
@@ -72,6 +73,7 @@ const GROUPS: { label: string; items: NavItemDef[] }[] = [
       { href: "/billing", label: "Invoices & payments", description: "Invoices, payments and verification", icon: Receipt, roles: ["OWNER", "ACCOUNTS"] },
       { href: "/dues", label: "Dues & follow-ups", description: "Outstanding and overdue balances", icon: AlertCircle, roles: ["OWNER", "ACCOUNTS", "COORDINATOR"] },
       { href: "/payouts", label: "Trainer payouts", labelFor: { TEACHER: "My earnings" }, description: "Earnings and payout runs", icon: DollarSign, roles: ["OWNER", "ACCOUNTS", "TEACHER"] },
+      { href: "/accounts", label: "Accounts & P&L", description: "Sales, expenses and profit & loss", icon: Calculator, roles: ["OWNER", "ACCOUNTS"] },
     ],
   },
   {

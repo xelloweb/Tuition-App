@@ -15,20 +15,20 @@ enum Role {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  role      String   @default("COORDINATOR") // OWNER, COORDINATOR, TEACHER, ACCOUNTS
-  teacherId String?  @unique
-  teacher   Teacher? @relation(fields: [teacherId], references: [id])
-  active    Boolean  @default(true)
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String
+  role            String    @default("COORDINATOR") // OWNER, COORDINATOR, TEACHER, ACCOUNTS
+  teacherId       String?   @unique
+  teacher         Teacher?  @relation(fields: [teacherId], references: [id])
+  active          Boolean   @default(true)
   passwordHash    String?
-  inviteToken     String?  @unique
+  inviteToken     String?   @unique
   inviteExpiresAt DateTime?
   /// Bumped when the password is set, reset or revoked; sessions signed with an older value stop working.
-  sessionVersion  Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  sessionVersion  Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model Guardian {
@@ -133,20 +133,20 @@ model Teacher {
 }
 
 model SubjectEnrollment {
-  id             String    @id @default(cuid())
+  id             String          @id @default(cuid())
   studentId      String
-  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student        Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
   subjectId      String
-  subject        Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subject        Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   // Null until a trainer is assigned; a removed trainer leaves the enrolment in place.
   teacherId      String?
-  teacher        Teacher?  @relation(fields: [teacherId], references: [id], onDelete: SetNull)
-  status         String    @default("ACTIVE")
+  teacher        Teacher?        @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  status         String          @default("ACTIVE")
   targetExamDate DateTime?
   notes          String?
   timetableSlots TimetableSlot[]
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@unique([studentId, subjectId])
 }
@@ -191,30 +191,30 @@ model PackageTemplate {
 }
 
 model StudentPackage {
-  id                     String              @id @default(cuid())
-  packageNumber          String              @unique
-  studentId              String
-  student                Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  templateId             String?
-  template               PackageTemplate?    @relation(fields: [templateId], references: [id])
-  name                   String
-  totalCredits           Int
-  durationMinutes        Int                 @default(60)
-  startDate              DateTime            @default(now())
-  expiryDate             DateTime?
-  price                  Int
-  currency               String              @default("INR")
-  status                 String              @default("ACTIVE") // DRAFT, ACTIVE, PAUSED, EXHAUSTED, EXPIRED, CLOSED
-  cancellationNoticeHours Int                @default(4)
-  noShowDeductCredit     Boolean             @default(true)
-  notes                  String?
-  allocations            SubjectAllocation[]
-  creditLedgers          CreditLedger[]
-  sessions               Session[]
-  invoices               Invoice[]
-  followUps              FollowUp[]
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
+  id                      String              @id @default(cuid())
+  packageNumber           String              @unique
+  studentId               String
+  student                 Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  templateId              String?
+  template                PackageTemplate?    @relation(fields: [templateId], references: [id])
+  name                    String
+  totalCredits            Int
+  durationMinutes         Int                 @default(60)
+  startDate               DateTime            @default(now())
+  expiryDate              DateTime?
+  price                   Int
+  currency                String              @default("INR")
+  status                  String              @default("ACTIVE") // DRAFT, ACTIVE, PAUSED, EXHAUSTED, EXPIRED, CLOSED
+  cancellationNoticeHours Int                 @default(4)
+  noShowDeductCredit      Boolean             @default(true)
+  notes                   String?
+  allocations             SubjectAllocation[]
+  creditLedgers           CreditLedger[]
+  sessions                Session[]
+  invoices                Invoice[]
+  followUps               FollowUp[]
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
 }
 
 model SubjectAllocation {
@@ -247,58 +247,58 @@ model CreditLedger {
 }
 
 model Session {
-  id                     String            @id @default(cuid())
-  packageId              String
-  package                StudentPackage    @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  studentId              String
-  student                Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  teacherId              String
-  teacher                Teacher           @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  subjectId              String
-  subject                Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  scheduledStartTimeUtc  DateTime
-  scheduledEndTimeUtc    DateTime
-  durationMinutes        Int               @default(60)
-  status                 String            @default("SCHEDULED") // SCHEDULED, COMPLETED, STUDENT_NO_SHOW, TEACHER_NO_SHOW, CANCELLED, RESCHEDULED
-  meetingUrl             String?
-  recurrenceId           String?
-  timetableSlotId        String? // set when generated from a weekly timetable slot
-  timetableSlot          TimetableSlot?    @relation(fields: [timetableSlotId], references: [id], onDelete: SetNull)
-  occurrenceDate         String? // local date (YYYY-MM-DD, slot time zone) of the generated occurrence
-  rescheduledFromId      String?
-  rescheduledToId        String?
-  isCreditReserved       Boolean           @default(true)
-  isCreditConsumed       Boolean           @default(false)
-  attendance             AttendanceRecord?
-  payoutItems            PayoutItem[]
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
+  id                    String            @id @default(cuid())
+  packageId             String
+  package               StudentPackage    @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  studentId             String
+  student               Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacherId             String
+  teacher               Teacher           @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subjectId             String
+  subject               Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  scheduledStartTimeUtc DateTime
+  scheduledEndTimeUtc   DateTime
+  durationMinutes       Int               @default(60)
+  status                String            @default("SCHEDULED") // SCHEDULED, COMPLETED, STUDENT_NO_SHOW, TEACHER_NO_SHOW, CANCELLED, RESCHEDULED
+  meetingUrl            String?
+  recurrenceId          String?
+  timetableSlotId       String? // set when generated from a weekly timetable slot
+  timetableSlot         TimetableSlot?    @relation(fields: [timetableSlotId], references: [id], onDelete: SetNull)
+  occurrenceDate        String? // local date (YYYY-MM-DD, slot time zone) of the generated occurrence
+  rescheduledFromId     String?
+  rescheduledToId       String?
+  isCreditReserved      Boolean           @default(true)
+  isCreditConsumed      Boolean           @default(false)
+  attendance            AttendanceRecord?
+  payoutItems           PayoutItem[]
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
 
   // A slot produces at most one class per date, so regeneration is idempotent.
   @@unique([timetableSlotId, occurrenceDate])
 }
 
 model AttendanceRecord {
-  id                    String               @id @default(cuid())
-  sessionId             String               @unique
-  session               Session              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id                    String                        @id @default(cuid())
+  sessionId             String                        @unique
+  session               Session                       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   sessionOutcome        String // COMPLETED, STUDENT_NO_SHOW, TEACHER_NO_SHOW, CANCELLED
   studentAttendance     String // PRESENT, LATE, ABSENT
-  actualDurationMinutes Int                  @default(60)
+  actualDurationMinutes Int                           @default(60)
   topicCovered          String
   homework              String?
   studentProgressNote   String?
   markedByRole          String
   markedByName          String
-  markedAt              DateTime             @default(now())
-  isReversed            Boolean              @default(false)
+  markedAt              DateTime                      @default(now())
+  isReversed            Boolean                       @default(false)
   reversalReason        String?
   reversedAt            DateTime?
   reversedByName        String?
   revisions             AttendanceRevision[]
   correctionRequests    AttendanceCorrectionRequest[]
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @updatedAt
 }
 
 model AttendanceRevision {
@@ -459,21 +459,21 @@ model PayoutItem {
 }
 
 model StudentProgress {
-  id                      String   @id @default(cuid())
-  studentId               String
-  student                 Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  subjectId               String
-  subject                 Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  teacherId               String
-  teacher                 Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  monthYear               String // e.g. "2026-10"
-  topicProgress           String
-  homeworkCompletionRate  Int      @default(100) // Percentage
-  areasOfImprovement      String?
-  teacherFeedback         String
-  coordinatorNotes        String?
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  studentId              String
+  student                Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId              String
+  subject                Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherId              String
+  teacher                Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  monthYear              String // e.g. "2026-10"
+  topicProgress          String
+  homeworkCompletionRate Int      @default(100) // Percentage
+  areasOfImprovement     String?
+  teacherFeedback        String
+  coordinatorNotes       String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 }
 
 model Assessment {
@@ -532,17 +532,17 @@ model IdempotencyKey {
 /// Unfinished admissions. A draft never creates a student, guardian or code;
 /// confirming it creates the real records and removes the draft in one transaction.
 model AdmissionDraft {
-  id            String   @id @default(cuid())
+  id               String            @id @default(cuid())
   /// Student name for the drafts list ("Untitled admission" when not yet typed).
-  label         String
+  label            String
   /// JSON snapshot of the admission form.
-  data          String
-  createdByName String
-  updatedByName String
+  data             String
+  createdByName    String
+  updatedByName    String
   /// Set when the draft was started from a parent form submission.
   parentSubmission ParentSubmission?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 }
 
 /// A trainer's request to change attendance they already submitted. Staff resolve
@@ -624,4 +624,30 @@ model ParentSubmissionNote {
   createdAt    DateTime         @default(now())
 
   @@index([submissionId])
+}
+
+/// A business expense (rent, marketing, software…) recorded by the owner or Accounts.
+/// Trainer pay is not entered here: it comes from attendance and payout runs.
+model Expense {
+  id            String   @id @default(cuid())
+  expenseNumber String   @unique
+  /// Date the money was spent, YYYY-MM-DD in IST.
+  spentOn       String
+  category      String
+  description   String
+  /// Whole rupees.
+  amount        Int
+  currency      String   @default("INR")
+  /// CASH, UPI, BANK_TRANSFER, CARD, OTHER
+  paymentMethod String
+  paidTo        String?
+  reference     String?
+  notes         String?
+  createdByName String
+  createdByRole String
+  updatedByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([spentOn])
 }
