@@ -131,6 +131,7 @@ export default async function StudentDetailPage(props: { params: Promise<{ id: s
         canReallocate: canReallocatePackages(user.role),
         canEditPackage: canEditPackages(user.role),
         canRemovePackage: user.role === "OWNER",
+        canPurge: user.role === "OWNER",
         showFinancial,
         showFollowUps: !isTeacher,
       }}

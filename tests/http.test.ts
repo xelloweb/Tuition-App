@@ -467,3 +467,33 @@ describe("assign package using existing payment (owner, coordinator, accounts) o
     assert.doesNotMatch(JSON.stringify(invalid.json), /prisma|stack/i);
   });
 });
+
+describe("permanent student deletion (owner only) over HTTP", { skip: !BASE }, () => {
+  test("only the owner sees the preview and backup; a wrong code or a current student deletes nothing", async () => {
+    const students = await call("admin", "GET", "/api/students");
+    const target = (students.json!.students as { id: string; studentCode: string; status: string }[]).find((s) => s.status !== "WITHDRAWN")!;
+    const path = `/api/students/${target.id}/purge`;
+    assert.equal((await call(null, "GET", path)).status, 401);
+    assert.equal((await call(null, "POST", path, { confirmStudentCode: target.studentCode })).status, 401);
+    for (const persona of ["coordinator", "accounts", "teacher_rahul"]) {
+      assert.equal((await call(persona, "GET", path)).status, 403, persona);
+      assert.equal((await call(persona, "GET", `${path}?backup=1`)).status, 403, persona);
+      assert.equal((await call(persona, "POST", path, { confirmStudentCode: target.studentCode })).status, 403, persona);
+    }
+    const preview = await call("admin", "GET", path);
+    assert.equal(preview.status, 200);
+    assert.match((preview.json!.blockers as string[]).join(" "), /not archived/, "a current student is never deleted");
+
+    const backup = await fetch(`${BASE}${path}?backup=1`, { headers: { Cookie: await sessionFor("admin") } });
+    assert.equal(backup.status, 200);
+    assert.match(backup.headers.get("content-disposition") ?? "", new RegExp(`attachment; filename="xello-backup-${target.studentCode}-`));
+    assert.equal(backup.headers.get("cache-control"), "no-store");
+    const file = (await backup.json()) as { format: string; tables: { Student: { id: string }[] } };
+    assert.equal(file.format, "xello-student-backup");
+    assert.equal(file.tables.Student[0].id, target.id);
+
+    assert.equal((await call("admin", "POST", path, { confirmStudentCode: "XEL-0000-000" })).status, 400);
+    assert.equal((await call("admin", "POST", path, { confirmStudentCode: target.studentCode })).status, 409, "not archived");
+    assert.equal((await call("admin", "GET", path)).status, 200, "the student is still there");
+  });
+});

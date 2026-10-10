@@ -50,15 +50,23 @@ async function existingCodes(db: Db, kind: CodeKind, prefix: string): Promise<st
   }
 }
 
+/** Numbers of permanently deleted students' records stay retired: the deletion's audit entry names them. */
+export const RETIRING_ACTIONS = ["PURGE_STUDENT"];
+
+async function retiredCodes(db: Db, prefix: string): Promise<string[]> {
+  const rows = await db.auditLog.findMany({ where: { action: { in: RETIRING_ACTIONS }, details: { contains: prefix } }, select: { details: true } });
+  return rows.flatMap((r) => r.details.match(new RegExp(`${prefix}\\d+`, "g")) ?? []);
+}
+
 /**
  * Next human-readable reference, e.g. XEL-2026-014. Based on the highest
- * existing number (not the row count), so deleted rows can never cause a
- * collision and numbers are never reused.
+ * existing or retired number (not the row count), so deleted rows can never
+ * cause a collision and numbers are never reused.
  */
 export async function nextCode(db: Db, kind: CodeKind, now = new Date()): Promise<string> {
   const prefix = `${PREFIX[kind]}-${businessYear(now)}-`;
   let max = 0;
-  for (const code of await existingCodes(db, kind, prefix)) {
+  for (const code of [...(await existingCodes(db, kind, prefix)), ...(await retiredCodes(db, prefix))]) {
     const suffix = code.slice(prefix.length);
     if (/^\d+$/.test(suffix)) max = Math.max(max, Number(suffix));
   }

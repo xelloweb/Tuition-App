@@ -773,10 +773,13 @@ export async function deleteStudent(id: string, user: CurrentUser) {
   const weeklySlots = await prisma.timetableSlot.count({ where: { enrolment: { studentId: id } } });
   const historyCount = Object.values(c).reduce((a, b) => a + b, 0) + weeklySlots;
   if (historyCount > 0) {
+    const history = `${student.name} has ${c.packages} package(s), ${c.sessions} session(s), ${c.invoices} invoice(s), ${c.payments} payment(s) and ${weeklySlots} weekly timetable slot(s).`;
     throw new ApiError(
       409,
       "HAS_HISTORY",
-      `${student.name} has ${c.packages} package(s), ${c.sessions} session(s), ${c.invoices} invoice(s), ${c.payments} payment(s) and ${weeklySlots} weekly timetable slot(s). Archive the student instead (status: Withdrawn) so academic and financial records are kept.`,
+      student.status === "WITHDRAWN"
+        ? `${history} The student is archived. To remove everything, the owner can use “Permanently delete (with backup)”.`
+        : `${history} Archive the student instead (status: Withdrawn) so academic and financial records are kept.`,
       { details: { ...c, weeklySlots } }
     );
   }

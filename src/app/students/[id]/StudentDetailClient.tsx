@@ -44,6 +44,7 @@ import { EditAttendanceModal, AttendanceRecordForEdit } from "@/components/atten
 import { DeleteAttendanceModal } from "@/components/attendance/DeleteAttendanceModal";
 import { SubjectOption, TeacherOption } from "@/components/students/StudentFormModal";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
+import { PurgeStudentDialog } from "@/components/students/PurgeStudentDialog";
 import { MobileTabs } from "@/components/ui/MobileTabs";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { TimetableView } from "@/lib/services/timetable";
@@ -62,7 +63,7 @@ interface StudentDetailClientProps {
   activity?: { id: string; action: string; actorName: string; createdAt: string; details: string }[];
   ledger?: { id: string; eventType: string; creditsDelta: number; reason: string; actorName: string; createdAt: string }[];
   viewerTimeZone?: string;
-  permissions?: { canManage: boolean; canSchedule: boolean; canReallocate: boolean; canEditPackage?: boolean; canRemovePackage?: boolean; showFinancial: boolean; showFollowUps: boolean };
+  permissions?: { canManage: boolean; canSchedule: boolean; canReallocate: boolean; canEditPackage?: boolean; canRemovePackage?: boolean; canPurge?: boolean; showFinancial: boolean; showFollowUps: boolean };
   /** Owner only, and only when money already paid is not yet a working package. */
   existingPayment?: ExistingPaymentOptions | null;
   /** Tab to open first (e.g. ?tab=packages). */
@@ -106,6 +107,7 @@ export function StudentDetailClient({
   const [selectedForLedger, setSelectedForLedger] = useState<{ id: string; number: string; name: string } | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [purgeOpen, setPurgeOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [invoiceToDelete, setInvoiceToDelete] = useState<any | null>(null);
@@ -1260,9 +1262,27 @@ export function StudentDetailClient({
           confirmLabel="Yes, Remove Student"
           loading={deleteLoading}
           errorMessage={deleteError}
-          alternativeAction={student.status !== "WITHDRAWN" ? { label: "Archive instead", onClick: handleArchive } : undefined}
+          alternativeAction={
+            student.status !== "WITHDRAWN"
+              ? { label: "Archive instead", onClick: handleArchive }
+              : permissions.canPurge
+              ? { label: "Permanently delete (with backup)…", onClick: () => { setDeleteModalOpen(false); setPurgeOpen(true); } }
+              : undefined
+          }
           onConfirm={handleDeleteStudent}
           onCancel={() => setDeleteModalOpen(false)}
+        />
+      )}
+
+      {purgeOpen && (
+        <PurgeStudentDialog
+          studentId={student.id}
+          studentCode={student.studentCode}
+          onClose={() => setPurgeOpen(false)}
+          onDeleted={() => {
+            router.push("/students");
+            router.refresh();
+          }}
         />
       )}
 
